@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     service_name: str = Field(default="acip", alias="ACIP_SERVICE_NAME")
 
     # Elasticsearch (data spine)
-    es_host: str = Field(default="https://elasticsearch:9200", alias="ES_HOST")
+    es_host: str = Field(default="http://elasticsearch:9200", alias="ES_HOST")
     es_username: str = Field(default="elastic", alias="ES_USERNAME")
     es_password: str = Field(default="", alias="ES_PASSWORD")
     es_verify_certs: bool = Field(default=False, alias="ES_VERIFY_CERTS")
@@ -45,6 +45,23 @@ class Settings(BaseSettings):
 
     # Observability
     otel_endpoint: str = Field(default="", alias="OTEL_EXPORTER_OTLP_ENDPOINT")
+
+    # --- Phase 1: search / index / embedding tuning ---
+    es_index_prefix: str = Field(default="acip", alias="ES_INDEX_PREFIX")
+    catalogue_alias: str = Field(default="acip-products", alias="CATALOGUE_ALIAS")
+    embedding_model: str = Field(default="BAAI/bge-m3", alias="EMBEDDING_MODEL")
+    embedding_dims: int = Field(default=1024, alias="EMBEDDING_DIMS")
+    reranker_model: str = Field(default="BAAI/bge-reranker-v2-m3", alias="RERANKER_MODEL")
+    rerank_enabled: bool = Field(default=False, alias="RERANK_ENABLED")
+    rerank_window: int = Field(default=50, alias="RERANK_WINDOW")
+    search_default_size: int = Field(default=20, alias="SEARCH_DEFAULT_SIZE")
+    rrf_rank_constant: int = Field(default=60, alias="RRF_RANK_CONSTANT")
+    rrf_rank_window: int = Field(default=100, alias="RRF_RANK_WINDOW")
+    knn_k: int = Field(default=100, alias="KNN_K")
+    knn_num_candidates: int = Field(default=200, alias="KNN_NUM_CANDIDATES")
+    semantic_cache_threshold: float = Field(default=0.92, alias="SEMANTIC_CACHE_THRESHOLD")
+    index_shards: int = Field(default=1, alias="INDEX_SHARDS")
+    index_replicas: int = Field(default=1, alias="INDEX_REPLICAS")
 
     @property
     def pg_dsn(self) -> str:

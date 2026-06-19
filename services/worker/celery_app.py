@@ -1,8 +1,8 @@
-"""Celery application bootstrap (Phase 0 foundation).
+"""Celery application bootstrap.
 
-The worker will run sync ingestion, reconciliation, batch embeddings, and
-analytics (M3/M4/M10, Phases 1-3). Phase 0 establishes only the Celery app,
-broker wiring, and a trivial health task — no business tasks.
+Runs sync ingestion, reconciliation, and batch embeddings (M3/M4). Phase 1 adds
+the sync/embedding tasks (in `worker.tasks`) and a periodic reconciliation
+beat schedule — the self-healing safety net (REQ-M3-002).
 """
 
 from __future__ import annotations
@@ -16,11 +16,20 @@ celery_app = Celery(
     "acip",
     broker=settings.celery_broker_url,
     backend=settings.celery_result_backend,
+    include=["worker.tasks"],
 )
 celery_app.conf.update(
     task_track_started=True,
-    task_acks_late=True,           # idempotency-friendly; full guards land in M3
+    task_acks_late=True,           # idempotency-friendly; guarded upserts in M3
     worker_prefetch_multiplier=1,
+    beat_schedule={
+        # Reconciliation cadence; tenants are enumerated by the task in M11/M3.
+        "reconcile-sync": {
+            "task": "acip.sync.reconcile_tenant",
+            "schedule": 900.0,  # every 15 minutes
+            "args": ("__all__", "rest"),
+        }
+    },
 )
 
 
