@@ -71,6 +71,8 @@ class Settings(BaseSettings):
     frontier_api_key: str = Field(default="", alias="FRONTIER_API_KEY")
     budget_default_cap: float = Field(default=1000.0, alias="BUDGET_DEFAULT_CAP")
     chat_max_tokens: int = Field(default=512, alias="CHAT_MAX_TOKENS")
+    # Operator/admin plane auth — separated from tenant API keys (REQ-M11-004).
+    admin_token: str = Field(default="", alias="ADMIN_TOKEN")
 
     @property
     def pg_dsn(self) -> str:
