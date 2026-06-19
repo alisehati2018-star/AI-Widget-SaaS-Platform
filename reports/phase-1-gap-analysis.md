@@ -64,3 +64,25 @@ Legend: ✅ done · ◑ partial · ❌ deferred · ⏳ runtime/data-gated.
 - One pilot store live on ACIP search (Phase-1 exit, §16.3).
 These require a Docker host + a pilot store and are the human/runtime portion of
 the gate, not code defects.
+
+## Post-approval re-audit (2026-06-19)
+
+Independent re-audit against `phase-1.md`/`tasks-phase-1.md`. Static gates green
+(ruff clean; mypy clean across 55 files; 33 unit passed / 3 ES-gated skipped).
+Coverage findings above are confirmed and accurate. One **critical defect** was
+found and **fixed**:
+
+- **DEFECT-P1-A (fixed): worker event-loop reuse.** `services/worker/tasks.py`
+  called `asyncio.run()` per task while using the module-level cached async
+  singletons (`get_es_client`, `get_redis`, embedding client). Those clients
+  bind their connector to the loop at first use; `asyncio.run` closes that loop
+  after each task, so the **2nd task onward would fail** ("Event loop is
+  closed"). The API path was unaffected (single persistent uvicorn loop).
+  Fix: a persistent per-process event loop in the worker (`_run` reuses one
+  loop). Verified the loop is reused and stays open across calls. No other
+  files touched; static suite still green.
+
+No other critical defects found. The remaining items (GAP-P1-1..5, `body=`
+deprecation on the ES client, scope/RBAC deferral, webhook-signature
+enforcement) are non-blocking partials/tech-debt already tracked above and are
+correctly scheduled for later phases. **No blockers remain for Phase 2.**

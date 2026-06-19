@@ -24,9 +24,19 @@ from .celery_app import celery_app
 
 log = get_logger("worker.tasks")
 
+# A single, persistent event loop per worker process. The datastore clients
+# (AsyncElasticsearch, redis.asyncio, httpx) are cached singletons bound to the
+# loop at first use; `asyncio.run` would create — and then close — a new loop on
+# every task, leaving those clients pinned to a closed loop and breaking the 2nd
+# task onward. A long-lived loop keeps them valid for the process lifetime.
+_loop: asyncio.AbstractEventLoop | None = None
+
 
 def _run(coro):
-    return asyncio.run(coro)
+    global _loop
+    if _loop is None or _loop.is_closed():
+        _loop = asyncio.new_event_loop()
+    return _loop.run_until_complete(coro)
 
 
 async def _embed_text(text: str) -> list[float] | None:
