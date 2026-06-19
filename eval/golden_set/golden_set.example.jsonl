@@ -1,0 +1,5 @@
+{"query_id": "GS-001", "query": "گوشی سامسونگ", "category": "common", "notes": "common brand+product search", "judgements": [{"product_id": "P-1001", "grade": 3}, {"product_id": "P-1002", "grade": 2}]}
+{"query_id": "GS-002", "query": "می‌خوام یه کفش ورزشی ارزون", "category": "conversational", "notes": "conversational phrasing + price intent", "judgements": [{"product_id": "P-2001", "grade": 3}, {"product_id": "P-2002", "grade": 1}]}
+{"query_id": "GS-003", "query": "كفش نايك", "category": "synonym_brand", "notes": "Arabic ك/ي variants of کفش نایک", "judgements": [{"product_id": "P-2010", "grade": 3}]}
+{"query_id": "GS-004", "query": "میروم", "category": "zwnj_spacing", "notes": "ZWNJ-free form of می‌روم (analyzer must match)", "judgements": [{"product_id": "P-3001", "grade": 2}]}
+{"query_id": "GS-005", "query": "ایفون ۱۵", "category": "misspelling", "notes": "Persian digits + colloquial spelling of iPhone 15", "judgements": [{"product_id": "P-4001", "grade": 3}, {"product_id": "P-4002", "grade": 1}]}

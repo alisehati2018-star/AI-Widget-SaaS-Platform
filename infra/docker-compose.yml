@@ -1,0 +1,135 @@
+# ACIP — on-premise development topology (Phase 0, App D / REQ-M1-002).
+# Single-host Docker Compose; the same services move to Kubernetes unchanged.
+#
+# Network segmentation (REQ-M1-009): ONLY `api` and `gateway` publish host
+# ports. Elasticsearch, Postgres, Redis, and the inference services are on the
+# internal network with no host port mapping. `kibana` is published for
+# operator observability only.
+#
+# Values are illustrative dev defaults; production sources secrets from a
+# secret store and enables CA-verified TLS everywhere (REQ-M1-003/010).
+
+name: acip
+
+x-python-build: &python-build
+  build:
+    context: ..
+    dockerfile: infra/Dockerfile.python
+
+services:
+  elasticsearch: # data spine: BM25 + dense_vector + RRF, DiskBBQ, ACORN (M1)
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.2.0
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=true
+      - ELASTIC_PASSWORD=${ES_PASSWORD:-change-me-in-secret-store}
+      - "ES_JAVA_OPTS=-Xms2g -Xmx2g"
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    networks: [internal]
+    deploy:
+      resources:
+        limits:
+          memory: 4g
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -u elastic:$$ELASTIC_PASSWORD http://localhost:9200/_cluster/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  kibana: # observability surface (REQ-M12-011); ops-only
+    image: docker.elastic.co/kibana/kibana:9.2.0
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+    networks: [internal]
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+
+  postgres: # control plane: tenants, keys, plans, usage (M1)
+    image: postgres:16
+    environment:
+      - POSTGRES_DB=${PG_DB:-acip}
+      - POSTGRES_USER=${PG_USER:-acip}
+      - POSTGRES_PASSWORD=${PG_PASSWORD:-change-me-in-secret-store}
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+      - ../db/migrations:/docker-entrypoint-initdb.d:ro
+    networks: [internal]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER:-acip} -d ${PG_DB:-acip}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis: # cache + queue + rate limits (M1)
+    image: redis:7
+    networks: [internal]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  embeddings: # self-hosted embedding model (BGE-M3 / Qwen3-Embedding) — wired in M4
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-latest
+    command: ["--model-id", "BAAI/bge-m3"]
+    networks: [internal]
+    profiles: ["inference"] # opt-in; heavy. Enable with: --profile inference
+
+  reranker: # self-hosted cross-encoder (BGE/Qwen3 reranker) — wired in M5
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-latest
+    command: ["--model-id", "BAAI/bge-reranker-v2-m3"]
+    networks: [internal]
+    profiles: ["inference"]
+
+  llm: # self-hosted generation (Qwen3.x / Gemma) via vLLM — wired in M7
+    image: vllm/vllm-openai:latest
+    command: ["--model", "Qwen/Qwen3-0.6B", "--enable-prefix-caching"]
+    networks: [internal]
+    profiles: ["inference"]
+
+  gateway: # AI gateway shell (M6) — externally exposed
+    <<: *python-build
+    command: ["uvicorn", "gateway.main:app", "--host", "0.0.0.0", "--port", "8080"]
+    env_file: [../.env]
+    ports:
+      - "8080:8080"
+    networks: [internal]
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  api: # public API (M1/§12) — externally exposed
+    <<: *python-build
+    command: ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    env_file: [../.env]
+    ports:
+      - "8000:8000"
+    networks: [internal]
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker: # Celery worker (M3/M4/M10) — internal only
+    <<: *python-build
+    command: ["celery", "-A", "worker.celery_app", "worker", "--loglevel=INFO"]
+    env_file: [../.env]
+    networks: [internal]
+    depends_on:
+      redis:
+        condition: service_healthy
+
+networks:
+  internal:
+    driver: bridge
+
+volumes:
+  es-data:
+  pg-data:

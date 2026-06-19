@@ -1,0 +1,29 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ACIP golden-set query record",
+  "description": "One judged Persian query (blueprint §20.1). The golden set is a JSONL file with one of these objects per line.",
+  "type": "object",
+  "required": ["query_id", "query", "category", "judgements"],
+  "properties": {
+    "query_id": { "type": "string", "description": "Stable id, e.g. GS-001." },
+    "query": { "type": "string", "description": "The Persian query text as a shopper would type it." },
+    "category": {
+      "type": "string",
+      "description": "Coverage bucket (§20.1).",
+      "enum": ["common", "long_tail", "conversational", "misspelling", "zwnj_spacing", "synonym_brand", "hard_ambiguous"]
+    },
+    "notes": { "type": "string" },
+    "judgements": {
+      "type": "array",
+      "description": "Human relevance grades for expected products.",
+      "items": {
+        "type": "object",
+        "required": ["product_id", "grade"],
+        "properties": {
+          "product_id": { "type": "string" },
+          "grade": { "type": "integer", "minimum": 0, "maximum": 3, "description": "0 irrelevant .. 3 perfect" }
+        }
+      }
+    }
+  }
+}
