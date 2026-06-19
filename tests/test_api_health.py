@@ -25,9 +25,18 @@ def test_trace_id_generated_when_absent():
     assert resp.headers.get("x-request-id")
 
 
-def test_v1_search_not_implemented_envelope():
-    resp = client.post("/v1/search")
-    assert resp.status_code == 501
+def test_v1_search_requires_api_key():
+    # Phase 1: /v1/search is implemented and tenant-scoped. Without a key it must
+    # reject before touching any datastore (isolation: no tenant -> no query).
+    resp = client.post("/v1/search", json={"query": "گوشی"})
+    assert resp.status_code == 401
     body = resp.json()
-    assert body["error"]["code"] == "not_implemented"
+    assert body["error"]["code"] == "unauthorized"
     assert "request_id" in body["error"]
+
+
+def test_v1_chat_still_not_implemented():
+    # Chat is Phase 2 (M7) — still a 501 contract skeleton.
+    resp = client.post("/v1/chat")
+    assert resp.status_code == 501
+    assert resp.json()["error"]["code"] == "not_implemented"

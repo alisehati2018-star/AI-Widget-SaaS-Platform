@@ -1,7 +1,7 @@
-# ACIP CI — Phase 0 baseline gate (REQ-M12-010, T-P0-008).
-# Establishes the ordered-gate skeleton: lint -> type-check -> unit/integration.
-# Later phases extend this with the relevance eval, tenant-isolation suite,
-# guardrail suite, and cost-regression replay (blueprint §20.4).
+# ACIP CI (REQ-M12-010, §20.4).
+# Ordered gates: lint -> type-check -> unit tests (hermetic), then an ES-backed
+# integration job (analyzer/isolation round trips) + the golden-set relevance
+# eval. Guardrail + cost-regression gates arrive in Phase 2/3.
 name: ci
 
 on:
@@ -28,10 +28,41 @@ jobs:
         run: ruff check .
 
       - name: Type-check (mypy)
-        run: mypy packages services eval || true   # advisory in Phase 0
+        run: mypy packages services eval
 
-      - name: Unit + integration tests (pytest)
+      - name: Unit tests (hermetic, hard gate)
         run: pytest -q
+
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      elasticsearch:
+        image: docker.elastic.co/elasticsearch/elasticsearch:9.2.0
+        env:
+          discovery.type: single-node
+          xpack.security.enabled: "false"   # test-only; dev/prod use auth
+          ES_JAVA_OPTS: -Xms1g -Xmx1g
+        ports:
+          - 9200:9200
+        options: >-
+          --health-cmd "bash -c 'exec 3<>/dev/tcp/localhost/9200'"
+          --health-interval 15s --health-timeout 10s --health-retries 12
+    env:
+      ES_HOST: http://localhost:9200
+      ES_PASSWORD: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ".[dev]"
+      - name: Integration tests (ES-backed)
+        run: pytest -q tests/integration
+      - name: Relevance eval (golden-set dry run)
+        run: python -m eval.run_eval --golden eval/golden_set/golden_set.example.jsonl
 
   frontend:
     runs-on: ubuntu-latest

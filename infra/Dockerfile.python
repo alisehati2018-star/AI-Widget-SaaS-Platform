@@ -8,15 +8,15 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# Install dependencies first for better layer caching.
+# Copy project metadata + source, then install. Source is present at install
+# time so setuptools can discover the packages (packages/ + services/) rather
+# than producing a deps-only, PYTHONPATH-dependent install.
 COPY pyproject.toml ./
-RUN pip install --upgrade pip && pip install .
-
-# Source: shared lib + services.
 COPY packages ./packages
 COPY services ./services
+RUN pip install --upgrade pip && pip install .
 
-# Make the shared package and services importable.
+# Belt-and-suspenders: keep the source importable even if run uninstalled.
 ENV PYTHONPATH=/app/packages:/app/services:/app
 
 # Default to the public API; compose overrides per service.

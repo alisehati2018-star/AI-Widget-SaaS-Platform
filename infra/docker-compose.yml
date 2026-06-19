@@ -22,6 +22,10 @@ services:
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=true
+      # Dev: auth stays ON, but the HTTP layer is plaintext so every client
+      # (api, kibana, healthcheck) speaks http consistently. Production enables
+      # CA-verified TLS with mounted certs (REQ-M1-003).
+      - xpack.security.http.ssl.enabled=false
       - ELASTIC_PASSWORD=${ES_PASSWORD:-change-me-in-secret-store}
       - "ES_JAVA_OPTS=-Xms2g -Xmx2g"
     volumes:
@@ -32,15 +36,23 @@ services:
         limits:
           memory: 4g
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS -u elastic:$$ELASTIC_PASSWORD http://localhost:9200/_cluster/health || exit 1"]
+      # curl-free: the ES image's entrypoint is bash, so a /dev/tcp probe is
+      # available and is scheme-agnostic (works regardless of TLS).
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/9200"]
       interval: 15s
       timeout: 10s
       retries: 10
+      start_period: 40s
 
   kibana: # observability surface (REQ-M12-011); ops-only
     image: docker.elastic.co/kibana/kibana:9.2.0
     environment:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      # Dev: authenticate against the security-enabled cluster. The elastic
+      # superuser keeps the dev stack single-step (no post-boot password reset).
+      # Production switches to the kibana_system user or a service-account token.
+      - ELASTICSEARCH_USERNAME=elastic
+      - ELASTICSEARCH_PASSWORD=${ES_PASSWORD:-change-me-in-secret-store}
     ports:
       - "5601:5601"
     networks: [internal]

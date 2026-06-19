@@ -85,11 +85,23 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run the golden-set evaluation.")
     parser.add_argument("--golden", required=True, type=Path)
     parser.add_argument("-k", type=int, default=10)
+    parser.add_argument(
+        "--tenant",
+        default=None,
+        help="Tenant id to evaluate against a live ES cluster (M5). Omit for a dry run.",
+    )
     args = parser.parse_args()
 
     golden = load_golden_set(args.golden)
-    # Phase 0: no search backend yet -> EmptyProvider. Swap in the M5 client later.
-    results = evaluate(golden, EmptyProvider(), k=args.k)
+    if args.tenant:
+        # Live search backend (requires a reachable Elasticsearch cluster).
+        from eval.es_provider import ESResultsProvider
+
+        provider: ResultsProvider = ESResultsProvider(args.tenant, size=args.k)
+    else:
+        # Dry run with no backend (Phase-0 behaviour).
+        provider = EmptyProvider()
+    results = evaluate(golden, provider, k=args.k)
     print(json.dumps(results, indent=2, ensure_ascii=False))
 
 
