@@ -7,15 +7,16 @@ Every endpoint is tenant-scoped via the API key (REQ-M11-001). The mandatory
 
 from __future__ import annotations
 
+import uuid
 from typing import Any
 
-from acip_core.errors import error_response, not_implemented
+from acip_core.errors import error_response
 from acip_search.suggest import suggest as run_suggest
 from acip_sync.connectors import get_connector
 from fastapi import APIRouter, Header, Request
 
 from ..deps import API_KEY_HEADER, resolve_principal
-from ..runtime import get_search_service
+from ..runtime import get_assistant, get_search_service
 
 router = APIRouter(prefix="/v1", tags=["v1"])
 
@@ -96,5 +97,16 @@ async def sync_bulk(payload: dict[str, Any], x_api_key: str | None = _KEY):
 
 
 @router.post("/chat")
-async def chat():
-    return not_implemented("Assistant chat (/v1/chat, M7)")
+async def chat(payload: dict[str, Any], x_api_key: str | None = _KEY):
+    """Grounded RAG assistant turn (M7). Tenant-scoped; answers strictly from
+    the store's own data via the gateway cache→route→compress→generate ladder."""
+    principal = await resolve_principal(x_api_key)
+    if not principal.tenant_id:
+        return _unauthorized()
+    message = str(payload.get("message", "")).strip()
+    if not message:
+        return error_response(422, "invalid_request", "Field 'message' is required.")
+    session_id = str(payload.get("session_id") or uuid.uuid4().hex)
+    assistant = get_assistant()
+    result = await assistant.answer(principal.tenant_id, session_id, message)
+    return {"session_id": session_id, **result}
