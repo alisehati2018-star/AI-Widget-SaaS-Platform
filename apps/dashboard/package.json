@@ -1,0 +1,22 @@
+{
+  "name": "acip-dashboard",
+  "version": "0.0.0",
+  "private": true,
+  "description": "ACIP operator dashboard + widget host (foundation only; built out in M8/M9, Phase 2).",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "next": "14.2.5",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "20.14.0",
+    "@types/react": "18.3.3",
+    "typescript": "5.5.3"
+  }
+}
