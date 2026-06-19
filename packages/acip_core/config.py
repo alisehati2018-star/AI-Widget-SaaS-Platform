@@ -63,6 +63,17 @@ class Settings(BaseSettings):
     index_shards: int = Field(default=1, alias="INDEX_SHARDS")
     index_replicas: int = Field(default=1, alias="INDEX_REPLICAS")
 
+    # --- Phase 2: assistant / gateway ---
+    llm_model: str = Field(default="Qwen/Qwen3-0.6B", alias="LLM_MODEL")
+    frontier_enabled: bool = Field(default=False, alias="FRONTIER_ENABLED")
+    frontier_url: str = Field(default="", alias="FRONTIER_URL")
+    frontier_model: str = Field(default="", alias="FRONTIER_MODEL")
+    frontier_api_key: str = Field(default="", alias="FRONTIER_API_KEY")
+    budget_default_cap: float = Field(default=1000.0, alias="BUDGET_DEFAULT_CAP")
+    chat_max_tokens: int = Field(default=512, alias="CHAT_MAX_TOKENS")
+    # Operator/admin plane auth — separated from tenant API keys (REQ-M11-004).
+    admin_token: str = Field(default="", alias="ADMIN_TOKEN")
+
     @property
     def pg_dsn(self) -> str:
         return (

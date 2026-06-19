@@ -7,15 +7,18 @@ Every endpoint is tenant-scoped via the API key (REQ-M11-001). The mandatory
 
 from __future__ import annotations
 
+import json
+import uuid
 from typing import Any
 
-from acip_core.errors import error_response, not_implemented
+from acip_core.errors import error_response
 from acip_search.suggest import suggest as run_suggest
 from acip_sync.connectors import get_connector
 from fastapi import APIRouter, Header, Request
+from fastapi.responses import StreamingResponse
 
 from ..deps import API_KEY_HEADER, resolve_principal
-from ..runtime import get_search_service
+from ..runtime import get_assistant, get_search_service
 
 router = APIRouter(prefix="/v1", tags=["v1"])
 
@@ -96,5 +99,53 @@ async def sync_bulk(payload: dict[str, Any], x_api_key: str | None = _KEY):
 
 
 @router.post("/chat")
-async def chat():
-    return not_implemented("Assistant chat (/v1/chat, M7)")
+async def chat(payload: dict[str, Any], x_api_key: str | None = _KEY):
+    """Grounded RAG assistant turn (M7). Tenant-scoped; answers strictly from
+    the store's own data via the gateway cache→route→compress→generate ladder."""
+    principal = await resolve_principal(x_api_key)
+    if not principal.tenant_id:
+        return _unauthorized()
+    message = str(payload.get("message", "")).strip()
+    if not message:
+        return error_response(422, "invalid_request", "Field 'message' is required.")
+    session_id = str(payload.get("session_id") or uuid.uuid4().hex)
+    assistant = get_assistant()
+    result = await assistant.answer(principal.tenant_id, session_id, message)
+
+    # Best-effort in-conversation lead capture (M10-004); never breaks the turn.
+    from acip_analytics import capture_lead, detect_lead
+    from acip_core.clients import get_pg_pool
+
+    signal = detect_lead(message)
+    if signal.is_lead:
+        await capture_lead(await get_pg_pool(), principal.tenant_id, signal)
+
+    return {"session_id": session_id, **result}
+
+
+@router.post("/chat/stream")
+async def chat_stream(payload: dict[str, Any], x_api_key: str | None = _KEY):
+    """Server-Sent-Events streaming chat (M7: REQ-M7-007).
+
+    Streams the grounded answer so the widget renders progressively (first-token
+    target < 1.5 s — measured in the Validation phase). The full turn still goes
+    through the gateway ladder + guardrails; this endpoint chunks the result as
+    SSE `data:` frames. True per-token model streaming is wired to vLLM at
+    validation time via `acip_gateway.llm_client.LLMClient.stream`.
+    """
+    principal = await resolve_principal(x_api_key)
+    if not principal.tenant_id:
+        return _unauthorized()
+    message = str(payload.get("message", "")).strip()
+    if not message:
+        return error_response(422, "invalid_request", "Field 'message' is required.")
+    session_id = str(payload.get("session_id") or uuid.uuid4().hex)
+    result = await get_assistant().answer(principal.tenant_id, session_id, message)
+
+    async def _events():
+        yield f"event: meta\ndata: {json.dumps({'session_id': session_id})}\n\n"
+        for token in str(result.get("answer", "")).split():
+            yield f"data: {json.dumps({'token': token + ' '})}\n\n"
+        yield f"event: done\ndata: {json.dumps({'citations': result.get('citations', [])})}\n\n"
+
+    return StreamingResponse(_events(), media_type="text/event-stream")

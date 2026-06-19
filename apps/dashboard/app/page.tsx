@@ -1,12 +1,21 @@
+import Link from "next/link";
+
 export default function Home() {
-  // Phase 0 foundation only. The operator dashboard (synonyms, zero-result,
-  // four-dimension metrics) and the embeddable widget are built in M8/M9
-  // (Phase 2). This placeholder establishes the Next.js app in the monorepo.
+  // Operator dashboard home. The console (four-dimension analytics) and synonym
+  // tools are the M9 surfaces; the embeddable shopper widget lives in
+  // `widget/acip-widget.ts` (M8).
   return (
     <main style={{ fontFamily: "system-ui, sans-serif", padding: "2rem" }}>
       <h1>ACIP</h1>
-      <p>AI Commerce Intelligence Platform — dashboard foundation (Phase 0).</p>
-      <p>Operator console and widget arrive in Phase 2 (M8 / M9).</p>
+      <p>AI Commerce Intelligence Platform — operator dashboard.</p>
+      <ul>
+        <li>
+          <Link href="/console">Analytics console (relevance · latency · cost · reliability)</Link>
+        </li>
+        <li>
+          <Link href="/synonyms">Synonym &amp; suggestion management</Link>
+        </li>
+      </ul>
     </main>
   );
 }

@@ -35,8 +35,9 @@ def test_v1_search_requires_api_key():
     assert "request_id" in body["error"]
 
 
-def test_v1_chat_still_not_implemented():
-    # Chat is Phase 2 (M7) — still a 501 contract skeleton.
-    resp = client.post("/v1/chat")
-    assert resp.status_code == 501
-    assert resp.json()["error"]["code"] == "not_implemented"
+def test_v1_chat_requires_api_key():
+    # Phase 2: /v1/chat is implemented and tenant-scoped (M7). Without a key it
+    # must reject before any retrieval/generation (isolation: no tenant -> no turn).
+    resp = client.post("/v1/chat", json={"message": "سلام"})
+    assert resp.status_code == 401
+    assert resp.json()["error"]["code"] == "unauthorized"
