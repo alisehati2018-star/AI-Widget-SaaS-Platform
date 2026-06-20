@@ -1,0 +1,23 @@
+{
+  "name": "vitrin-web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Vitrin — marketing site, auth, store-owner dashboard, and platform admin panel (Next.js 16).",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "next": "16.2.9",
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
+  },
+  "devDependencies": {
+    "@types/node": "26.0.0",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "typescript": "6.0.3"
+  }
+}

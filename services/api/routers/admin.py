@@ -27,6 +27,7 @@ from ..deps import hash_key
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 _ADMIN = Header(default=None, alias="x-admin-token")
+_AUTHZ = Header(default=None, alias="authorization")
 
 
 def _authorized(token: str | None) -> bool:
@@ -35,6 +36,17 @@ def _authorized(token: str | None) -> bool:
     if not expected or not token:
         return False
     return secrets.compare_digest(token, expected)
+
+
+async def _admin_ok(token: str | None, authorization: str | None) -> bool:
+    """Authorize the admin plane via EITHER the operator token (automation) OR a
+    platform-admin bearer JWT (the admin-panel UI). Phase 6 dual-auth."""
+    if _authorized(token):
+        return True
+    from .auth import current_principal
+
+    principal = await current_principal(authorization)
+    return principal is not None and principal.is_admin
 
 
 def _forbidden():
@@ -68,6 +80,57 @@ async def create_tenant(payload: dict[str, Any], x_admin_token: str | None = _AD
                 detail={"slug": slug, "scope": scope})
     # The raw key is returned exactly once; only its hash is stored.
     return {"tenant_id": str(tenant_id), "slug": slug, "api_key": raw_key, "scope": scope}
+
+
+@router.get("/overview")
+async def overview(x_admin_token: str | None = _ADMIN, authorization: str | None = _AUTHZ):
+    """Platform-wide counts for the admin dashboard (Phase 6)."""
+    if not await _admin_ok(x_admin_token, authorization):
+        return _forbidden()
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        tenants = await conn.fetchval("SELECT count(*) FROM tenants")
+        users = await conn.fetchval("SELECT count(*) FROM users")
+        active_subs = await conn.fetchval(
+            "SELECT count(*) FROM subscriptions WHERE status IN ('active', 'trialing')"
+        )
+        mrr = await conn.fetchval(
+            "SELECT COALESCE(sum(p.price_monthly), 0) FROM subscriptions s "
+            "JOIN plans p ON p.id = s.plan_id WHERE s.status = 'active'"
+        )
+    return {
+        "tenants": int(tenants or 0),
+        "users": int(users or 0),
+        "active_subscriptions": int(active_subs or 0),
+        "mrr": float(mrr or 0),
+    }
+
+
+@router.get("/tenants")
+async def list_tenants(x_admin_token: str | None = _ADMIN, authorization: str | None = _AUTHZ):
+    """List tenants with their plan + subscription status (Phase 6)."""
+    if not await _admin_ok(x_admin_token, authorization):
+        return _forbidden()
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT t.id, t.slug, t.name, t.status, t.created_at, "
+            "COALESCE(p.name, '—') AS plan, COALESCE(s.status, 'none') AS sub_status "
+            "FROM tenants t "
+            "LEFT JOIN subscriptions s ON s.tenant_id = t.id "
+            "LEFT JOIN plans p ON p.id = s.plan_id "
+            "ORDER BY t.created_at DESC LIMIT 200"
+        )
+    return {
+        "tenants": [
+            {
+                "id": str(r["id"]), "slug": r["slug"], "name": r["name"],
+                "status": r["status"], "plan": r["plan"], "sub_status": r["sub_status"],
+                "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+            }
+            for r in rows
+        ]
+    }
 
 
 @router.get("/analytics")

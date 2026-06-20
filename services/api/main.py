@@ -14,7 +14,7 @@ from acip_core.logging import configure_logging, get_logger
 from acip_core.middleware import TraceIdMiddleware
 from fastapi import FastAPI
 
-from .routers import admin, auth, health, v1
+from .routers import admin, auth, health, public, v1
 
 
 def create_app() -> FastAPI:
@@ -29,15 +29,16 @@ def create_app() -> FastAPI:
         log.info("api.shutdown")
 
     app = FastAPI(
-        title="ACIP API",
-        version="0.0.0",
-        description="AI Commerce Intelligence Platform — public API (Phase 0 foundation).",
+        title="Vitrin API",
+        version="0.1.0",
+        description="Vitrin — AI Commerce Intelligence Platform (public + auth + admin API).",
         lifespan=lifespan,
     )
     app.add_middleware(TraceIdMiddleware)
     app.add_exception_handler(Exception, unhandled_exception_handler)
 
     app.include_router(health.router)
+    app.include_router(public.router)
     app.include_router(auth.router)
     app.include_router(v1.router)
     app.include_router(admin.router)
