@@ -13,8 +13,11 @@ import secrets
 from typing import Any
 
 from acip_analytics import aggregations as _agg
+from acip_analytics import analyze as _analyze
 from acip_analytics import attribution as _attr
-from acip_core.clients import get_pg_pool, get_redis
+from acip_analytics import why_summary as _why
+from acip_core.audit import audit
+from acip_core.clients import get_es_client, get_pg_pool, get_redis
 from acip_core.config import get_settings
 from acip_core.errors import error_response
 from fastapi import APIRouter, Header
@@ -61,6 +64,8 @@ async def create_tenant(payload: dict[str, Any], x_admin_token: str | None = _AD
                 "VALUES ($1, $2, $3, $4)",
                 tenant_id, hash_key(raw_key), scope, "provisioned",
             )
+    await audit(pool, actor="operator", action="tenant.create", tenant_id=str(tenant_id),
+                detail={"slug": slug, "scope": scope})
     # The raw key is returned exactly once; only its hash is stored.
     return {"tenant_id": str(tenant_id), "slug": slug, "api_key": raw_key, "scope": scope}
 
@@ -71,8 +76,6 @@ async def analytics(tenant: str, x_admin_token: str | None = _ADMIN):
         return _forbidden()
     pool = await get_pg_pool()
     redis = get_redis()
-    from acip_core.clients import get_es_client
-
     es = get_es_client()
     return {
         "tenant_id": tenant,
@@ -87,9 +90,29 @@ async def analytics(tenant: str, x_admin_token: str | None = _ADMIN):
 async def zero_results(tenant: str, x_admin_token: str | None = _ADMIN):
     if not _authorized(x_admin_token):
         return _forbidden()
-    from acip_core.clients import get_es_client
-
     return {"tenant_id": tenant, "terms": await _agg.zero_result_terms(get_es_client(), tenant)}
+
+
+@router.get("/insight")
+async def insight(tenant: str, x_admin_token: str | None = _ADMIN):
+    """Insight 'why' engine (M10: REQ-M10-002): demand gaps + funnel drop-off."""
+    if not _authorized(x_admin_token):
+        return _forbidden()
+    return {"tenant_id": tenant, "insight": await _why(get_es_client(), tenant)}
+
+
+@router.post("/analyst")
+async def analyst(payload: dict[str, Any], tenant: str, x_admin_token: str | None = _ADMIN):
+    """AI Business Analyst (M10: REQ-M10-003): NL question → grounded narration."""
+    if not _authorized(x_admin_token):
+        return _forbidden()
+    question = str(payload.get("question", "")).strip()
+    if not question:
+        return error_response(422, "invalid_request", "Field 'question' is required.")
+    from ..runtime import get_provider_chain
+
+    result = await _analyze(question, get_es_client(), tenant, providers=get_provider_chain())
+    return {"tenant_id": tenant, **result}
 
 
 def _syn_key(tenant: str) -> str:
@@ -118,3 +141,79 @@ async def set_synonyms(payload: dict[str, Any], tenant: str, x_admin_token: str 
     # Live reload of the ES updateable synonym set is exercised in validation
     # (deferred). The curated list is persisted here as the source of truth.
     return {"tenant_id": tenant, "count": len(lines), "status": "saved"}
+
+
+# --- GDPR-style data governance (M11: REQ-M11-006) ---
+
+
+@router.post("/tenants/{tenant_id}/erase")
+async def erase_tenant_data(tenant_id: str, x_admin_token: str | None = _ADMIN):
+    """Erase a tenant's data across index, memory, and logs (right to be forgotten)."""
+    if not _authorized(x_admin_token):
+        return _forbidden()
+    s = get_settings()
+    es = get_es_client()
+    erased: dict[str, Any] = {}
+    query = {"query": {"term": {"tenant_id": tenant_id}}}
+    for index in (s.catalogue_alias, f"{s.es_index_prefix}-chatmem", f"{s.es_index_prefix}-events"):
+        try:
+            await es.delete_by_query(index=index, body=query, conflicts="proceed")
+            erased[index] = "ok"
+        except Exception:  # noqa: BLE001 - index may not exist yet
+            erased[index] = "skipped"
+    redis = get_redis()
+    if redis is not None:
+        for pattern in (f"chatmem:{tenant_id}:*", f"l2:{tenant_id}", f"synonyms:{tenant_id}",
+                        f"data_version:{tenant_id}"):
+            try:
+                async for key in redis.scan_iter(match=pattern):
+                    await redis.delete(key)
+            except Exception:  # noqa: BLE001
+                pass
+    pool = await get_pg_pool()
+    try:
+        async with pool.acquire() as conn:
+            await conn.execute("DELETE FROM leads WHERE tenant_id = $1", tenant_id)
+    except Exception:  # noqa: BLE001
+        pass
+    await audit(pool, actor="operator", action="tenant.erase", tenant_id=tenant_id, detail=erased)
+    return {"tenant_id": tenant_id, "erased": erased, "status": "erased"}
+
+
+@router.get("/tenants/{tenant_id}/export")
+async def export_tenant_data(tenant_id: str, x_admin_token: str | None = _ADMIN):
+    """Export a tenant's portable data (PII included for the data subject)."""
+    if not _authorized(x_admin_token):
+        return _forbidden()
+    pool = await get_pg_pool()
+    leads: list[dict[str, Any]] = []
+    try:
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT email, phone, has_intent, source, created_at "
+                "FROM leads WHERE tenant_id = $1",
+                tenant_id,
+            )
+            leads = [dict(r) for r in rows]
+    except Exception:  # noqa: BLE001
+        leads = []
+    return {"tenant_id": tenant_id, "leads": leads}
+
+
+@router.post("/tenants/{tenant_id}/tracking")
+async def set_tracking(tenant_id: str, payload: dict[str, Any], x_admin_token: str | None = _ADMIN):
+    """Enable/disable behavioural capture for a tenant (REQ-M11-006)."""
+    if not _authorized(x_admin_token):
+        return _forbidden()
+    enabled = bool(payload.get("enabled", True))
+    pool = await get_pg_pool()
+    try:
+        async with pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE tenants SET tracking_enabled = $1 WHERE id = $2", enabled, tenant_id
+            )
+    except Exception:  # noqa: BLE001
+        pass
+    await audit(pool, actor="operator", action="tenant.tracking", tenant_id=tenant_id,
+                detail={"enabled": enabled})
+    return {"tenant_id": tenant_id, "tracking_enabled": enabled}

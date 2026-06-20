@@ -73,6 +73,8 @@ class Settings(BaseSettings):
     chat_max_tokens: int = Field(default=512, alias="CHAT_MAX_TOKENS")
     # Operator/admin plane auth — separated from tenant API keys (REQ-M11-004).
     admin_token: str = Field(default="", alias="ADMIN_TOKEN")
+    # --- Phase 4: agent actions (money-moving tools), disabled by default ---
+    agent_actions_enabled: bool = Field(default=False, alias="AGENT_ACTIONS_ENABLED")
 
     @property
     def pg_dsn(self) -> str:

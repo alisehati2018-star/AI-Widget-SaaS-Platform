@@ -61,3 +61,26 @@ def test_admin_authorized_requires_configured_token(monkeypatch):
     assert admin._authorized("wrong") is False
     assert admin._authorized(None) is False
     get_settings.cache_clear()
+
+
+# --- insight 'why' engine + NL analyst (M10-002/003) ---
+
+def test_funnel_dropoff_finds_biggest():
+    from acip_analytics.insight import _funnel_dropoff
+    drops = _funnel_dropoff({"search": 100, "click": 40, "cart": 30, "purchase": 10})
+    assert drops[0]["from"] == "search" and drops[0]["to"] == "click"
+    assert drops[0]["drop_rate"] == 0.6
+
+
+async def test_nl_analyst_routes_and_grounds():
+    from acip_analytics.nl_analyst import analyze, route_metric
+
+    class _ES:
+        async def search(self, index, body):
+            return {"aggregations": {"terms": {"buckets": [{"key": "گوشی", "doc_count": 5}]}}}
+
+    routed = await route_metric("پرفروش‌ترین محصولات؟", _ES(), "t1")
+    assert routed["kind"] == "most_wanted"
+    # No providers -> deterministic, grounded template narration (never invents).
+    out = await analyze("پرفروش‌ترین محصولات؟", _ES(), "t1")
+    assert out["narrated_by"] == "template" and "گوشی" in out["answer"]

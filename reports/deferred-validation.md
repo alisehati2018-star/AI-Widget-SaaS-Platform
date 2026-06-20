@@ -46,6 +46,10 @@ Each item: ID · what to validate · requirement(s) · how to run it.
 - **DV-204** SLOs + error-budget alarms; availability ≥ 99.9%. (M12-007)
 - **DV-205** Full ordered CI/CD gate chain incl. cost-regression replay. (M12-010)
 
+## Phase 4 (v2 / post-GA)
+- **DV-301** Money-moving agent actions against live PSP/order systems with the
+  confirmation UX in the widget; audit + idempotency under real traffic. (M7-008)
+
 ## Notes
 - All items above are **not** code blockers for development; they validate
   behaviour/performance once real infrastructure + data exist.
