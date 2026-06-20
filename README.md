@@ -30,10 +30,10 @@ reports/                   Per-phase audits & completion reports
 
 ## Tech stack (Phase 0 decisions)
 
-- **Backend:** Python 3.12 + FastAPI (async); Celery worker.
+- **Backend:** Python 3.13 + FastAPI (async); Celery worker.
 - **Frontend:** Next.js + React + TypeScript.
 - **Data spine:** Elasticsearch 9.2+ (DiskBBQ, kNN, RRF, ACORN — used from Phase 1).
-- **Control plane:** PostgreSQL 16. **Cache/queue:** Redis 7.
+- **Control plane:** PostgreSQL 18. **Cache/queue:** Redis 8.
 - **Inference (compose-only in P0):** TEI embeddings/reranker, vLLM LLM.
 - **Observability:** OpenTelemetry + structlog + Kibana.
 

@@ -18,7 +18,7 @@ x-python-build: &python-build
 
 services:
   elasticsearch: # data spine: BM25 + dense_vector + RRF, DiskBBQ, ACORN (M1)
-    image: docker.elastic.co/elasticsearch/elasticsearch:9.2.0
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.4.2
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=true
@@ -45,7 +45,7 @@ services:
       start_period: 40s
 
   kibana: # observability surface (REQ-M12-011); ops-only
-    image: docker.elastic.co/kibana/kibana:9.2.0
+    image: docker.elastic.co/kibana/kibana:9.4.2
     environment:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
       # Dev: authenticate against the security-enabled cluster. The elastic
@@ -61,7 +61,7 @@ services:
         condition: service_healthy
 
   postgres: # control plane: tenants, keys, plans, usage (M1)
-    image: postgres:16
+    image: postgres:18
     environment:
       - POSTGRES_DB=${PG_DB:-acip}
       - POSTGRES_USER=${PG_USER:-acip}
@@ -77,7 +77,7 @@ services:
       retries: 5
 
   redis: # cache + queue + rate limits (M1)
-    image: redis:7
+    image: redis:8
     networks: [internal]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
