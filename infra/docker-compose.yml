@@ -1,10 +1,11 @@
 # ACIP — on-premise development topology (Phase 0, App D / REQ-M1-002).
 # Single-host Docker Compose; the same services move to Kubernetes unchanged.
 #
-# Network segmentation (REQ-M1-009): ONLY `api` and `gateway` publish host
-# ports. Elasticsearch, Postgres, Redis, and the inference services are on the
-# internal network with no host port mapping. `kibana` is published for
-# operator observability only.
+# Network segmentation (REQ-M1-009): in PRODUCTION only `api` and `gateway`
+# publish host ports; datastores stay internal. This DEV compose additionally
+# publishes elasticsearch (9200), postgres (5432) and redis (6379) so you can
+# run the app on the host (the common local-dev case in .env.example) against
+# Docker-hosted datastores. Remove those `ports:` for a locked-down deployment.
 #
 # Values are illustrative dev defaults; production sources secrets from a
 # secret store and enables CA-verified TLS everywhere (REQ-M1-003/010).
@@ -21,15 +22,16 @@ services:
     image: docker.elastic.co/elasticsearch/elasticsearch:9.4.2
     environment:
       - discovery.type=single-node
-      - xpack.security.enabled=true
-      # Dev: auth stays ON, but the HTTP layer is plaintext so every client
-      # (api, kibana, healthcheck) speaks http consistently. Production enables
-      # CA-verified TLS with mounted certs (REQ-M1-003).
-      - xpack.security.http.ssl.enabled=false
-      - ELASTIC_PASSWORD=${ES_PASSWORD:-change-me-in-secret-store}
+      # Dev: security OFF so a host-run app (the common local-dev case) connects
+      # with no password over plain http on localhost:9200. Production enables
+      # auth + CA-verified TLS with mounted certs (REQ-M1-003).
+      - xpack.security.enabled=false
       - "ES_JAVA_OPTS=-Xms2g -Xmx2g"
     volumes:
       - es-data:/usr/share/elasticsearch/data
+    # Published so an app running on the host (per .env.example) can reach it.
+    ports:
+      - "9200:9200"
     networks: [internal]
     deploy:
       resources:
@@ -47,12 +49,9 @@ services:
   kibana: # observability surface (REQ-M12-011); ops-only
     image: docker.elastic.co/kibana/kibana:9.4.2
     environment:
-      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
-      # Dev: authenticate against the security-enabled cluster. The elastic
-      # superuser keeps the dev stack single-step (no post-boot password reset).
+      # Dev cluster has security off (see elasticsearch service), so no creds.
       # Production switches to the kibana_system user or a service-account token.
-      - ELASTICSEARCH_USERNAME=elastic
-      - ELASTICSEARCH_PASSWORD=${ES_PASSWORD:-change-me-in-secret-store}
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
     ports:
       - "5601:5601"
     networks: [internal]
@@ -65,10 +64,13 @@ services:
     environment:
       - POSTGRES_DB=${PG_DB:-acip}
       - POSTGRES_USER=${PG_USER:-acip}
-      - POSTGRES_PASSWORD=${PG_PASSWORD:-change-me-in-secret-store}
+      - POSTGRES_PASSWORD=${PG_PASSWORD:-acip}
     volumes:
       - pg-data:/var/lib/postgresql/data
       - ../db/migrations:/docker-entrypoint-initdb.d:ro
+    # Published so a host-run app/worker (per .env.example) can reach it.
+    ports:
+      - "5432:5432"
     networks: [internal]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${PG_USER:-acip} -d ${PG_DB:-acip}"]
@@ -78,6 +80,9 @@ services:
 
   redis: # cache + queue + rate limits (M1)
     image: redis:8
+    # Published so a host-run app/worker (per .env.example) can reach it.
+    ports:
+      - "6379:6379"
     networks: [internal]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -107,6 +112,18 @@ services:
     <<: *python-build
     command: ["uvicorn", "gateway.main:app", "--host", "0.0.0.0", "--port", "8080"]
     env_file: [../.env]
+    # .env targets host-run mode (localhost); inside compose we reach datastores
+    # by service name. These overrides win over env_file values.
+    environment:
+      - ES_HOST=http://elasticsearch:9200
+      - ES_PASSWORD=
+      - PG_HOST=postgres
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - EMBEDDINGS_URL=http://embeddings:80
+      - RERANKER_URL=http://reranker:80
+      - LLM_URL=http://llm:8000
     ports:
       - "8080:8080"
     networks: [internal]
@@ -118,6 +135,16 @@ services:
     <<: *python-build
     command: ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
     env_file: [../.env]
+    environment:
+      - ES_HOST=http://elasticsearch:9200
+      - ES_PASSWORD=
+      - PG_HOST=postgres
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - EMBEDDINGS_URL=http://embeddings:80
+      - RERANKER_URL=http://reranker:80
+      - LLM_URL=http://llm:8000
     ports:
       - "8000:8000"
     networks: [internal]
@@ -133,6 +160,16 @@ services:
     <<: *python-build
     command: ["celery", "-A", "worker.celery_app", "worker", "--loglevel=INFO"]
     env_file: [../.env]
+    environment:
+      - ES_HOST=http://elasticsearch:9200
+      - ES_PASSWORD=
+      - PG_HOST=postgres
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - EMBEDDINGS_URL=http://embeddings:80
+      - RERANKER_URL=http://reranker:80
+      - LLM_URL=http://llm:8000
     networks: [internal]
     depends_on:
       redis:
