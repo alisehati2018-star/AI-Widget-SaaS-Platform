@@ -2,14 +2,18 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { getPlans, type PlanInfo } from "../../../lib/api";
+import { getPlans, type PlanInfo, type TenantProfile } from "../../../lib/api";
+import { authFetch } from "../../../lib/auth";
 import { DashboardShell, OWNER_NAV } from "../../../components/shell";
 import { Badge } from "../../../components/ui";
 
 export default function BillingPage() {
   const [plans, setPlans] = useState<PlanInfo[]>([]);
+  const [profile, setProfile] = useState<TenantProfile | null>(null);
+
   useEffect(() => {
     getPlans().then((r) => setPlans(r.plans)).catch(() => setPlans([]));
+    authFetch<TenantProfile>("/tenant/profile").then(setProfile).catch(() => setProfile(null));
   }, []);
 
   return (
@@ -18,8 +22,17 @@ export default function BillingPage() {
         <div className="row-between">
           <div>
             <small className="faint">Current plan</small>
-            <h3 style={{ margin: "0.2rem 0" }}>Free <Badge tone="warning">trial</Badge></h3>
-            <p style={{ margin: 0 }}>Your 14-day trial includes hybrid search and the assistant.</p>
+            <h3 style={{ margin: "0.2rem 0" }}>
+              {profile?.plan ?? "—"}{" "}
+              <Badge tone={profile?.sub_status === "active" ? "success" : "warning"}>
+                {profile?.sub_status ?? "—"}
+              </Badge>
+            </h3>
+            <p style={{ margin: 0 }}>
+              {profile?.current_period_end
+                ? `Renews / ends ${profile.current_period_end.slice(0, 10)}.`
+                : "Your trial includes hybrid search and the assistant."}
+            </p>
           </div>
           <Link href="/pricing" className="btn btn-primary">Upgrade plan</Link>
         </div>

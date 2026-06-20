@@ -14,7 +14,7 @@ from acip_core.logging import configure_logging, get_logger
 from acip_core.middleware import TraceIdMiddleware
 from fastapi import FastAPI
 
-from .routers import admin, auth, health, public, v1
+from .routers import admin, auth, health, public, tenant, v1
 
 
 def create_app() -> FastAPI:
@@ -40,6 +40,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(public.router)
     app.include_router(auth.router)
+    app.include_router(tenant.router)
     app.include_router(v1.router)
     app.include_router(admin.router)
 

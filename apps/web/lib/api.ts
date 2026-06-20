@@ -55,3 +55,76 @@ export async function apiFetch<T = unknown>(
 export function getPlans(): Promise<{ plans: PlanInfo[] }> {
   return apiFetch("/plans");
 }
+
+// --- Tenant (store-owner) shapes ---
+export interface TenantProfile {
+  tenant_id: string;
+  slug: string;
+  name: string;
+  status: string;
+  plan: string;
+  sub_status: string;
+  current_period_end: string | null;
+  tracking_enabled: boolean;
+  settings: Record<string, string>;
+  credits: { spent: number; cap: number | null; within_plan: boolean };
+  role: string;
+}
+export interface ApiKey {
+  id: string;
+  scope: string;
+  label: string | null;
+  revoked: boolean;
+  created_at: string | null;
+  last_used_at: string | null;
+}
+export interface Lead {
+  email: string | null;
+  phone: string | null;
+  has_intent: boolean;
+  source: string;
+  created_at: string | null;
+}
+export interface TeamMember {
+  email: string;
+  full_name: string | null;
+  role: string;
+  status: string;
+  last_login_at: string | null;
+}
+export interface FourDimensions {
+  cost?: { total?: number; no_paid_share?: number };
+  latency?: { p95_ms?: number | null };
+  reliability?: { turns?: number };
+}
+export interface AnalyticsBundle {
+  four_dimensions?: FourDimensions;
+  most_wanted?: { term: string; count: number }[];
+  zero_results?: { term: string; count: number }[];
+  funnel?: Record<string, number>;
+}
+
+// --- Admin shapes ---
+export interface AdminUser {
+  email: string;
+  full_name: string | null;
+  role: string;
+  status: string;
+  tenant: string;
+  last_login_at: string | null;
+}
+export interface AuditEntry {
+  actor: string;
+  action: string;
+  detail: Record<string, unknown>;
+  created_at: string | null;
+}
+export interface Order {
+  tenant: string;
+  plan: string;
+  amount: number;
+  currency: string;
+  status: string;
+  provider: string;
+  created_at: string | null;
+}

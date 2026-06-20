@@ -14,15 +14,27 @@ export interface NavItem {
 
 export const OWNER_NAV: NavItem[] = [
   { href: "/dashboard", label: "Overview", icon: "📊" },
-  { href: "/dashboard/keys", label: "API keys", icon: "🔑" },
+  { href: "/dashboard/catalog", label: "Catalog & sync", icon: "📦" },
+  { href: "/dashboard/search", label: "Search tuning", icon: "🔎" },
+  { href: "/dashboard/assistant", label: "Assistant", icon: "🤖" },
   { href: "/dashboard/analytics", label: "Analytics", icon: "📈" },
+  { href: "/dashboard/leads", label: "Leads", icon: "🎯" },
+  { href: "/dashboard/widget", label: "Widget & brand", icon: "🎨" },
+  { href: "/dashboard/keys", label: "API keys", icon: "🔑" },
+  { href: "/dashboard/team", label: "Team", icon: "👥" },
   { href: "/dashboard/billing", label: "Plan & billing", icon: "💳" },
+  { href: "/dashboard/settings", label: "Settings", icon: "⚙️" },
 ];
 
 export const ADMIN_NAV: NavItem[] = [
   { href: "/admin", label: "Overview", icon: "📊" },
   { href: "/admin/tenants", label: "Tenants", icon: "🏬" },
+  { href: "/admin/users", label: "Users", icon: "👤" },
   { href: "/admin/plans", label: "Plans", icon: "🏷️" },
+  { href: "/admin/billing", label: "Billing", icon: "💳" },
+  { href: "/admin/analytics", label: "Analytics", icon: "📈" },
+  { href: "/admin/audit", label: "Audit log", icon: "📜" },
+  { href: "/admin/settings", label: "Settings", icon: "⚙️" },
 ];
 
 /**

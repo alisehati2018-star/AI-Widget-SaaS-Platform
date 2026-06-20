@@ -1,31 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { AnalyticsBundle } from "../../../lib/api";
+import { authFetch } from "../../../lib/auth";
 import { DashboardShell, OWNER_NAV } from "../../../components/shell";
 import { Stat } from "../../../components/ui";
-import { authFetch, useSession } from "../../../lib/auth";
-
-interface Analytics {
-  four_dimensions?: {
-    cost?: { total?: number; no_paid_share?: number };
-    latency?: { p95_ms?: number | null };
-    reliability?: { turns?: number };
-  };
-  most_wanted?: { term: string; count: number }[];
-  zero_results?: { term: string; count: number }[];
-}
 
 export default function AnalyticsPage() {
-  const { user } = useSession();
-  const [data, setData] = useState<Analytics | null>(null);
+  const [data, setData] = useState<AnalyticsBundle | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!user?.tenant_id) return;
-    authFetch<Analytics>(`/admin/analytics?tenant=${encodeURIComponent(user.tenant_id)}`)
+    authFetch<AnalyticsBundle>("/tenant/analytics")
       .then(setData)
       .catch((e) => setError(String(e.message ?? e)));
-  }, [user?.tenant_id]);
+  }, []);
 
   const fd = data?.four_dimensions;
   return (
@@ -38,10 +27,25 @@ export default function AnalyticsPage() {
         <Stat label="Assistant turns" value={fd?.reliability?.turns ?? "—"} />
       </div>
 
+      <div className="card" style={{ marginBottom: "1.5rem" }}>
+        <h3>Most-wanted searches</h3>
+        {data?.most_wanted?.length ? (
+          <table className="table">
+            <thead><tr><th>Query</th><th>Count</th></tr></thead>
+            <tbody>
+              {data.most_wanted.map((m) => (
+                <tr key={m.term}><td>{m.term}</td><td>{m.count}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <p className="muted">No search data yet{error ? ` (${error})` : ""}.</p>
+        )}
+      </div>
+
       <div className="card">
         <h3>Zero-result searches</h3>
-        <p className="hint">Demand your catalogue isn&apos;t meeting — opportunities to add products or synonyms.</p>
-        {error ? <p className="muted">No data yet ({error}).</p> : null}
+        <p className="hint">Demand your catalogue isn&apos;t meeting — add products or synonyms.</p>
         {data?.zero_results?.length ? (
           <table className="table">
             <thead><tr><th>Query</th><th>Count</th></tr></thead>

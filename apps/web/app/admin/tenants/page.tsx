@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ADMIN_NAV, DashboardShell } from "../../../components/shell";
 import { Badge } from "../../../components/ui";
@@ -43,7 +44,7 @@ export default function AdminTenants() {
           <tbody>
             {(tenants ?? []).map((t) => (
               <tr key={t.id}>
-                <td>{t.name}</td>
+                <td><Link href={`/admin/tenants/${t.id}`} className="grad-text">{t.name}</Link></td>
                 <td className="muted">{t.slug}</td>
                 <td>{t.plan}</td>
                 <td><Badge tone={t.sub_status === "active" ? "success" : "warning"}>{t.sub_status}</Badge></td>

@@ -133,6 +133,81 @@ async def list_tenants(x_admin_token: str | None = _ADMIN, authorization: str | 
     }
 
 
+@router.get("/users")
+async def list_users(x_admin_token: str | None = _ADMIN, authorization: str | None = _AUTHZ):
+    """List all platform users (Phase 6)."""
+    if not await _admin_ok(x_admin_token, authorization):
+        return _forbidden()
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT u.email, u.full_name, u.role, u.status, u.last_login_at, "
+            "COALESCE(t.name, '—') AS tenant FROM users u "
+            "LEFT JOIN tenants t ON t.id = u.tenant_id ORDER BY u.created_at DESC LIMIT 500"
+        )
+    return {
+        "users": [
+            {
+                "email": r["email"], "full_name": r["full_name"], "role": r["role"],
+                "status": r["status"], "tenant": r["tenant"],
+                "last_login_at": r["last_login_at"].isoformat() if r["last_login_at"] else None,
+            }
+            for r in rows
+        ]
+    }
+
+
+@router.get("/audit")
+async def audit_log(x_admin_token: str | None = _ADMIN, authorization: str | None = _AUTHZ):
+    """Recent audit-log entries (Phase 6)."""
+    if not await _admin_ok(x_admin_token, authorization):
+        return _forbidden()
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT actor, action, detail, created_at FROM audit_log "
+            "ORDER BY created_at DESC LIMIT 200"
+        )
+    return {
+        "entries": [
+            {
+                "actor": r["actor"], "action": r["action"], "detail": r["detail"],
+                "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+            }
+            for r in rows
+        ]
+    }
+
+
+@router.get("/orders")
+async def list_orders(x_admin_token: str | None = _ADMIN, authorization: str | None = _AUTHZ):
+    """Recent billing orders + paid-revenue total (Phase 6/7)."""
+    if not await _admin_ok(x_admin_token, authorization):
+        return _forbidden()
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT o.amount, o.currency, o.status, o.provider, o.created_at, "
+            "COALESCE(t.name, '—') AS tenant, COALESCE(p.name, '—') AS plan FROM orders o "
+            "LEFT JOIN tenants t ON t.id = o.tenant_id "
+            "LEFT JOIN plans p ON p.id = o.plan_id ORDER BY o.created_at DESC LIMIT 200"
+        )
+        revenue = await conn.fetchval(
+            "SELECT COALESCE(sum(amount), 0) FROM orders WHERE status = 'paid'"
+        )
+    return {
+        "revenue_total": float(revenue or 0),
+        "orders": [
+            {
+                "tenant": r["tenant"], "plan": r["plan"], "amount": float(r["amount"]),
+                "currency": r["currency"], "status": r["status"], "provider": r["provider"],
+                "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+            }
+            for r in rows
+        ],
+    }
+
+
 @router.get("/analytics")
 async def analytics(tenant: str, x_admin_token: str | None = _ADMIN):
     if not _authorized(x_admin_token):
