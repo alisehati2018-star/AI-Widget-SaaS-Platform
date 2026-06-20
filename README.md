@@ -1,61 +1,107 @@
 # ACIP — AI Commerce Intelligence Platform
 
-An on-premise, multi-tenant **Persian hybrid search + grounded RAG shopping
-assistant + analytics** layer for OpenCart / WooCommerce stores, engineered on
-**Elasticsearch 9.2+** with a local-first, cost-controlled AI gateway.
+On-premise, multi-tenant **Persian hybrid search + grounded RAG shopping
+assistant + analytics** for OpenCart / WooCommerce stores, built on
+**Elasticsearch** with a local-first, cost-controlled AI gateway.
 
-> **Status: Phase 0 (Setup & Discovery) foundation.** This repository currently
-> contains the planning suite (`docs/generated/`) and the Phase-0 infrastructure
-> + scaffolding. No feature logic (search, RAG, sync) is implemented yet — those
-> belong to Phases 1–3. See `docs/generated/master-implementation-plan.md`.
+> **Status:** all development phases (0–4) are **code-complete and statically
+> verified** — `ruff` + `mypy` clean (78 files), **81 unit tests pass**, frontend
+> `tsc` clean. Runtime/performance **acceptance is not yet validated** (needs a
+> live cluster + real catalogue + self-hosted models). See
+> `reports/blueprint-compliance-audit.md` and `reports/deferred-validation.md`.
+
+## Tech stack (latest, mutually compatible)
+
+| Layer | Tech |
+|---|---|
+| Backend | Python 3.13 · FastAPI 0.138 · Celery 5.6 |
+| Frontend | Next.js 16 · React 19 · TypeScript 6 |
+| Search / vectors | Elasticsearch 9.4 (BM25 + dense_vector + RRF, DiskBBQ, ACORN) |
+| Control plane | **PostgreSQL 18** · Cache/queue: **Redis 8** |
+| Inference (self-hosted) | TEI (BGE‑M3 / reranker) · vLLM (Qwen3/Gemma) — Docker only |
+| Observability | OpenTelemetry · structlog · Kibana |
+
+## Run it
+
+> **Elasticsearch, Kibana, PostgreSQL and Redis run inside Docker** — they are
+> **not** started by the bare Python/Node commands. For anything beyond unit
+> tests and the dashboard UI you need Docker.
+
+### Method A — With Docker (full stack, recommended)
+
+```bash
+cp .env.example .env          # set ES_PASSWORD, PG_PASSWORD, ADMIN_TOKEN, …
+
+# Core stack: Elasticsearch + Kibana + PostgreSQL 18 + Redis 8 + API + gateway + worker
+docker compose -f infra/docker-compose.yml up -d
+curl -s localhost:8000/readyz   # API readiness — reports ES/PG/Redis status
+
+# (optional, heavy) self-hosted models for real search/chat:
+docker compose -f infra/docker-compose.yml --profile inference up -d
+
+# Operator dashboard (Next.js):
+cd apps/dashboard && npm install && npm run dev
+```
+
+You can then open:
+
+| What | URL |
+|---|---|
+| API + interactive Swagger docs | http://localhost:8000/docs |
+| Operator dashboard (console / synonyms) | http://localhost:3000/console |
+| Kibana (runs in Docker) | http://localhost:5601 |
+
+Create a tenant + API key (operator token from `.env`):
+
+```bash
+curl -X POST http://localhost:8000/admin/tenants \
+  -H "x-admin-token: $ADMIN_TOKEN" -H "content-type: application/json" \
+  -d '{"slug":"shop1","name":"Test Shop","scope":"widget"}'   # returns api_key
+```
+
+Only `api` (8000), `gateway` (8080) and `kibana` (5601) publish host ports; the
+datastores and model servers stay on the internal network.
+
+### Method B — Without Docker (limited: code + UI only)
+
+No Docker ⇒ no Elasticsearch/PostgreSQL/Redis/Kibana, so `/v1/*` and `/admin/*`
+that hit datastores won’t return data. Useful for development/inspection:
+
+```bash
+# Backend: install, lint, type-check, unit tests (hermetic — no services needed)
+pip install ".[dev]"
+ruff check . && mypy packages services eval && pytest -q
+
+# Run the API process (only /healthz works without datastores; /readyz reports "degraded")
+PYTHONPATH=packages:services python -m uvicorn api.main:app --port 8000
+
+# Frontend: dashboard UI dev server + typecheck (API calls will fail without the backend)
+cd apps/dashboard && npm install && npm run dev      # http://localhost:3000
+npx tsc --noEmit
+```
 
 ## Repository layout
 
 ```
-ACIP-Blueprint.docx        Authoritative spec (source of truth)
-docs/generated/            Requirements, phases, tasks, traceability, gap analysis, master plan
-docs/phase-0-kpi-targets.md  The §18 KPI contract
-packages/acip_core/        Shared lib: config, logging, tracing, health, security, datastore clients
-services/api/              Public API (FastAPI): /healthz, /readyz, /v1/*, /admin/* (skeletons)
-services/gateway/          AI gateway shell (FastAPI)
-services/worker/           Celery worker bootstrap
-apps/dashboard/            Next.js operator dashboard (foundation only)
-db/migrations/             PostgreSQL control-plane schema (tenants, keys, plans, usage)
-eval/                      Golden-set metrics + evaluation harness (quality backbone)
-infra/                     Docker Compose topology, Dockerfile, cluster verify script
-tests/                     Unit + smoke tests
-.github/workflows/ci.yml   CI baseline gate
-reports/                   Per-phase audits & completion reports
+ACIP-Blueprint.docx   Authoritative spec (source of truth)
+docs/generated/       Requirements, phase plans, traceability, gap analysis, v2 roadmap
+packages/             Domain libs: acip_core, acip_search, acip_sync, acip_embedding,
+                      acip_cache, acip_gateway, acip_assistant, acip_analytics, acip_billing
+services/             api · gateway · worker (FastAPI + Celery)
+apps/dashboard/       Next.js operator console + embeddable widget (widget/acip-widget.ts)
+db/migrations/        PostgreSQL control-plane schema (0001–0004)
+eval/                 Golden-set metrics + evaluation harness
+infra/                docker-compose.yml, Dockerfile, cluster verify script
+tests/                Unit + ES-gated integration tests
+reports/              Audits, compliance, gap-closure, dependency upgrade
 ```
 
-## Tech stack (Phase 0 decisions)
+## Notes
 
-- **Backend:** Python 3.13 + FastAPI (async); Celery worker.
-- **Frontend:** Next.js + React + TypeScript.
-- **Data spine:** Elasticsearch 9.2+ (DiskBBQ, kNN, RRF, ACORN — used from Phase 1).
-- **Control plane:** PostgreSQL 18. **Cache/queue:** Redis 8.
-- **Inference (compose-only in P0):** TEI embeddings/reranker, vLLM LLM.
-- **Observability:** OpenTelemetry + structlog + Kibana.
-
-## Quick start (development)
-
-```bash
-cp .env.example .env                 # set passwords; never commit .env
-pip install ".[dev]"                 # backend deps
-pytest -q                            # run unit + smoke tests
-
-# Bring up the core stack (inference services are opt-in via --profile inference):
-docker compose -f infra/docker-compose.yml up -d elasticsearch kibana postgres redis api gateway
-python infra/scripts/verify_cluster.py   # validate the cluster (T-P0-001)
-curl -s localhost:8000/healthz           # API liveness
-curl -s localhost:8000/readyz            # API readiness (checks ES/PG/Redis)
-```
-
-Only `api` (8000), `gateway` (8080), and `kibana` (5601) publish host ports;
-the datastores and model servers stay on the internal network (REQ-M1-009).
-
-## Development discipline
-
-One phase at a time, behind approval gates. Before each phase: re-read the
-blueprint + `requirements.md` + `traceability-matrix.md` + the phase doc, and
-verify scope boundaries. See `docs/generated/` for the full plan.
+- API surface (§12): `/v1/search`, `/v1/suggest`, `/v1/chat` (+ `/chat/stream`),
+  `/v1/sync/{webhook,bulk}`, `/admin/*`, `/healthz`, `/readyz`.
+- Tenant isolation is a hard invariant (mandatory `tenant_id` filter + scoped
+  keys + a release-blocking isolation test).
+- Real Persian search and the AI assistant need the **inference profile**
+  (self-hosted models) and a synced catalogue — part of the pending Validation
+  phase.
