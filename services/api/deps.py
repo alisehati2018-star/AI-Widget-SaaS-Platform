@@ -38,5 +38,19 @@ async def resolve_principal(api_key: str | None) -> ApiKeyPrincipal:
     )
 
 
+def principal_allowed(principal: ApiKeyPrincipal, *scopes: KeyScope) -> bool:
+    """Least-privilege check (REQ-M11-002): the key's scope must be permitted.
+
+    A shopper-widget key cannot reach sync/admin paths, and vice-versa.
+    """
+    return principal.tenant_id is not None and principal.scope in scopes
+
+
 # Re-exported for routers.
-__all__ = ["resolve_principal", "hash_key", "API_KEY_HEADER", "KeyScope"]
+__all__ = [
+    "resolve_principal",
+    "principal_allowed",
+    "hash_key",
+    "API_KEY_HEADER",
+    "KeyScope",
+]

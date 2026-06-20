@@ -33,6 +33,21 @@ jobs:
       - name: Unit tests (hermetic, hard gate)
         run: pytest -q
 
+      # Ordered release gates (REQ-M12-010, §20.4). Each is blocking.
+      - name: Tenant-isolation gate (RELEASE BLOCKER, REQ-M11-005)
+        run: pytest -q tests/test_isolation.py
+
+      - name: Guardrail / prompt-injection gate (REQ-M7-005)
+        run: pytest -q tests/test_injection.py
+
+      - name: Security & resilience gate (REQ-M11-003, REQ-M12-002)
+        run: pytest -q tests/test_security.py
+
+      # Cost-regression replay gate (REQ-M12-008) runs against a labelled traffic
+      # sample in the Validation phase — placeholder kept visible here.
+      - name: Cost-regression gate (deferred — Validation phase)
+        run: echo "cost-regression replay runs with real traffic (DV-104)"
+
   integration:
     runs-on: ubuntu-latest
     services:

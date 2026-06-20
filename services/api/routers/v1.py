@@ -17,8 +17,8 @@ from acip_sync.connectors import get_connector
 from fastapi import APIRouter, Header, Request
 from fastapi.responses import StreamingResponse
 
-from ..deps import API_KEY_HEADER, resolve_principal
-from ..runtime import get_assistant, get_search_service
+from ..deps import API_KEY_HEADER, KeyScope, principal_allowed, resolve_principal
+from ..runtime import get_assistant, get_rate_limiter, get_search_service
 
 router = APIRouter(prefix="/v1", tags=["v1"])
 
@@ -30,11 +30,27 @@ def _unauthorized():
     return error_response(401, "unauthorized", "A valid x-api-key is required.")
 
 
-@router.post("/search")
-async def search(payload: dict[str, Any], x_api_key: str | None = _KEY):
+async def _guard(x_api_key: str | None, *scopes: KeyScope):
+    """Resolve + authorize a request: tenant present, scope permitted (least-
+    privilege, REQ-M11-002), and within the per-tenant rate limit (REQ-M11-003).
+
+    Returns (principal, None) on success or (None, error_response) on rejection.
+    """
     principal = await resolve_principal(x_api_key)
     if not principal.tenant_id:
-        return _unauthorized()
+        return None, _unauthorized()
+    if not principal_allowed(principal, *scopes):
+        return None, error_response(403, "forbidden", "This API key scope is not permitted here.")
+    if not await get_rate_limiter().allow(principal.tenant_id):
+        return None, error_response(429, "rate_limited", "Per-tenant rate limit exceeded.")
+    return principal, None
+
+
+@router.post("/search")
+async def search(payload: dict[str, Any], x_api_key: str | None = _KEY):
+    principal, rejected = await _guard(x_api_key, KeyScope.WIDGET)
+    if rejected is not None:
+        return rejected
     query = str(payload.get("query", "")).strip()
     if not query:
         return error_response(422, "invalid_request", "Field 'query' is required.")
@@ -50,9 +66,9 @@ async def search(payload: dict[str, Any], x_api_key: str | None = _KEY):
 
 @router.get("/suggest")
 async def suggest(q: str = "", x_api_key: str | None = _KEY):
-    principal = await resolve_principal(x_api_key)
-    if not principal.tenant_id:
-        return _unauthorized()
+    principal, rejected = await _guard(x_api_key, KeyScope.WIDGET)
+    if rejected is not None:
+        return rejected
     if not q.strip():
         return {"suggestions": []}
     from acip_core.clients import get_es_client
@@ -67,9 +83,9 @@ async def sync_webhook(
     source: str = "rest",
     x_api_key: str | None = _KEY,
 ):
-    principal = await resolve_principal(x_api_key)
-    if not principal.tenant_id:
-        return _unauthorized()
+    principal, rejected = await _guard(x_api_key, KeyScope.SYNC)
+    if rejected is not None:
+        return rejected
     payload = await request.json()
     connector = get_connector(source)
     event = connector.parse(payload)
@@ -85,9 +101,9 @@ async def sync_webhook(
 
 @router.post("/sync/bulk")
 async def sync_bulk(payload: dict[str, Any], x_api_key: str | None = _KEY):
-    principal = await resolve_principal(x_api_key)
-    if not principal.tenant_id:
-        return _unauthorized()
+    principal, rejected = await _guard(x_api_key, KeyScope.SYNC)
+    if rejected is not None:
+        return rejected
     source = str(payload.get("source", "rest"))
     products = payload.get("products", [])
     if not isinstance(products, list):
@@ -102,9 +118,9 @@ async def sync_bulk(payload: dict[str, Any], x_api_key: str | None = _KEY):
 async def chat(payload: dict[str, Any], x_api_key: str | None = _KEY):
     """Grounded RAG assistant turn (M7). Tenant-scoped; answers strictly from
     the store's own data via the gateway cache→route→compress→generate ladder."""
-    principal = await resolve_principal(x_api_key)
-    if not principal.tenant_id:
-        return _unauthorized()
+    principal, rejected = await _guard(x_api_key, KeyScope.WIDGET)
+    if rejected is not None:
+        return rejected
     message = str(payload.get("message", "")).strip()
     if not message:
         return error_response(422, "invalid_request", "Field 'message' is required.")
@@ -133,9 +149,9 @@ async def chat_stream(payload: dict[str, Any], x_api_key: str | None = _KEY):
     SSE `data:` frames. True per-token model streaming is wired to vLLM at
     validation time via `acip_gateway.llm_client.LLMClient.stream`.
     """
-    principal = await resolve_principal(x_api_key)
-    if not principal.tenant_id:
-        return _unauthorized()
+    principal, rejected = await _guard(x_api_key, KeyScope.WIDGET)
+    if rejected is not None:
+        return rejected
     message = str(payload.get("message", "")).strip()
     if not message:
         return error_response(422, "invalid_request", "Field 'message' is required.")

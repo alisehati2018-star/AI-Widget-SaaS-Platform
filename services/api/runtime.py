@@ -11,12 +11,14 @@ from functools import lru_cache
 
 from acip_assistant.memory import SessionMemory
 from acip_assistant.rag import RagAssistant
+from acip_billing.ledger import record_charge
 from acip_cache.data_version import current_data_version
 from acip_cache.l1 import L1ExactCache
 from acip_cache.l2 import L2SemanticCache
 from acip_cache.metering import record_usage
 from acip_core.clients import get_es_client, get_pg_pool, get_redis
 from acip_core.config import get_settings
+from acip_core.ratelimit import RateLimiter
 from acip_embedding import get_embedding_client
 from acip_gateway.budget import BudgetGuard
 from acip_gateway.failover import Endpoint, ProviderChain
@@ -26,7 +28,19 @@ from acip_search.retrieval import SearchService
 
 
 async def _meter(tenant_id: str, **kwargs) -> None:
-    await record_usage(await get_pg_pool(), tenant_id, **kwargs)
+    pool = await get_pg_pool()
+    await record_usage(pool, tenant_id, **kwargs)
+    # Persist the per-rung charge to the credit ledger (REQ-M11-009).
+    cost = float(kwargs.get("cost", 0.0) or 0.0)
+    if cost > 0:
+        await record_charge(pool, tenant_id, rung=str(kwargs.get("rung", "")), cost=cost)
+
+
+@lru_cache
+def get_rate_limiter() -> RateLimiter:
+    # Default per-minute ceiling; per-tenant plan limits are applied from the
+    # `plans` table during validation/runtime tuning.
+    return RateLimiter(get_redis(), default_per_min=120)
 
 
 @lru_cache
@@ -38,6 +52,12 @@ def get_search_service() -> SearchService:
         redis=redis,
         meter=_meter,
     )
+
+
+@lru_cache
+def get_provider_chain() -> ProviderChain:
+    """Process-wide provider chain (frontier → local), reused by the analyst."""
+    return _provider_chain()
 
 
 def _provider_chain() -> ProviderChain:
