@@ -93,6 +93,9 @@ class Settings(BaseSettings):
     # rejects all webhooks (fail closed) — only the manual/admin path works then.
     billing_webhook_secret: str = Field(default="", alias="BILLING_WEBHOOK_SECRET")
     subscription_period_days: int = Field(default=30, alias="SUBSCRIPTION_PERIOD_DAYS")
+    # Credit top-up pricing: how many AI credits one currency unit buys.
+    topup_credits_per_unit: int = Field(default=1000, alias="TOPUP_CREDITS_PER_UNIT")
+    billing_currency: str = Field(default="USD", alias="BILLING_CURRENCY")
 
     # --- Phase A: notifications (email) + verification + product surfaces ---
     # 'console' logs emails (dev default); 'smtp' sends via the SMTP settings.

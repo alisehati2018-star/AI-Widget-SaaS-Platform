@@ -270,19 +270,77 @@ async def admin_mark_paid(
         return _forbidden()
     from acip_billing import mark_order_paid
 
+    from .billing import _email_invoice
+
     pool = await get_pg_pool()
     days = get_settings().subscription_period_days
     result = await mark_order_paid(pool, order_id, period_days=days)
     if result is None:
         return error_response(404, "unknown_order", "No such order.")
+    if not result.get("already"):
+        await _email_invoice(pool, result)
     await audit(
         pool,
         actor="operator",
         action="billing.mark_paid",
         tenant_id=result["tenant_id"],
-        detail={"order_id": order_id},
+        detail={"order_id": order_id, "kind": result["kind"]},
     )
-    return {"status": "paid", "activated": result["plan_code"], "already": result.get("already")}
+    return {
+        "status": "paid",
+        "kind": result["kind"],
+        "activated": result.get("plan_code"),
+        "invoice_number": result.get("invoice_number"),
+        "already": result.get("already"),
+    }
+
+
+@router.post("/billing/run-renewals")
+async def run_renewals(
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    """Period-end processing: downgrade cancelled subs, mark others past_due."""
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    from acip_billing import process_renewals
+
+    pool = await get_pg_pool()
+    result = await process_renewals(pool, trial_plan_code=get_settings().trial_plan_code)
+    await audit(pool, actor="operator", action="billing.run_renewals", detail=result)
+    return result
+
+
+@router.post("/billing/run-dunning")
+async def run_dunning(
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    """Email every past-due subscription a payment reminder."""
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    from acip_billing import list_past_due
+    from acip_notify import dunning_email, send_email
+
+    pool = await get_pg_pool()
+    due = await list_past_due(pool)
+    sent = 0
+    for row in due:
+        if row["email"]:
+            subject, text, html = dunning_email(
+                row["plan"] or "your plan", row["amount"], row["currency"] or "USD"
+            )
+            await send_email(row["email"], subject, text, html)
+            sent += 1
+    await audit(
+        pool,
+        actor="operator",
+        action="billing.run_dunning",
+        detail={"past_due": len(due), "emailed": sent},
+    )
+    return {"past_due": len(due), "emailed": sent}
 
 
 @router.post("/orders/{order_id}/refund")

@@ -10,7 +10,9 @@ from __future__ import annotations
 from .mailer import send_email
 from .templates import (
     contact_notification,
+    dunning_email,
     invite_email,
+    invoice_email,
     reset_email,
     verification_email,
 )
@@ -21,4 +23,6 @@ __all__ = [
     "reset_email",
     "invite_email",
     "contact_notification",
+    "invoice_email",
+    "dunning_email",
 ]
