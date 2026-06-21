@@ -1,14 +1,20 @@
-# ACIP — AI Commerce Intelligence Platform
+# Vitrin — AI Commerce Intelligence Platform
 
 On-premise, multi-tenant **Persian hybrid search + grounded RAG shopping
 assistant + analytics** for OpenCart / WooCommerce stores, built on
 **Elasticsearch** with a local-first, cost-controlled AI gateway.
 
-> **Status:** all development phases (0–4) are **code-complete and statically
-> verified** — `ruff` + `mypy` clean (78 files), **81 unit tests pass**, frontend
-> `tsc` clean. Runtime/performance **acceptance is not yet validated** (needs a
-> live cluster + real catalogue + self-hosted models). See
-> `reports/blueprint-compliance-audit.md` and `reports/deferred-validation.md`.
+> **Vitrin** is the product brand; `acip_*` packages / `REQ-M*` IDs are the
+> internal codename. Authoritative spec: `docs/PRODUCT.md` +
+> `docs/PRODUCT-STRATEGY.md` (the old `.docx` "blueprint" is historical input).
+
+> **Status:** the search/RAG/analytics engine (phases 0–4) is **code-complete
+> and statically verified**. The human-facing layer (Phase 5 **identity & auth**
+> + the **marketing site, store-owner dashboard, and platform admin panel** in
+> `apps/web`) is implemented and builds clean. Gates: `ruff` + `mypy` clean (84
+> files), **91 unit tests pass**, both frontends `tsc` + `next build` clean.
+> Runtime/DB acceptance is validated where Postgres/ES are live
+> (`reports/deferred-validation.md`). Plan: `docs/generated/expansion-plan-phases-5-8.md`.
 
 ## Tech stack (latest, mutually compatible)
 
@@ -39,19 +45,36 @@ curl -s localhost:8000/readyz   # API readiness — reports ES/PG/Redis status
 # (optional, heavy) self-hosted models for real search/chat:
 docker compose -f infra/docker-compose.yml --profile inference up -d
 
-# Operator dashboard (Next.js):
-cd apps/dashboard && npm install && npm run dev
+# Web app (marketing site + signup/login + store dashboard + admin panel):
+cd apps/web && npm install && npm run dev          # http://localhost:3000
 ```
+
+> Set `AUTH_SECRET` in `.env` (e.g. `openssl rand -hex 32`) so login/signup can
+> issue tokens — empty fails closed. The web app proxies `/api/*` to the backend
+> (`API_ORIGIN`, default `http://localhost:8000`), so no CORS setup is needed.
 
 You can then open:
 
 | What | URL |
 |---|---|
+| Marketing site (landing / pricing) | http://localhost:3000 |
+| Sign up / sign in | http://localhost:3000/signup · `/login` |
+| Store-owner dashboard | http://localhost:3000/dashboard |
+| Platform admin panel | http://localhost:3000/admin (`/admin/login`) |
 | API + interactive Swagger docs | http://localhost:8000/docs |
-| Operator dashboard (console / synonyms) | http://localhost:3000/console |
 | Kibana (runs in Docker) | http://localhost:5601 |
 
-Create a tenant + API key (operator token from `.env`):
+Create the first **platform admin** (operator token from `.env`), then sign in
+at `/admin/login`:
+
+```bash
+curl -X POST http://localhost:8000/auth/bootstrap-admin \
+  -H "x-admin-token: $ADMIN_TOKEN" -H "content-type: application/json" \
+  -d '{"email":"admin@vitrin.ai","password":"ChangeMe-Str0ng!","full_name":"Admin"}'
+```
+
+Store owners self-serve via the **Sign up** page (provisions a tenant + trial).
+A tenant + scoped API key can still be minted directly for automation:
 
 ```bash
 curl -X POST http://localhost:8000/admin/tenants \
@@ -83,13 +106,15 @@ npx tsc --noEmit
 ## Repository layout
 
 ```
-ACIP-Blueprint.docx   Authoritative spec (source of truth)
-docs/generated/       Requirements, phase plans, traceability, gap analysis, v2 roadmap
-packages/             Domain libs: acip_core, acip_search, acip_sync, acip_embedding,
-                      acip_cache, acip_gateway, acip_assistant, acip_analytics, acip_billing
-services/             api · gateway · worker (FastAPI + Celery)
-apps/dashboard/       Next.js operator console + embeddable widget (widget/acip-widget.ts)
-db/migrations/        PostgreSQL control-plane schema (0001–0004)
+docs/PRODUCT*.md      Authoritative product spec + strategy (Vitrin)
+docs/generated/       Requirements, phase plans, traceability, expansion plan (5–8)
+packages/             Domain libs: acip_core, acip_auth, acip_search, acip_sync,
+                      acip_embedding, acip_cache, acip_gateway, acip_assistant,
+                      acip_analytics, acip_billing
+services/             api · gateway · worker (FastAPI + Celery) — incl. auth/admin/public routers
+apps/web/             Next.js app: marketing site + auth + store dashboard + admin panel
+apps/dashboard/       Legacy operator console + embeddable widget (widget/acip-widget.ts)
+db/migrations/        PostgreSQL control-plane schema (0001–0005: incl. identity/auth/plans)
 eval/                 Golden-set metrics + evaluation harness
 infra/                docker-compose.yml, Dockerfile, cluster verify script
 tests/                Unit + ES-gated integration tests

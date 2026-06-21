@@ -73,6 +73,26 @@ class Settings(BaseSettings):
     chat_max_tokens: int = Field(default=512, alias="CHAT_MAX_TOKENS")
     # Operator/admin plane auth — separated from tenant API keys (REQ-M11-004).
     admin_token: str = Field(default="", alias="ADMIN_TOKEN")
+
+    # --- Phase 5: human identity & auth (platform admins / store owners) ---
+    # MUST be overridden in production with a long random value. Empty disables
+    # token issuance (login returns 503) — fail closed rather than sign with "".
+    auth_secret: str = Field(default="", alias="AUTH_SECRET")
+    access_token_ttl: int = Field(default=900, alias="ACCESS_TOKEN_TTL")          # 15 min
+    refresh_token_ttl: int = Field(default=2592000, alias="REFRESH_TOKEN_TTL")    # 30 days
+    signup_enabled: bool = Field(default=True, alias="SIGNUP_ENABLED")
+    login_max_attempts: int = Field(default=5, alias="LOGIN_MAX_ATTEMPTS")
+    login_lockout_minutes: int = Field(default=15, alias="LOGIN_LOCKOUT_MINUTES")
+    trial_plan_code: str = Field(default="free", alias="TRIAL_PLAN_CODE")
+
+    # --- Phase 7: billing / buy-plan (provider-agnostic) ---
+    # 'manual' = operator confirms payment (works out of the box). Real gateways
+    # (stripe/zarinpal) plug in via the webhook + provider redirect later.
+    billing_provider: str = Field(default="manual", alias="BILLING_PROVIDER")
+    # HMAC-SHA256 secret the payment provider signs webhook bodies with. Empty
+    # rejects all webhooks (fail closed) — only the manual/admin path works then.
+    billing_webhook_secret: str = Field(default="", alias="BILLING_WEBHOOK_SECRET")
+    subscription_period_days: int = Field(default=30, alias="SUBSCRIPTION_PERIOD_DAYS")
     # --- Phase 4: agent actions (money-moving tools), disabled by default ---
     agent_actions_enabled: bool = Field(default=False, alias="AGENT_ACTIONS_ENABLED")
 

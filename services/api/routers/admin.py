@@ -27,6 +27,7 @@ from ..deps import hash_key
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 _ADMIN = Header(default=None, alias="x-admin-token")
+_AUTHZ = Header(default=None, alias="authorization")
 
 
 def _authorized(token: str | None) -> bool:
@@ -35,6 +36,17 @@ def _authorized(token: str | None) -> bool:
     if not expected or not token:
         return False
     return secrets.compare_digest(token, expected)
+
+
+async def _admin_ok(token: str | None, authorization: str | None) -> bool:
+    """Authorize the admin plane via EITHER the operator token (automation) OR a
+    platform-admin bearer JWT (the admin-panel UI). Phase 6 dual-auth."""
+    if _authorized(token):
+        return True
+    from .auth import current_principal
+
+    principal = await current_principal(authorization)
+    return principal is not None and principal.is_admin
 
 
 def _forbidden():
@@ -68,6 +80,169 @@ async def create_tenant(payload: dict[str, Any], x_admin_token: str | None = _AD
                 detail={"slug": slug, "scope": scope})
     # The raw key is returned exactly once; only its hash is stored.
     return {"tenant_id": str(tenant_id), "slug": slug, "api_key": raw_key, "scope": scope}
+
+
+@router.get("/overview")
+async def overview(x_admin_token: str | None = _ADMIN, authorization: str | None = _AUTHZ):
+    """Platform-wide counts for the admin dashboard (Phase 6)."""
+    if not await _admin_ok(x_admin_token, authorization):
+        return _forbidden()
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        tenants = await conn.fetchval("SELECT count(*) FROM tenants")
+        users = await conn.fetchval("SELECT count(*) FROM users")
+        active_subs = await conn.fetchval(
+            "SELECT count(*) FROM subscriptions WHERE status IN ('active', 'trialing')"
+        )
+        mrr = await conn.fetchval(
+            "SELECT COALESCE(sum(p.price_monthly), 0) FROM subscriptions s "
+            "JOIN plans p ON p.id = s.plan_id WHERE s.status = 'active'"
+        )
+    return {
+        "tenants": int(tenants or 0),
+        "users": int(users or 0),
+        "active_subscriptions": int(active_subs or 0),
+        "mrr": float(mrr or 0),
+    }
+
+
+@router.get("/tenants")
+async def list_tenants(x_admin_token: str | None = _ADMIN, authorization: str | None = _AUTHZ):
+    """List tenants with their plan + subscription status (Phase 6)."""
+    if not await _admin_ok(x_admin_token, authorization):
+        return _forbidden()
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT t.id, t.slug, t.name, t.status, t.created_at, "
+            "COALESCE(p.name, '—') AS plan, COALESCE(s.status, 'none') AS sub_status "
+            "FROM tenants t "
+            "LEFT JOIN subscriptions s ON s.tenant_id = t.id "
+            "LEFT JOIN plans p ON p.id = s.plan_id "
+            "ORDER BY t.created_at DESC LIMIT 200"
+        )
+    return {
+        "tenants": [
+            {
+                "id": str(r["id"]), "slug": r["slug"], "name": r["name"],
+                "status": r["status"], "plan": r["plan"], "sub_status": r["sub_status"],
+                "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+            }
+            for r in rows
+        ]
+    }
+
+
+@router.get("/users")
+async def list_users(x_admin_token: str | None = _ADMIN, authorization: str | None = _AUTHZ):
+    """List all platform users (Phase 6)."""
+    if not await _admin_ok(x_admin_token, authorization):
+        return _forbidden()
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT u.email, u.full_name, u.role, u.status, u.last_login_at, "
+            "COALESCE(t.name, '—') AS tenant FROM users u "
+            "LEFT JOIN tenants t ON t.id = u.tenant_id ORDER BY u.created_at DESC LIMIT 500"
+        )
+    return {
+        "users": [
+            {
+                "email": r["email"], "full_name": r["full_name"], "role": r["role"],
+                "status": r["status"], "tenant": r["tenant"],
+                "last_login_at": r["last_login_at"].isoformat() if r["last_login_at"] else None,
+            }
+            for r in rows
+        ]
+    }
+
+
+@router.get("/audit")
+async def audit_log(x_admin_token: str | None = _ADMIN, authorization: str | None = _AUTHZ):
+    """Recent audit-log entries (Phase 6)."""
+    if not await _admin_ok(x_admin_token, authorization):
+        return _forbidden()
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT actor, action, detail, created_at FROM audit_log "
+            "ORDER BY created_at DESC LIMIT 200"
+        )
+    return {
+        "entries": [
+            {
+                "actor": r["actor"], "action": r["action"], "detail": r["detail"],
+                "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+            }
+            for r in rows
+        ]
+    }
+
+
+@router.get("/orders")
+async def list_orders(x_admin_token: str | None = _ADMIN, authorization: str | None = _AUTHZ):
+    """Recent billing orders + paid-revenue total (Phase 6/7)."""
+    if not await _admin_ok(x_admin_token, authorization):
+        return _forbidden()
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT o.id, o.amount, o.currency, o.status, o.provider, o.created_at, "
+            "COALESCE(t.name, '—') AS tenant, COALESCE(p.name, '—') AS plan FROM orders o "
+            "LEFT JOIN tenants t ON t.id = o.tenant_id "
+            "LEFT JOIN plans p ON p.id = o.plan_id ORDER BY o.created_at DESC LIMIT 200"
+        )
+        revenue = await conn.fetchval(
+            "SELECT COALESCE(sum(amount), 0) FROM orders WHERE status = 'paid'"
+        )
+    return {
+        "revenue_total": float(revenue or 0),
+        "orders": [
+            {
+                "id": str(r["id"]), "tenant": r["tenant"], "plan": r["plan"],
+                "amount": float(r["amount"]), "currency": r["currency"],
+                "status": r["status"], "provider": r["provider"],
+                "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+            }
+            for r in rows
+        ],
+    }
+
+
+@router.post("/orders/{order_id}/mark-paid")
+async def admin_mark_paid(order_id: str, x_admin_token: str | None = _ADMIN,
+                          authorization: str | None = _AUTHZ):
+    """Operator confirmation of a manual/invoice payment → activates the plan."""
+    if not await _admin_ok(x_admin_token, authorization):
+        return _forbidden()
+    from acip_billing import mark_order_paid
+
+    pool = await get_pg_pool()
+    days = get_settings().subscription_period_days
+    result = await mark_order_paid(pool, order_id, period_days=days)
+    if result is None:
+        return error_response(404, "unknown_order", "No such order.")
+    await audit(pool, actor="operator", action="billing.mark_paid",
+                tenant_id=result["tenant_id"], detail={"order_id": order_id})
+    return {"status": "paid", "activated": result["plan_code"], "already": result.get("already")}
+
+
+@router.post("/orders/{order_id}/refund")
+async def admin_refund(order_id: str, x_admin_token: str | None = _ADMIN,
+                       authorization: str | None = _AUTHZ):
+    """Mark an order refunded (does not auto-downgrade the live subscription)."""
+    if not await _admin_ok(x_admin_token, authorization):
+        return _forbidden()
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "UPDATE orders SET status = 'refunded' WHERE id = $1 RETURNING tenant_id", order_id
+        )
+    if row is None:
+        return error_response(404, "unknown_order", "No such order.")
+    await audit(pool, actor="operator", action="billing.refund",
+                tenant_id=str(row["tenant_id"]), detail={"order_id": order_id})
+    return {"status": "refunded"}
 
 
 @router.get("/analytics")
