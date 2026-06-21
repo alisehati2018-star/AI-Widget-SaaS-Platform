@@ -62,9 +62,35 @@ jobs:
         options: >-
           --health-cmd "bash -c 'exec 3<>/dev/tcp/localhost/9200'"
           --health-interval 15s --health-timeout 10s --health-retries 12
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: acip
+          POSTGRES_USER: acip
+          POSTGRES_PASSWORD: acip
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U acip -d acip"
+          --health-interval 10s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:8
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 10
     env:
       ES_HOST: http://localhost:9200
       ES_PASSWORD: ""
+      PG_HOST: localhost
+      PG_PORT: "5432"
+      PG_DB: acip
+      PG_USER: acip
+      PG_PASSWORD: acip
+      REDIS_URL: redis://localhost:6379/0
+      AUTH_SECRET: integration-secret-0123456789abcdef
+      ADMIN_TOKEN: integration-operator-token
+      BILLING_WEBHOOK_SECRET: integration-whsec
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -74,8 +100,26 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install ".[dev]"
-      - name: Integration tests (ES-backed)
+      - name: Apply control-plane migrations (Postgres)
+        run: |
+          python - <<'PY'
+          import asyncio, glob, asyncpg, os
+          async def main():
+              dsn = f"postgresql://{os.environ['PG_USER']}:{os.environ['PG_PASSWORD']}@{os.environ['PG_HOST']}:{os.environ['PG_PORT']}/{os.environ['PG_DB']}"
+              conn = await asyncpg.connect(dsn)
+              for f in sorted(glob.glob("db/migrations/*.sql")):
+                  await conn.execute(open(f).read())
+                  print("applied", f)
+              await conn.close()
+          asyncio.run(main())
+          PY
+      - name: Integration tests (ES + PG-backed flows)
         run: pytest -q tests/integration
+      - name: Load smoke (ES-free; health endpoint)
+        run: |
+          PYTHONPATH=packages:services python -m uvicorn api.main:app --port 8000 &
+          sleep 6
+          python -m eval.load_test --url http://localhost:8000 --path /healthz --requests 500 --concurrency 25
       - name: Relevance eval (golden-set dry run)
         run: python -m eval.run_eval --golden eval/golden_set/golden_set.example.jsonl
 

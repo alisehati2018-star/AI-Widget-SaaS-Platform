@@ -13,6 +13,7 @@ the machine scoped API keys in ``/v1/*``. Security posture:
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import re
 import secrets
 from datetime import UTC, datetime, timedelta
@@ -152,8 +153,21 @@ def _issue_tokens(conn: Any, user: dict, *, request: Request) -> dict[str, Any]:
         "jti_hash": _hash_token(jti),
         "expires_at": _now() + timedelta(seconds=s.refresh_token_ttl),
         "ua": (request.headers.get("user-agent") or "")[:300],
-        "ip": (request.client.host if request.client else None),
+        "ip": _client_ip(request),
     }
+
+
+def _client_ip(request: Request) -> str | None:
+    """Return the client host only if it's a valid IP (the `ip` column is INET);
+    proxies / test clients can present a non-IP host, which must store as NULL."""
+    host = request.client.host if request.client else None
+    if not host:
+        return None
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        return None
+    return host
 
 
 def _token_response(user: dict, tokens: dict[str, Any]) -> dict[str, Any]:
