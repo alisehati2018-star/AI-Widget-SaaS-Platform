@@ -4,13 +4,14 @@ import { useCallback, useEffect, useState } from "react";
 import type { Order } from "../../../lib/api";
 import { authFetch } from "../../../lib/auth";
 import { ADMIN_NAV, DashboardShell } from "../../../components/shell";
-import { Badge, Spinner, Stat } from "../../../components/ui";
+import { Alert, Badge, Spinner, Stat } from "../../../components/ui";
 
 export default function AdminBilling() {
   const [orders, setOrders] = useState<Order[] | null>(null);
   const [revenue, setRevenue] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
 
   const load = useCallback(() => {
     authFetch<{ orders: Order[]; revenue_total: number }>("/admin/orders")
@@ -32,14 +33,40 @@ export default function AdminBilling() {
 
   const tone = (s: string) => (s === "paid" ? "success" : s === "pending" ? "warning" : undefined);
 
+  async function runJob(job: "run-renewals" | "run-dunning") {
+    setBusy(job);
+    try {
+      const r = await authFetch<Record<string, number>>(`/admin/billing/${job}`, { method: "POST" });
+      setMsg(job === "run-renewals"
+        ? `Renewals: ${r.downgraded ?? 0} downgraded, ${r.past_due ?? 0} past-due.`
+        : `Dunning: emailed ${r.emailed ?? 0} of ${r.past_due ?? 0} past-due tenants.`);
+      load();
+    } finally {
+      setBusy(null);
+    }
+  }
+
   return (
     <DashboardShell title="Billing" nav={ADMIN_NAV} requireAdmin loginHref="/admin/login">
-      <p style={{ marginTop: "-1rem" }}>Orders and revenue across the platform.</p>
-      <div className="stat-grid" style={{ marginBottom: "2rem" }}>
+      <p style={{ marginTop: "-1rem" }}>Orders, revenue, and billing operations.</p>
+      {msg ? <Alert kind="success">{msg}</Alert> : null}
+      <div className="stat-grid" style={{ marginBottom: "1.5rem" }}>
         <Stat label="Paid revenue" value={`$${revenue.toFixed(0)}`} />
         <Stat label="Orders" value={orders?.length ?? "—"} />
         <Stat label="Pending" value={orders?.filter((o) => o.status === "pending").length ?? "—"} />
         <Stat label="Refunded" value={orders?.filter((o) => o.status === "refunded").length ?? "—"} />
+      </div>
+      <div className="card" style={{ marginBottom: "1.5rem" }}>
+        <h3>Billing operations</h3>
+        <p className="hint">Run period-end processing and dunning (normally scheduled).</p>
+        <div className="row" style={{ flexWrap: "wrap" }}>
+          <button className="btn btn-soft" disabled={busy !== null} onClick={() => void runJob("run-renewals")}>
+            {busy === "run-renewals" ? <Spinner /> : "Run renewals"}
+          </button>
+          <button className="btn btn-soft" disabled={busy !== null} onClick={() => void runJob("run-dunning")}>
+            {busy === "run-dunning" ? <Spinner /> : "Run dunning"}
+          </button>
+        </div>
       </div>
       <div className="card">
         <h3>Recent orders</h3>

@@ -60,16 +60,11 @@ export default function DashboardHome() {
 
       <div className="card">
         <h3>Finish setting up</h3>
-        <p>Connect your store and drop in the search widget to start seeing data.</p>
-        <ol className="muted" style={{ paddingLeft: "1.2rem", lineHeight: 2 }}>
-          <li>Create an API key and install the OpenCart / WooCommerce plugin.</li>
-          <li>Run the first catalogue sync.</li>
-          <li>Embed the Vitrin widget on your storefront.</li>
-        </ol>
+        <p>Complete the guided steps to connect your store and go live.</p>
         <div className="row" style={{ marginTop: "1rem", flexWrap: "wrap" }}>
-          <Link href="/dashboard/keys" className="btn btn-primary">Get your API key</Link>
+          <Link href="/onboarding" className="btn btn-primary">Open setup guide →</Link>
+          <Link href="/dashboard/keys" className="btn btn-ghost">API keys</Link>
           <Link href="/dashboard/catalog" className="btn btn-ghost">Connect store</Link>
-          <Link href="/dashboard/widget" className="btn btn-ghost">Install widget</Link>
         </div>
       </div>
     </DashboardShell>

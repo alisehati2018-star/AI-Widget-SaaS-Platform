@@ -39,3 +39,4 @@ htmlcov/
 es-data/
 pg-data/
 *.log
+dump.rdb

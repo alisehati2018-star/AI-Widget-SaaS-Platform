@@ -28,7 +28,17 @@ celery_app.conf.update(
             "task": "acip.sync.reconcile_tenant",
             "schedule": 900.0,  # every 15 minutes
             "args": ("__all__", "rest"),
-        }
+        },
+        # Billing period-end processing (downgrade cancelled, mark past_due).
+        "billing-renewals": {
+            "task": "acip.billing.process_renewals",
+            "schedule": 86400.0,  # daily
+        },
+        # Dunning reminders to past-due subscriptions.
+        "billing-dunning": {
+            "task": "acip.billing.run_dunning",
+            "schedule": 86400.0,  # daily
+        },
     },
 )
 

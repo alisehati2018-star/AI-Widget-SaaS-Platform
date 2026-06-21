@@ -36,6 +36,27 @@ class TraceIdMiddleware(BaseHTTPMiddleware):
         return response
 
 
+class MetricsMiddleware(BaseHTTPMiddleware):
+    """Record request count + latency per method/status into the metrics registry."""
+
+    async def dispatch(self, request: Request, call_next):
+        import time
+
+        from .obs import metrics
+
+        start = time.perf_counter()
+        status = 500
+        try:
+            response = await call_next(request)
+            status = response.status_code
+            return response
+        finally:
+            elapsed = time.perf_counter() - start
+            method = request.method
+            metrics.inc("vitrin_http_requests_total", {"method": method, "status": str(status)})
+            metrics.observe("vitrin_http_request_duration_seconds", elapsed, {"method": method})
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Add standard hardening headers to every response (SE-2).
 
@@ -68,10 +89,19 @@ class CsrfMiddleware(BaseHTTPMiddleware):
     authenticate via the access cookie must present a matching ``x-csrf-token``
     header (compared to the ``vitrin_csrf`` cookie). This keeps the existing
     bearer flow working unchanged during the dual-support window.
+
+    Unauthenticated public endpoints (auth, the signed billing webhook, contact)
+    are exempt: their action does not rely on the session cookie, so CSRF is not
+    the threat model — and a stale cookie must not block sign-in / signup.
     """
 
+    # Path prefixes whose action is authenticated by body/credentials/signature,
+    # not by the session cookie. The cookie-protected surfaces are /tenant/* and
+    # /admin/* (still enforced below).
+    _EXEMPT = ("/auth/", "/billing/webhook", "/contact")
+
     async def dispatch(self, request: Request, call_next):
-        if request.method not in _SAFE_METHODS:
+        if request.method not in _SAFE_METHODS and not request.url.path.startswith(self._EXEMPT):
             has_bearer = "authorization" in request.headers
             access_cookie = request.cookies.get(ACCESS_COOKIE)
             if access_cookie and not has_bearer:

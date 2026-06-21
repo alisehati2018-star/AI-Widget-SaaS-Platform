@@ -13,9 +13,11 @@ from acip_core.errors import unhandled_exception_handler
 from acip_core.logging import configure_logging, get_logger
 from acip_core.middleware import (
     CsrfMiddleware,
+    MetricsMiddleware,
     SecurityHeadersMiddleware,
     TraceIdMiddleware,
 )
+from acip_core.obs import setup_telemetry
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -42,6 +44,8 @@ def create_app() -> FastAPI:
     # Middleware (added inner→outer; CORS added last = outermost so it also
     # decorates error/preflight responses).
     app.add_middleware(TraceIdMiddleware)
+    if settings.metrics_enabled:
+        app.add_middleware(MetricsMiddleware)
     if settings.csrf_enabled:
         app.add_middleware(CsrfMiddleware)
     if settings.security_headers_enabled:
@@ -55,6 +59,7 @@ def create_app() -> FastAPI:
         expose_headers=["x-request-id"],
     )
     app.add_exception_handler(Exception, unhandled_exception_handler)
+    setup_telemetry(app, settings)
 
     app.include_router(health.router)
     app.include_router(public.router)

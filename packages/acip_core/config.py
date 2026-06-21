@@ -45,6 +45,9 @@ class Settings(BaseSettings):
 
     # Observability
     otel_endpoint: str = Field(default="", alias="OTEL_EXPORTER_OTLP_ENDPOINT")
+    metrics_enabled: bool = Field(default=True, alias="METRICS_ENABLED")
+    otel_enabled: bool = Field(default=True, alias="OTEL_ENABLED")  # instrument FastAPI
+    otel_console: bool = Field(default=False, alias="OTEL_CONSOLE")  # print spans (dev)
 
     # --- Phase 1: search / index / embedding tuning ---
     es_index_prefix: str = Field(default="acip", alias="ES_INDEX_PREFIX")
@@ -93,6 +96,9 @@ class Settings(BaseSettings):
     # rejects all webhooks (fail closed) — only the manual/admin path works then.
     billing_webhook_secret: str = Field(default="", alias="BILLING_WEBHOOK_SECRET")
     subscription_period_days: int = Field(default=30, alias="SUBSCRIPTION_PERIOD_DAYS")
+    # Credit top-up pricing: how many AI credits one currency unit buys.
+    topup_credits_per_unit: int = Field(default=1000, alias="TOPUP_CREDITS_PER_UNIT")
+    billing_currency: str = Field(default="USD", alias="BILLING_CURRENCY")
 
     # --- Phase A: notifications (email) + verification + product surfaces ---
     # 'console' logs emails (dev default); 'smtp' sends via the SMTP settings.

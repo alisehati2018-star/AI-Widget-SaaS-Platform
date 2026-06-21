@@ -23,7 +23,7 @@ export default function SignupPage() {
     setBusy(true);
     try {
       const user = await signup(form);
-      router.replace(user.role === "platform_admin" ? "/admin" : "/dashboard");
+      router.replace(user.role === "platform_admin" ? "/admin" : "/onboarding");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Something went wrong.");
       setBusy(false);

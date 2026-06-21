@@ -70,7 +70,7 @@ def process_webhook_event(
     except Exception as exc:  # noqa: BLE001
         log.warning("task.webhook_failed", error=str(exc), product_id=product_id)
         try:
-            raise self.retry(countdown=2 ** self.request.retries, exc=exc)
+            raise self.retry(countdown=2**self.request.retries, exc=exc)
         except MaxRetriesExceededError:
             event = {"source": source, "product_id": product_id, "raw": raw}
             _run(park(get_redis(), tenant_id, event, str(exc)))
@@ -107,3 +107,45 @@ def reconcile_tenant(tenant_id: str, source: str = "rest") -> str:
 def batch_embed(texts: list[str]) -> int:
     vectors = _run(get_embedding_client(redis=get_redis()).embed(texts))
     return len(vectors)
+
+
+# --- Scheduled billing jobs (Phase F) ---------------------------------------- #
+@celery_app.task(name="acip.billing.process_renewals")
+def process_renewals_task() -> dict[str, int]:
+    """Period-end processing: downgrade cancelled subs, mark others past_due."""
+    from acip_billing import process_renewals
+    from acip_core.clients import get_pg_pool
+    from acip_core.config import get_settings
+
+    async def _go():
+        pool = await get_pg_pool()
+        return await process_renewals(pool, trial_plan_code=get_settings().trial_plan_code)
+
+    result = _run(_go())
+    log.info("task.process_renewals", **result)
+    return result
+
+
+@celery_app.task(name="acip.billing.run_dunning")
+def run_dunning_task() -> int:
+    """Email every past-due subscription a payment reminder."""
+    from acip_billing import list_past_due
+    from acip_core.clients import get_pg_pool
+    from acip_notify import dunning_email, send_email
+
+    async def _go():
+        pool = await get_pg_pool()
+        due = await list_past_due(pool)
+        sent = 0
+        for row in due:
+            if row["email"]:
+                subject, text, html = dunning_email(
+                    row["plan"] or "your plan", row["amount"], row["currency"] or "USD"
+                )
+                await send_email(row["email"], subject, text, html)
+                sent += 1
+        return sent
+
+    sent = _run(_go())
+    log.info("task.run_dunning", emailed=sent)
+    return sent

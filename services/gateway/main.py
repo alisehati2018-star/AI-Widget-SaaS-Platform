@@ -14,8 +14,10 @@ from acip_core.config import get_settings
 from acip_core.errors import not_implemented, unhandled_exception_handler
 from acip_core.health import ReadinessRegistry
 from acip_core.logging import configure_logging, get_logger
-from acip_core.middleware import TraceIdMiddleware
+from acip_core.middleware import MetricsMiddleware, SecurityHeadersMiddleware, TraceIdMiddleware
+from acip_core.obs import metrics, setup_telemetry
 from fastapi import APIRouter, FastAPI, Response
+from fastapi.responses import PlainTextResponse
 
 _registry = ReadinessRegistry()
 _registry.register("redis", redis_ready)
@@ -35,6 +37,13 @@ async def readyz(response: Response) -> dict[str, object]:
     return {"status": "ready" if ok else "degraded", "dependencies": deps}
 
 
+@router.get("/metrics")
+async def gateway_metrics() -> Response:
+    if not get_settings().metrics_enabled:
+        return PlainTextResponse("metrics disabled\n", status_code=404)
+    return PlainTextResponse(metrics.render(), media_type="text/plain; version=0.0.4")
+
+
 @router.post("/route")
 async def route():
     return not_implemented("Cost-aware routing ladder (M6)")
@@ -51,9 +60,14 @@ def create_app() -> FastAPI:
         yield
         log.info("gateway.shutdown")
 
-    app = FastAPI(title="ACIP Gateway", version="0.0.0", lifespan=lifespan)
+    app = FastAPI(title="Vitrin Gateway", version="0.1.0", lifespan=lifespan)
     app.add_middleware(TraceIdMiddleware)
+    if settings.metrics_enabled:
+        app.add_middleware(MetricsMiddleware)
+    if settings.security_headers_enabled:
+        app.add_middleware(SecurityHeadersMiddleware, hsts=settings.hsts_enabled)
     app.add_exception_handler(Exception, unhandled_exception_handler)
+    setup_telemetry(app, settings)
     app.include_router(router)
 
     return app

@@ -60,6 +60,35 @@ def invite_email(link: str, store_name: str) -> tuple[str, str, str]:
     return subject, text, html
 
 
+def invoice_email(
+    number: int, description: str, amount: float, currency: str
+) -> tuple[str, str, str]:
+    subject = f"{_BRAND} invoice #{number}"
+    text = (
+        f"Thanks for your payment.\n\nInvoice #{number}\n{description}\n"
+        f"Amount: {currency} {amount:.2f}\n\nThis is your receipt."
+    )
+    html = _wrap(
+        f"Invoice #{number}",
+        f"<p>Thanks for your payment.</p><p>{description}<br><b>{currency} {amount:.2f}</b></p>",
+    )
+    return subject, text, html
+
+
+def dunning_email(plan: str, amount: float, currency: str) -> tuple[str, str, str]:
+    subject = f"Action needed: your {_BRAND} subscription payment is due"
+    text = (
+        f"Your {plan} subscription renewal ({currency} {amount:.2f}) is past due.\n\n"
+        "Please complete payment to keep your store's AI features active."
+    )
+    html = _wrap(
+        "Payment past due",
+        f"<p>Your <b>{plan}</b> renewal ({currency} {amount:.2f}) is past due. "
+        "Complete payment to keep your AI features active.</p>",
+    )
+    return subject, text, html
+
+
 def contact_notification(name: str, email: str, message: str) -> tuple[str, str, str]:
     subject = f"[{_BRAND}] New contact message from {name}"
     text = f"From: {name} <{email}>\n\n{message}"
