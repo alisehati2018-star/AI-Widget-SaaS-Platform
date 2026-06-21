@@ -8,7 +8,6 @@ mirror of the data isolation invariant.
 
 from __future__ import annotations
 
-import json
 import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -279,7 +278,7 @@ async def update_settings(payload: dict[str, Any], authorization: str | None = _
         await conn.execute(
             "UPDATE tenants SET settings = settings || $1::jsonb, updated_at = now() "
             "WHERE id = $2",
-            json.dumps(patch), p.tenant_id,
+            patch, p.tenant_id,
         )
     await audit(pool, actor=p.email, action="settings.update", tenant_id=p.tenant_id, detail=patch)
     return {"status": "saved", "settings": patch}
