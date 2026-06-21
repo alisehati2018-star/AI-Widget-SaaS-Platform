@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DirectionToggle } from "./direction";
 import { Brand } from "./ui";
 
 export function MarketingNav() {
@@ -12,6 +13,7 @@ export function MarketingNav() {
           <Link href="/docs">Docs</Link>
           <Link href="/contact">Contact</Link>
           <Link href="/login">Sign in</Link>
+          <DirectionToggle className="btn btn-ghost" />
           <Link href="/signup" className="btn btn-primary">
             Start free
           </Link>

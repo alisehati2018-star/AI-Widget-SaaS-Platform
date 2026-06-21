@@ -169,6 +169,16 @@ small { color: var(--faint); }
 .main { padding: 2rem 2.4rem; max-width: 1080px; }
 .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
 
+/* mobile drawer chrome (hidden on desktop) */
+.mobile-topbar { display: none; }
+.sidebar-backdrop { display: none; }
+.hamburger {
+  display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px;
+  border-radius: 10px; border: 1px solid var(--border); background: var(--panel); color: var(--text);
+  font-size: 1.2rem; cursor: pointer;
+}
+.sidebar-close { display: none; }
+
 /* ---------- Stats / tables ---------- */
 .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
 .stat .stat-label { font-size: 0.8rem; color: var(--faint); text-transform: uppercase; letter-spacing: 0.05em; }
@@ -184,16 +194,58 @@ small { color: var(--faint); }
 @keyframes spin { to { transform: rotate(360deg); } }
 .footer { border-top: 1px solid var(--border-soft); padding: 2.5rem 0; margin-top: 3rem; color: var(--faint); font-size: 0.88rem; }
 
+/* ---------- Accessibility ---------- */
+.skip-link {
+  position: absolute; left: -999px; top: 0; z-index: 200; padding: 0.6rem 1rem;
+  background: var(--brand); color: #0a0b14; border-radius: 0 0 8px 0; font-weight: 700;
+}
+.skip-link:focus { left: 0; }
+:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; border-radius: 4px; }
+
+/* ---------- Onboarding wizard ---------- */
+.steps { display: flex; flex-direction: column; gap: 0.8rem; }
+.step { display: flex; gap: 1rem; align-items: flex-start; padding: 1rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); }
+.step.done { border-color: rgba(56,211,159,0.4); }
+.step-num { width: 30px; height: 30px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; flex-shrink: 0; background: var(--panel-2); border: 1px solid var(--border); }
+.step.done .step-num { background: rgba(56,211,159,0.15); color: var(--success); border-color: rgba(56,211,159,0.4); }
+.progress-track { height: 8px; border-radius: 999px; background: var(--panel-2); overflow: hidden; border: 1px solid var(--border); }
+.progress-fill { height: 100%; background: var(--brand-grad); transition: width 0.4s ease; }
+
+/* ---------- Empty / error states ---------- */
+.state { text-align: center; padding: 2.5rem 1rem; color: var(--muted); }
+.state .state-icon { font-size: 2rem; margin-bottom: 0.5rem; }
+
 @media (max-width: 880px) {
   .feature-grid, .pricing-grid, .stat-grid { grid-template-columns: 1fr 1fr; }
   .shell { grid-template-columns: 1fr; }
-  .sidebar { display: none; }
-  .main { padding: 1.5rem; }
+  .main { padding: 1.5rem; padding-top: 1rem; }
+  /* off-canvas drawer */
+  .mobile-topbar {
+    display: flex; align-items: center; justify-content: space-between; gap: 0.8rem;
+    padding: 0.8rem 1rem; border-bottom: 1px solid var(--border); position: sticky; top: 0;
+    z-index: 60; background: rgba(10,11,20,0.85); backdrop-filter: blur(10px);
+  }
+  .sidebar {
+    position: fixed; inset: 0 auto 0 0; width: 270px; max-width: 82vw; z-index: 80;
+    transform: translateX(-100%); transition: transform 0.25s ease;
+  }
+  .sidebar.open { transform: translateX(0); box-shadow: var(--shadow); }
+  .sidebar-close { display: inline-flex; }
+  .sidebar-backdrop.open { display: block; position: fixed; inset: 0; z-index: 70; background: rgba(0,0,0,0.5); }
 }
 @media (max-width: 560px) {
   .feature-grid, .pricing-grid, .stat-grid { grid-template-columns: 1fr; }
   .nav-links { display: none; }
 }
 
+/* ---------- RTL ---------- */
 [dir="rtl"] .sidebar { border-right: none; border-left: 1px solid var(--border); }
 [dir="rtl"] .table th, [dir="rtl"] .table td { text-align: right; }
+[dir="rtl"] .feature-list li { flex-direction: row-reverse; }
+[dir="rtl"] body { background-image:
+  radial-gradient(60rem 40rem at 20% -10%, rgba(124, 92, 255, 0.18), transparent 60%),
+  radial-gradient(50rem 30rem at 110% 10%, rgba(77, 208, 225, 0.10), transparent 55%); }
+@media (max-width: 880px) {
+  [dir="rtl"] .sidebar { inset: 0 0 0 auto; transform: translateX(100%); }
+  [dir="rtl"] .sidebar.open { transform: translateX(0); }
+}
