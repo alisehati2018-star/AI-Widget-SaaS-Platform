@@ -36,6 +36,27 @@ class TraceIdMiddleware(BaseHTTPMiddleware):
         return response
 
 
+class MetricsMiddleware(BaseHTTPMiddleware):
+    """Record request count + latency per method/status into the metrics registry."""
+
+    async def dispatch(self, request: Request, call_next):
+        import time
+
+        from .obs import metrics
+
+        start = time.perf_counter()
+        status = 500
+        try:
+            response = await call_next(request)
+            status = response.status_code
+            return response
+        finally:
+            elapsed = time.perf_counter() - start
+            method = request.method
+            metrics.inc("vitrin_http_requests_total", {"method": method, "status": str(status)})
+            metrics.observe("vitrin_http_request_duration_seconds", elapsed, {"method": method})
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Add standard hardening headers to every response (SE-2).
 

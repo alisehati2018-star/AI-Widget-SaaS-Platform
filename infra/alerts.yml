@@ -1,0 +1,45 @@
+# Vitrin alert rules (Phase F). Loaded by Prometheus (see prometheus.yml).
+groups:
+  - name: vitrin-availability
+    rules:
+      - alert: ApiDown
+        expr: up{job="vitrin-api"} == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "Vitrin API is down"
+          description: "No successful scrape of the API /metrics for 1m."
+
+      - alert: HighErrorRate
+        # >5% of requests returning 5xx over 5m.
+        expr: |
+          sum(rate(vitrin_http_requests_total{status=~"5.."}[5m]))
+            / clamp_min(sum(rate(vitrin_http_requests_total[5m])), 1) > 0.05
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Elevated 5xx error rate"
+          description: "More than 5% of requests are failing over the last 5 minutes."
+
+      - alert: HighRequestLatency
+        # Mean request duration > 1s over 5m (summary sum/count).
+        expr: |
+          sum(rate(vitrin_http_request_duration_seconds_sum[5m]))
+            / clamp_min(sum(rate(vitrin_http_request_duration_seconds_count[5m])), 1) > 1
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "High mean request latency"
+          description: "Mean request latency above 1s for 5 minutes."
+
+  - name: vitrin-dependencies
+    rules:
+      # Blackbox-style: alert if /readyz reports degraded (requires a probe that
+      # exposes vitrin_readyz_ok; wired with the blackbox exporter in production).
+      - alert: DependencyDegraded
+        expr: vitrin_readyz_ok == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "A core dependency is degraded"
+          description: "Postgres, Redis, or Elasticsearch failed readiness for 2m."

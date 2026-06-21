@@ -45,6 +45,9 @@ class Settings(BaseSettings):
 
     # Observability
     otel_endpoint: str = Field(default="", alias="OTEL_EXPORTER_OTLP_ENDPOINT")
+    metrics_enabled: bool = Field(default=True, alias="METRICS_ENABLED")
+    otel_enabled: bool = Field(default=True, alias="OTEL_ENABLED")  # instrument FastAPI
+    otel_console: bool = Field(default=False, alias="OTEL_CONSOLE")  # print spans (dev)
 
     # --- Phase 1: search / index / embedding tuning ---
     es_index_prefix: str = Field(default="acip", alias="ES_INDEX_PREFIX")
