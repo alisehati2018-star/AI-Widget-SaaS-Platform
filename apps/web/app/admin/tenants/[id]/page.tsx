@@ -31,6 +31,11 @@ export default function TenantDetail() {
     setNote("Tenant data erased.");
   }
 
+  async function setStatus(status: string) {
+    await authFetch(`/admin/tenants/${id}/status`, { body: { status } }).catch(() => {});
+    setNote(`Tenant ${status}.`);
+  }
+
   const fd = data?.four_dimensions;
   return (
     <DashboardShell title="Tenant detail" nav={ADMIN_NAV} requireAdmin loginHref="/admin/login">
@@ -42,6 +47,15 @@ export default function TenantDetail() {
         <Stat label="No-paid share" value={fd?.cost?.no_paid_share != null ? `${Math.round(fd.cost.no_paid_share * 100)}%` : "—"} />
         <Stat label="Cost (credits)" value={fd?.cost?.total ?? "—"} />
         <Stat label="Assistant turns" value={fd?.reliability?.turns ?? "—"} />
+      </div>
+
+      <div className="card" style={{ marginBottom: "1.5rem" }}>
+        <h3>Lifecycle</h3>
+        <p className="hint">Suspend blocks the tenant; activate restores access.</p>
+        <div className="row" style={{ flexWrap: "wrap" }}>
+          <button className="btn btn-danger" onClick={() => void setStatus("suspended")}>Suspend tenant</button>
+          <button className="btn btn-soft" onClick={() => void setStatus("active")}>Activate tenant</button>
+        </div>
       </div>
 
       <div className="card">

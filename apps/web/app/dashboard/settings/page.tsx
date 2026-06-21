@@ -36,6 +36,21 @@ export default function SettingsPage() {
     a.click();
   }
 
+  async function eraseData() {
+    if (!profile) return;
+    const confirm = window.prompt(
+      `This erases ALL shopper data (leads, chat memory, events, index). ` +
+        `Type your store slug "${profile.slug}" to confirm.`,
+    );
+    if (confirm === null) return;
+    try {
+      await authFetch("/tenant/erase", { body: { confirm } });
+      setNote("Your store data has been erased.");
+    } catch {
+      setNote("Erase failed — confirmation did not match.");
+    }
+  }
+
   return (
     <DashboardShell title="Settings" nav={OWNER_NAV}>
       {note ? <Alert kind="success">{note}</Alert> : null}
@@ -74,8 +89,11 @@ export default function SettingsPage() {
 
       <div className="card">
         <h3>Data &amp; privacy</h3>
-        <p className="hint">Export your tenant&apos;s portable data. To erase all data, contact platform support.</p>
-        <button className="btn btn-ghost" onClick={() => void exportData()}>Export my data (JSON)</button>
+        <p className="hint">Export your tenant&apos;s portable data, or permanently erase all shopper data.</p>
+        <div className="row" style={{ flexWrap: "wrap" }}>
+          <button className="btn btn-ghost" onClick={() => void exportData()}>Export my data (JSON)</button>
+          <button className="btn btn-danger" onClick={() => void eraseData()}>Erase all data</button>
+        </div>
       </div>
     </DashboardShell>
   );

@@ -67,6 +67,7 @@ export interface TenantProfile {
   current_period_end: string | null;
   tracking_enabled: boolean;
   settings: Record<string, string>;
+  email_verified: boolean;
   credits: { spent: number; granted: number; cap: number | null; within_plan: boolean };
   role: string;
 }

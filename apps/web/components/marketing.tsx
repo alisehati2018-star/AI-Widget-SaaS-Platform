@@ -9,6 +9,7 @@ export function MarketingNav() {
         <div className="nav-links">
           <Link href="/features">Features</Link>
           <Link href="/pricing">Pricing</Link>
+          <Link href="/docs">Docs</Link>
           <Link href="/contact">Contact</Link>
           <Link href="/login">Sign in</Link>
           <Link href="/signup" className="btn btn-primary">
@@ -28,8 +29,10 @@ export function MarketingFooter() {
         <div className="row" style={{ gap: "1.5rem", flexWrap: "wrap" }}>
           <Link href="/features">Features</Link>
           <Link href="/pricing">Pricing</Link>
+          <Link href="/docs">Docs</Link>
           <Link href="/contact">Contact</Link>
-          <Link href="/login">Sign in</Link>
+          <Link href="/legal/terms">Terms</Link>
+          <Link href="/legal/privacy">Privacy</Link>
           <Link href="/admin/login">Admin</Link>
         </div>
       </div>

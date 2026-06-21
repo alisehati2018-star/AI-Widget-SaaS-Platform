@@ -8,7 +8,6 @@ transaction is authoritative).
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from acip_core.logging import get_logger
@@ -25,7 +24,7 @@ async def audit(pg_pool, *, actor: str, action: str, tenant_id: str | None = Non
             await conn.execute(
                 "INSERT INTO audit_log (tenant_id, actor, action, detail) "
                 "VALUES ($1, $2, $3, $4::jsonb)",
-                tenant_id, actor, action, json.dumps(detail or {}),
+                tenant_id, actor, action, detail or {},
             )
     except Exception as exc:  # noqa: BLE001
         log.warning("audit.write_failed", action=action, error=str(exc))

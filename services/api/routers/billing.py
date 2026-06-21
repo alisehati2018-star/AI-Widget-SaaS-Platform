@@ -23,19 +23,22 @@ from acip_core.audit import audit
 from acip_core.clients import get_pg_pool
 from acip_core.config import get_settings
 from acip_core.errors import error_response
-from fastapi import APIRouter, Header, Request
+from fastapi import APIRouter, Cookie, Header, Request
 
 from .tenant import _require_tenant
 
 router = APIRouter(tags=["billing"])
 
 _AUTHZ = Header(default=None, alias="authorization")
+_COOKIE = Cookie(default=None, alias="vitrin_access")
 _SIGNATURE = Header(default=None, alias="x-billing-signature")
 
 
 @router.post("/tenant/billing/checkout")
-async def checkout(payload: dict[str, Any], authorization: str | None = _AUTHZ):
-    p = await _require_tenant(authorization)
+async def checkout(
+    payload: dict[str, Any], authorization: str | None = _AUTHZ, vitrin_access: str | None = _COOKIE
+):
+    p = await _require_tenant(authorization, vitrin_access)
     if p is None:
         return error_response(401, "unauthenticated", "Sign in to your store account.")
     if p.role != Role.STORE_OWNER:
@@ -47,11 +50,28 @@ async def checkout(payload: dict[str, Any], authorization: str | None = _AUTHZ):
 
     s = get_settings()
     pool = await get_pg_pool()
+    # Require a verified email before money-moving actions.
+    if s.email_verification_required:
+        async with pool.acquire() as conn:
+            verified = await conn.fetchval(
+                "SELECT email_verified FROM users WHERE id = $1", p.user_id
+            )
+        if not verified:
+            return error_response(
+                403,
+                "email_unverified",
+                "Verify your email before purchasing a plan.",
+            )
     order = await create_order(pool, p.tenant_id, plan_code, provider=s.billing_provider)
     if order is None:
         return error_response(404, "unknown_plan", "No such plan.")
-    await audit(pool, actor=p.email, action="billing.checkout", tenant_id=p.tenant_id,
-                detail={"plan": plan_code, "order_id": order["order_id"]})
+    await audit(
+        pool,
+        actor=p.email,
+        action="billing.checkout",
+        tenant_id=p.tenant_id,
+        detail={"plan": plan_code, "order_id": order["order_id"]},
+    )
 
     # The manual provider has no external redirect: the order awaits operator
     # confirmation. Real providers return a hosted-payment redirect URL here.
@@ -68,8 +88,8 @@ async def checkout(payload: dict[str, Any], authorization: str | None = _AUTHZ):
 
 
 @router.get("/tenant/billing/orders")
-async def my_orders(authorization: str | None = _AUTHZ):
-    p = await _require_tenant(authorization)
+async def my_orders(authorization: str | None = _AUTHZ, vitrin_access: str | None = _COOKIE):
+    p = await _require_tenant(authorization, vitrin_access)
     if p is None:
         return error_response(401, "unauthenticated", "Sign in to your store account.")
     assert p.tenant_id is not None
@@ -85,8 +105,12 @@ async def my_orders(authorization: str | None = _AUTHZ):
     return {
         "orders": [
             {
-                "id": str(r["id"]), "plan": r["plan"], "amount": float(r["amount"]),
-                "currency": r["currency"], "status": r["status"], "provider": r["provider"],
+                "id": str(r["id"]),
+                "plan": r["plan"],
+                "amount": float(r["amount"]),
+                "currency": r["currency"],
+                "status": r["status"],
+                "provider": r["provider"],
                 "created_at": r["created_at"].isoformat() if r["created_at"] else None,
                 "paid_at": r["paid_at"].isoformat() if r["paid_at"] else None,
             }
@@ -120,6 +144,11 @@ async def webhook(request: Request, x_billing_signature: str | None = _SIGNATURE
     result = await mark_order_paid(pool, order_id, period_days=s.subscription_period_days)
     if result is None:
         return error_response(404, "unknown_order", "No such order.")
-    await audit(pool, actor="provider", action="billing.paid",
-                tenant_id=result["tenant_id"], detail={"order_id": order_id, "via": "webhook"})
+    await audit(
+        pool,
+        actor="provider",
+        action="billing.paid",
+        tenant_id=result["tenant_id"],
+        detail={"order_id": order_id, "via": "webhook"},
+    )
     return {"status": "ok", "activated": result["plan_code"]}
