@@ -98,8 +98,8 @@ ruff check . && mypy packages services eval && pytest -q
 # Run the API process (only /healthz works without datastores; /readyz reports "degraded")
 PYTHONPATH=packages:services python -m uvicorn api.main:app --port 8000
 
-# Frontend: dashboard UI dev server + typecheck (API calls will fail without the backend)
-cd apps/dashboard && npm install && npm run dev      # http://localhost:3000
+# Frontend: the product web app (marketing + auth + dashboards + admin panel)
+cd apps/web && npm install && npm run dev      # http://localhost:3000
 npx tsc --noEmit
 ```
 
@@ -114,10 +114,10 @@ packages/             Domain libs: acip_core, acip_auth, acip_search, acip_sync,
 services/             api · gateway · worker (FastAPI + Celery) — incl. auth/admin/public routers
 apps/web/             Next.js app: marketing site + auth + store dashboard + admin panel
 apps/dashboard/       Legacy operator console + embeddable widget (widget/acip-widget.ts)
-db/migrations/        PostgreSQL control-plane schema (0001–0005: incl. identity/auth/plans)
+db/migrations/        PostgreSQL control-plane schema (0001–0009: identity/auth/plans/billing/kb)
 eval/                 Golden-set metrics + evaluation harness
 infra/                docker-compose.yml, Dockerfile, cluster verify script
-tests/                Unit + ES-gated integration tests
+tests/                Unit + PG/ES integration tests
 reports/              Audits, compliance, gap-closure, dependency upgrade
 ```
 

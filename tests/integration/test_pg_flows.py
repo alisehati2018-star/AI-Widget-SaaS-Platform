@@ -141,6 +141,19 @@ def test_billing_lifecycle_end_to_end(live_client):
     )
 
 
+def test_public_plans_and_contact(live_client):
+    plans = live_client.get("/plans").json()["plans"]
+    codes = {p["code"] for p in plans}
+    assert {"free", "starter", "pro"} <= codes
+    # contact: valid accepted, invalid email rejected
+    ok = live_client.post("/contact", json={
+        "name": "Sam", "email": "sam@ex.com", "message": "Hi, interested in enterprise.",
+    })
+    assert ok.status_code == 200 and ok.json()["status"] == "received"
+    bad = live_client.post("/contact", json={"name": "X", "email": "nope", "message": "hi"})
+    assert bad.status_code == 422
+
+
 def test_webhook_rejects_bad_signature(live_client):
     body = b'{"order_id":"x","status":"paid"}'
     r = live_client.post(

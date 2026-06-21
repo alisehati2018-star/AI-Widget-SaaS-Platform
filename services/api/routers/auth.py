@@ -115,11 +115,6 @@ def _slugify(name: str) -> str:
     return f"{base}-{secrets.token_hex(3)}"
 
 
-def _secret_or_503() -> str | None:
-    secret = get_settings().auth_secret
-    return secret or None
-
-
 async def _create_verification(conn: Any, user_id: Any) -> str:
     """Insert a hashed email-verification token and return the raw token."""
     token = secrets.token_urlsafe(32)
