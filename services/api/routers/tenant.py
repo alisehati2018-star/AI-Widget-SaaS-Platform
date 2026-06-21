@@ -22,6 +22,7 @@ from acip_core.audit import audit
 from acip_core.clients import get_es_client, get_pg_pool, get_redis
 from acip_core.config import get_settings
 from acip_core.errors import error_response
+from acip_notify import invite_email, send_email
 from fastapi import APIRouter, Header
 
 from ..deps import hash_key
@@ -69,6 +70,9 @@ async def profile(authorization: str | None = _AUTHZ):
             "LEFT JOIN plans pl ON pl.id = s.plan_id WHERE t.id = $1",
             p.tenant_id,
         )
+        email_verified = await conn.fetchval(
+            "SELECT email_verified FROM users WHERE id = $1", p.user_id
+        )
     status = await plan_status(pool, p.tenant_id)
     usage = await usage_summary(pool, p.tenant_id)
     if t is None:
@@ -81,6 +85,7 @@ async def profile(authorization: str | None = _AUTHZ):
         "current_period_end": period_end.isoformat() if period_end else None,
         "tracking_enabled": t["tracking_enabled"],
         "settings": t["settings"],
+        "email_verified": bool(email_verified),
         "credits": {
             "spent": usage["used"], "granted": usage["granted"], "cap": status.get("cap"),
             "within_plan": status.get("within_plan", True),
@@ -344,12 +349,16 @@ async def invite(payload: dict[str, Any], authorization: str | None = _AUTHZ):
                 "INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES ($1, $2, $3)",
                 user_id, hash_key(setup_token), datetime.now(UTC) + timedelta(days=7),
             )
+        store_name = await conn.fetchval("SELECT name FROM tenants WHERE id = $1", p.tenant_id)
     await audit(pool, actor=p.email, action="team.invite", tenant_id=p.tenant_id,
                 detail={"email": email})
+    s = get_settings()
+    subject, text, html = invite_email(
+        f"{s.app_base_url}/reset-password?token={setup_token}", store_name or "your store"
+    )
+    await send_email(email, subject, text, html)
     result = {"status": "invited", "email": email}
-    # The invitee sets their password via /reset-password?token=... (email delivery
-    # is wired in the notification phase; token surfaced in non-production only).
-    if get_settings().env != "production":
+    if s.env != "production":  # dev convenience: surface the setup link token
         result["setup_token"] = setup_token
     return result
 

@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { apiFetch, ApiError } from "../../lib/api";
 import { MarketingFooter, MarketingNav } from "../../components/marketing";
 import { Alert, Field, Input, Spinner } from "../../components/ui";
 
 export default function ContactPage() {
   const [form, setForm] = useState({ name: "", email: "", message: "" });
   const [sent, setSent] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   function update(k: keyof typeof form) {
@@ -14,14 +16,18 @@ export default function ContactPage() {
       setForm({ ...form, [k]: e.target.value });
   }
 
-  function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
+    setError(null);
     setBusy(true);
-    // Contact delivery is wired in the notification phase; acknowledge locally.
-    setTimeout(() => {
+    try {
+      await apiFetch("/contact", { body: form });
       setSent(true);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not send message.");
+    } finally {
       setBusy(false);
-    }, 400);
+    }
   }
 
   return (
@@ -38,6 +44,7 @@ export default function ContactPage() {
               <Alert kind="success">Thanks — we&apos;ve received your message and will reply soon.</Alert>
             ) : (
               <form onSubmit={submit}>
+                {error ? <Alert kind="error">{error}</Alert> : null}
                 <Field label="Name">
                   <Input value={form.name} onChange={update("name")} required />
                 </Field>

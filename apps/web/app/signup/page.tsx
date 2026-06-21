@@ -57,6 +57,11 @@ export default function SignupPage() {
               {busy ? <Spinner /> : "Create account"}
             </button>
           </form>
+          <p className="hint center" style={{ marginTop: "0.8rem" }}>
+            By creating an account you agree to our{" "}
+            <Link href="/legal/terms" className="grad-text">Terms</Link> and{" "}
+            <Link href="/legal/privacy" className="grad-text">Privacy Policy</Link>.
+          </p>
           <p className="center" style={{ marginTop: "1rem", marginBottom: 0, fontSize: "0.9rem" }}>
             Already have an account? <Link href="/login" className="grad-text">Sign in</Link>
           </p>

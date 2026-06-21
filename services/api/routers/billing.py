@@ -47,6 +47,17 @@ async def checkout(payload: dict[str, Any], authorization: str | None = _AUTHZ):
 
     s = get_settings()
     pool = await get_pg_pool()
+    # Require a verified email before money-moving actions.
+    if s.email_verification_required:
+        async with pool.acquire() as conn:
+            verified = await conn.fetchval(
+                "SELECT email_verified FROM users WHERE id = $1", p.user_id
+            )
+        if not verified:
+            return error_response(
+                403, "email_unverified",
+                "Verify your email before purchasing a plan.",
+            )
     order = await create_order(pool, p.tenant_id, plan_code, provider=s.billing_provider)
     if order is None:
         return error_response(404, "unknown_plan", "No such plan.")

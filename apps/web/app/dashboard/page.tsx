@@ -2,18 +2,30 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import type { TenantProfile } from "../../lib/api";
+import { apiFetch, type TenantProfile } from "../../lib/api";
 import { authFetch, useSession } from "../../lib/auth";
 import { DashboardShell, OWNER_NAV } from "../../components/shell";
-import { Badge, Stat } from "../../components/ui";
+import { Alert, Badge, Stat } from "../../components/ui";
 
 export default function DashboardHome() {
   const { user } = useSession();
   const [profile, setProfile] = useState<TenantProfile | null>(null);
+  const [resent, setResent] = useState(false);
 
   useEffect(() => {
     authFetch<TenantProfile>("/tenant/profile").then(setProfile).catch(() => setProfile(null));
   }, []);
+
+  async function resendVerification() {
+    if (!user?.email) return;
+    try {
+      await apiFetch("/auth/verify-request", { body: { email: user.email } });
+    } catch {
+      /* generic */
+    } finally {
+      setResent(true);
+    }
+  }
 
   const credits = profile?.credits;
   const remaining =
@@ -21,7 +33,19 @@ export default function DashboardHome() {
 
   return (
     <DashboardShell title="Overview" nav={OWNER_NAV}>
-      <p style={{ marginTop: "-1rem" }}>
+      {profile && !profile.email_verified ? (
+        <Alert kind="error">
+          Your email isn&apos;t verified yet — verify it to unlock plan purchases.{" "}
+          {resent ? (
+            <strong>Verification email sent.</strong>
+          ) : (
+            <button className="btn btn-soft" style={{ marginLeft: "0.5rem" }} onClick={() => void resendVerification()}>
+              Resend verification
+            </button>
+          )}
+        </Alert>
+      ) : null}
+      <p style={{ marginTop: "-0.5rem" }}>
         Welcome{user?.full_name ? `, ${user.full_name}` : ""}. Here&apos;s {profile?.name ?? "your store"} at a glance.
       </p>
       <div className="stat-grid" style={{ marginBottom: "2rem" }}>

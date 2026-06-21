@@ -34,6 +34,7 @@ from acip_core.audit import audit
 from acip_core.clients import get_pg_pool
 from acip_core.config import get_settings
 from acip_core.errors import error_response
+from acip_notify import reset_email, send_email, verification_email
 from fastapi import APIRouter, Header, Request
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -61,6 +62,17 @@ def _slugify(name: str) -> str:
 def _secret_or_503() -> str | None:
     secret = get_settings().auth_secret
     return secret or None
+
+
+async def _create_verification(conn: Any, user_id: Any) -> str:
+    """Insert a hashed email-verification token and return the raw token."""
+    token = secrets.token_urlsafe(32)
+    await conn.execute(
+        "INSERT INTO email_verifications (user_id, token_hash, expires_at) "
+        "VALUES ($1, $2, $3)",
+        user_id, _hash_token(token), _now() + timedelta(hours=24),
+    )
+    return token
 
 
 def _issue_tokens(conn: Any, user: dict, *, request: Request) -> dict[str, Any]:
@@ -158,9 +170,18 @@ async def signup(payload: dict[str, Any], request: Request):
                 "VALUES ($1, $2, $3, $4, $5)",
                 user["id"], tokens["jti_hash"], tokens["ua"], tokens["ip"], tokens["expires_at"],
             )
+            verify_token = await _create_verification(conn, user["id"])
         await audit(pool, actor=email, action="auth.signup", tenant_id=str(tenant_id),
                     detail={"store_name": store_name})
-    return _token_response(dict(user), tokens)
+    # Send the verification email (best-effort, outside the txn).
+    subject, text, html = verification_email(
+        f"{s.app_base_url}/verify-email?token={verify_token}"
+    )
+    await send_email(email, subject, text, html)
+    resp = _token_response(dict(user), tokens)
+    if s.env != "production":
+        resp["verify_token"] = verify_token  # dev convenience for testing
+    return resp
 
 
 # --------------------------------------------------------------------------- #
@@ -352,6 +373,7 @@ async def reset_request(payload: dict[str, Any]):
     accepted = {"status": "accepted"}  # always generic
     if not _EMAIL_RE.match(email):
         return accepted
+    s = get_settings()
     pool = await get_pg_pool()
     async with pool.acquire() as conn:
         user = await conn.fetchrow("SELECT id, email FROM users WHERE lower(email) = $1", email)
@@ -362,11 +384,58 @@ async def reset_request(payload: dict[str, Any]):
                 "VALUES ($1, $2, $3)",
                 user["id"], _hash_token(token), _now() + timedelta(hours=1),
             )
-            # Delivery (email) is wired in the notification phase; the token is
-            # returned only in non-production to support local testing.
-            if get_settings().env != "production":
+            subject, text, html = reset_email(f"{s.app_base_url}/reset-password?token={token}")
+            await send_email(email, subject, text, html)
+            if s.env != "production":  # dev convenience for testing
                 accepted["reset_token"] = token
     return accepted
+
+
+@router.post("/verify-request")
+async def verify_request(payload: dict[str, Any]):
+    """(Re)send an email-verification link. Generic response (no enumeration)."""
+    email = str(payload.get("email", "")).strip().lower()
+    accepted: dict[str, Any] = {"status": "accepted"}
+    if not _EMAIL_RE.match(email):
+        return accepted
+    s = get_settings()
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        user = await conn.fetchrow(
+            "SELECT id, email_verified FROM users WHERE lower(email) = $1", email
+        )
+        if user is not None and not user["email_verified"]:
+            token = await _create_verification(conn, user["id"])
+            subject, text, html = verification_email(
+                f"{s.app_base_url}/verify-email?token={token}"
+            )
+            await send_email(email, subject, text, html)
+            if s.env != "production":
+                accepted["verify_token"] = token
+    return accepted
+
+
+@router.post("/verify-confirm")
+async def verify_confirm(payload: dict[str, Any]):
+    """Confirm an email-verification token → mark the user verified (single-use)."""
+    token = str(payload.get("token", ""))
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT id, user_id FROM email_verifications WHERE token_hash = $1 "
+            "AND used_at IS NULL AND expires_at > now()",
+            _hash_token(token),
+        )
+        if row is None:
+            return error_response(400, "invalid_token", "Invalid or expired verification token.")
+        async with conn.transaction():
+            await conn.execute(
+                "UPDATE users SET email_verified = TRUE WHERE id = $1", row["user_id"]
+            )
+            await conn.execute(
+                "UPDATE email_verifications SET used_at = now() WHERE id = $1", row["id"]
+            )
+    return {"status": "verified"}
 
 
 @router.post("/password/reset-confirm")
