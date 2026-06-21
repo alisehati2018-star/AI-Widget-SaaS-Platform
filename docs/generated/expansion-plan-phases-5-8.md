@@ -56,18 +56,22 @@
 - Security: admin routes require `platform_admin`; every mutation audited; admin
   session idle timeout; optional IP allowlist + (later) TOTP 2FA hook.
 
-## Phase 7 — Marketing site + Signup + Buy Plan (billing)
+## Phase 7 — Marketing site + Signup + Buy Plan (billing) ✅
 
 **Goal:** a visitor can discover Vitrin, sign up, and purchase a plan.
 
-- Frontend: landing (hero, features, social proof), pricing (from public
-  `plans`), signup, login, password reset — modern, responsive, RTL-ready.
-- Backend: public `GET /plans`; `POST /billing/checkout` (creates an `order`,
-  returns a provider redirect/instructions); `POST /billing/webhook` (provider
-  callback → mark order paid → activate subscription → grant credits); manual
-  invoice path for enterprise.
-- Security: signup rate-limited + bot-resistant; webhook signature verified;
-  prices authoritative server-side (never trust client amounts); orders audited.
+- Frontend: landing, features, pricing (from public `plans`), contact, signup,
+  login, password reset/confirm — modern, responsive, RTL-ready.
+- Backend (provider-agnostic): `POST /tenant/billing/checkout` (creates an
+  `order` priced server-side from `plans`), `GET /tenant/billing/orders`,
+  `POST /billing/webhook` (HMAC-SHA256 verified → mark order paid → activate
+  subscription → grant credits), admin `mark-paid`/`refund` for the manual/
+  invoice path. `acip_billing.subscription` activates plans + grants credits.
+- Security: prices authoritative server-side (never trust client amounts);
+  webhook signature verified, fail-closed when unconfigured; checkout is
+  owner-only; every billing action audited.
+- **Status:** implemented + tested (`tests/test_billing.py`), gates green. Live
+  card/gateway provider (Stripe / ZarinPal) plugs into the same webhook flow.
 
 ## Phase 8 — Store-Owner Dashboard + onboarding
 
@@ -94,6 +98,6 @@
 | Phase | Scope | State |
 |---|---|---|
 | 5 | Identity/auth/security backend | **Implemented, tested** |
-| 6 | Admin panel + admin login | Next |
-| 7 | Marketing site + signup + buy plan | Planned |
-| 8 | Store-owner dashboard | Planned |
+| 6 | Admin panel + admin login | **Implemented** |
+| 7 | Marketing site + signup + buy plan | **Implemented, tested** |
+| 8 | Store-owner dashboard | **Implemented** |

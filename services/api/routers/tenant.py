@@ -18,7 +18,7 @@ from acip_analytics import attribution as _attr
 from acip_analytics import why_summary as _why
 from acip_auth import hash_password
 from acip_auth.models import AuthPrincipal, Role
-from acip_billing.ledger import balance, plan_status
+from acip_billing.ledger import plan_status, usage_summary
 from acip_core.audit import audit
 from acip_core.clients import get_es_client, get_pg_pool, get_redis
 from acip_core.config import get_settings
@@ -71,7 +71,7 @@ async def profile(authorization: str | None = _AUTHZ):
             p.tenant_id,
         )
     status = await plan_status(pool, p.tenant_id)
-    spent = await balance(pool, p.tenant_id)
+    usage = await usage_summary(pool, p.tenant_id)
     if t is None:
         return error_response(404, "not_found", "Tenant not found.")
     period_end = t["current_period_end"]
@@ -83,7 +83,7 @@ async def profile(authorization: str | None = _AUTHZ):
         "tracking_enabled": t["tracking_enabled"],
         "settings": t["settings"],
         "credits": {
-            "spent": abs(spent), "cap": status.get("cap"),
+            "spent": usage["used"], "granted": usage["granted"], "cap": status.get("cap"),
             "within_plan": status.get("within_plan", True),
         },
         "role": p.role.value,

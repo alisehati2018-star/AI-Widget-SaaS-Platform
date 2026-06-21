@@ -67,8 +67,18 @@ export interface TenantProfile {
   current_period_end: string | null;
   tracking_enabled: boolean;
   settings: Record<string, string>;
-  credits: { spent: number; cap: number | null; within_plan: boolean };
+  credits: { spent: number; granted: number; cap: number | null; within_plan: boolean };
   role: string;
+}
+export interface MyOrder {
+  id: string;
+  plan: string;
+  amount: number;
+  currency: string;
+  status: string;
+  provider: string;
+  created_at: string | null;
+  paid_at: string | null;
 }
 export interface ApiKey {
   id: string;
@@ -120,6 +130,7 @@ export interface AuditEntry {
   created_at: string | null;
 }
 export interface Order {
+  id: string;
   tenant: string;
   plan: string;
   amount: number;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Order } from "../../../lib/api";
 import { authFetch } from "../../../lib/auth";
 import { ADMIN_NAV, DashboardShell } from "../../../components/shell";
@@ -10,12 +10,25 @@ export default function AdminBilling() {
   const [orders, setOrders] = useState<Order[] | null>(null);
   const [revenue, setRevenue] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     authFetch<{ orders: Order[]; revenue_total: number }>("/admin/orders")
       .then((r) => { setOrders(r.orders); setRevenue(r.revenue_total); })
       .catch((e) => setError(String(e.message ?? e)));
   }, []);
+
+  useEffect(() => load(), [load]);
+
+  async function act(id: string, action: "mark-paid" | "refund") {
+    setBusy(id + action);
+    try {
+      await authFetch(`/admin/orders/${id}/${action}`, { method: "POST" });
+      load();
+    } finally {
+      setBusy(null);
+    }
+  }
 
   const tone = (s: string) => (s === "paid" ? "success" : s === "pending" ? "warning" : undefined);
 
@@ -37,16 +50,32 @@ export default function AdminBilling() {
           <p className="muted">No orders yet. Checkout activates with the billing release.</p>
         ) : (
           <table className="table">
-            <thead><tr><th>Store</th><th>Plan</th><th>Amount</th><th>Provider</th><th>Status</th><th>When</th></tr></thead>
+            <thead><tr><th>Store</th><th>Plan</th><th>Amount</th><th>Provider</th><th>Status</th><th>When</th><th></th></tr></thead>
             <tbody>
-              {orders.map((o, i) => (
-                <tr key={i}>
+              {orders.map((o) => (
+                <tr key={o.id}>
                   <td>{o.tenant}</td>
                   <td>{o.plan}</td>
                   <td>{o.currency} {o.amount.toFixed(2)}</td>
                   <td className="muted">{o.provider}</td>
                   <td><Badge tone={tone(o.status)}>{o.status}</Badge></td>
                   <td className="muted">{o.created_at?.slice(0, 10) ?? "—"}</td>
+                  <td>
+                    <div className="row" style={{ gap: "0.4rem" }}>
+                      {o.status === "pending" ? (
+                        <button className="btn btn-soft" disabled={busy !== null}
+                          onClick={() => void act(o.id, "mark-paid")}>
+                          {busy === o.id + "mark-paid" ? <Spinner /> : "Mark paid"}
+                        </button>
+                      ) : null}
+                      {o.status === "paid" ? (
+                        <button className="btn btn-danger" disabled={busy !== null}
+                          onClick={() => void act(o.id, "refund")}>
+                          {busy === o.id + "refund" ? <Spinner /> : "Refund"}
+                        </button>
+                      ) : null}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>

@@ -62,3 +62,22 @@ async def plan_status(pg_pool, tenant_id: str) -> dict[str, Any]:
     spent = -(await balance(pg_pool, tenant_id))
     within = cap is None or spent <= float(cap)
     return {"spent": spent, "cap": float(cap) if cap is not None else None, "within_plan": within}
+
+
+async def usage_summary(pg_pool, tenant_id: str) -> dict[str, float]:
+    """Split the ledger into credits used (spend) vs granted, for dashboards."""
+    if pg_pool is None:
+        return {"used": 0.0, "granted": 0.0}
+    try:
+        async with pg_pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT "
+                "COALESCE(-sum(delta) FILTER (WHERE delta < 0), 0) AS used, "
+                "COALESCE(sum(delta) FILTER (WHERE delta > 0), 0) AS granted "
+                "FROM credit_ledger WHERE tenant_id = $1",
+                tenant_id,
+            )
+        return {"used": float(row["used"] or 0), "granted": float(row["granted"] or 0)}
+    except Exception:  # noqa: BLE001
+        return {"used": 0.0, "granted": 0.0}
+
