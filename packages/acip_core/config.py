@@ -111,6 +111,26 @@ class Settings(BaseSettings):
     email_verification_required: bool = Field(
         default=True, alias="EMAIL_VERIFICATION_REQUIRED"
     )
+
+    # --- Phase D: security hardening ---
+    security_headers_enabled: bool = Field(default=True, alias="SECURITY_HEADERS_ENABLED")
+    hsts_enabled: bool = Field(default=False, alias="HSTS_ENABLED")  # enable behind HTTPS
+    # Comma-separated CORS allowlist for browser clients (web app + store widgets).
+    # Empty falls back to APP_BASE_URL.
+    cors_allow_origins: str = Field(default="", alias="CORS_ALLOW_ORIGINS")
+    # Cookie-based auth (dual-support alongside bearer). Secure=true in production.
+    cookie_secure: bool = Field(default=False, alias="COOKIE_SECURE")
+    cookie_samesite: str = Field(default="lax", alias="COOKIE_SAMESITE")
+    csrf_enabled: bool = Field(default=True, alias="CSRF_ENABLED")
+    # Per-IP rate limit (per minute) on unauthenticated auth endpoints.
+    auth_ip_rate_per_min: int = Field(default=10, alias="AUTH_IP_RATE_PER_MIN")
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        raw = self.cors_allow_origins.strip()
+        if not raw:
+            return [self.app_base_url]
+        return [o.strip() for o in raw.split(",") if o.strip()]
     # --- Phase 4: agent actions (money-moving tools), disabled by default ---
     agent_actions_enabled: bool = Field(default=False, alias="AGENT_ACTIONS_ENABLED")
 

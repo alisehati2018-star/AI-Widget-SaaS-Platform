@@ -23,7 +23,7 @@ from acip_core.clients import get_es_client, get_pg_pool, get_redis
 from acip_core.config import get_settings
 from acip_core.errors import error_response
 from acip_notify import invite_email, send_email
-from fastapi import APIRouter, Header
+from fastapi import APIRouter, Cookie, Header
 
 from ..deps import hash_key
 from .auth import current_principal
@@ -31,12 +31,15 @@ from .auth import current_principal
 router = APIRouter(prefix="/tenant", tags=["tenant"])
 
 _AUTHZ = Header(default=None, alias="authorization")
+_COOKIE = Cookie(default=None, alias="vitrin_access")
 _TENANT_ROLES = frozenset({Role.STORE_OWNER, Role.STORE_STAFF})
 
 
-async def _require_tenant(authorization: str | None) -> AuthPrincipal | None:
+async def _require_tenant(
+    authorization: str | None, access_cookie: str | None = None
+) -> AuthPrincipal | None:
     """Return a tenant-scoped principal, or None if not a logged-in store user."""
-    principal = await current_principal(authorization)
+    principal = await current_principal(authorization, access_cookie)
     if principal is None or principal.tenant_id is None or principal.role not in _TENANT_ROLES:
         return None
     return principal
@@ -54,8 +57,8 @@ def _owner_only():
 # Profile / overview                                                          #
 # --------------------------------------------------------------------------- #
 @router.get("/profile")
-async def profile(authorization: str | None = _AUTHZ):
-    p = await _require_tenant(authorization)
+async def profile(authorization: str | None = _AUTHZ, vitrin_access: str | None = _COOKIE):
+    p = await _require_tenant(authorization, vitrin_access)
     if p is None:
         return _unauth()
     assert p.tenant_id is not None  # narrowed: _require_tenant guarantees a tenant
@@ -80,14 +83,19 @@ async def profile(authorization: str | None = _AUTHZ):
     period_end = t["current_period_end"]
     return {
         "tenant_id": p.tenant_id,
-        "slug": t["slug"], "name": t["name"], "status": t["status"],
-        "plan": t["plan"], "sub_status": t["sub_status"],
+        "slug": t["slug"],
+        "name": t["name"],
+        "status": t["status"],
+        "plan": t["plan"],
+        "sub_status": t["sub_status"],
         "current_period_end": period_end.isoformat() if period_end else None,
         "tracking_enabled": t["tracking_enabled"],
         "settings": t["settings"],
         "email_verified": bool(email_verified),
         "credits": {
-            "spent": usage["used"], "granted": usage["granted"], "cap": status.get("cap"),
+            "spent": usage["used"],
+            "granted": usage["granted"],
+            "cap": status.get("cap"),
             "within_plan": status.get("within_plan", True),
         },
         "role": p.role.value,
@@ -98,8 +106,8 @@ async def profile(authorization: str | None = _AUTHZ):
 # Analytics (tenant-scoped)                                                   #
 # --------------------------------------------------------------------------- #
 @router.get("/analytics")
-async def analytics(authorization: str | None = _AUTHZ):
-    p = await _require_tenant(authorization)
+async def analytics(authorization: str | None = _AUTHZ, vitrin_access: str | None = _COOKIE):
+    p = await _require_tenant(authorization, vitrin_access)
     if p is None:
         return _unauth()
     assert p.tenant_id is not None  # narrowed: _require_tenant guarantees a tenant
@@ -114,8 +122,8 @@ async def analytics(authorization: str | None = _AUTHZ):
 
 
 @router.get("/insight")
-async def insight(authorization: str | None = _AUTHZ):
-    p = await _require_tenant(authorization)
+async def insight(authorization: str | None = _AUTHZ, vitrin_access: str | None = _COOKIE):
+    p = await _require_tenant(authorization, vitrin_access)
     if p is None:
         return _unauth()
     assert p.tenant_id is not None  # narrowed: _require_tenant guarantees a tenant
@@ -130,8 +138,8 @@ def _syn_key(tenant: str) -> str:
 
 
 @router.get("/synonyms")
-async def get_synonyms(authorization: str | None = _AUTHZ):
-    p = await _require_tenant(authorization)
+async def get_synonyms(authorization: str | None = _AUTHZ, vitrin_access: str | None = _COOKIE):
+    p = await _require_tenant(authorization, vitrin_access)
     if p is None:
         return _unauth()
     assert p.tenant_id is not None  # narrowed: _require_tenant guarantees a tenant
@@ -141,8 +149,10 @@ async def get_synonyms(authorization: str | None = _AUTHZ):
 
 
 @router.post("/synonyms")
-async def set_synonyms(payload: dict[str, Any], authorization: str | None = _AUTHZ):
-    p = await _require_tenant(authorization)
+async def set_synonyms(
+    payload: dict[str, Any], authorization: str | None = _AUTHZ, vitrin_access: str | None = _COOKIE
+):
+    p = await _require_tenant(authorization, vitrin_access)
     if p is None:
         return _unauth()
     assert p.tenant_id is not None  # narrowed: _require_tenant guarantees a tenant
@@ -156,8 +166,8 @@ async def set_synonyms(payload: dict[str, Any], authorization: str | None = _AUT
 
 
 @router.get("/zero-results")
-async def zero_results(authorization: str | None = _AUTHZ):
-    p = await _require_tenant(authorization)
+async def zero_results(authorization: str | None = _AUTHZ, vitrin_access: str | None = _COOKIE):
+    p = await _require_tenant(authorization, vitrin_access)
     if p is None:
         return _unauth()
     assert p.tenant_id is not None  # narrowed: _require_tenant guarantees a tenant
@@ -168,8 +178,8 @@ async def zero_results(authorization: str | None = _AUTHZ):
 # Leads                                                                       #
 # --------------------------------------------------------------------------- #
 @router.get("/leads")
-async def leads(authorization: str | None = _AUTHZ):
-    p = await _require_tenant(authorization)
+async def leads(authorization: str | None = _AUTHZ, vitrin_access: str | None = _COOKIE):
+    p = await _require_tenant(authorization, vitrin_access)
     if p is None:
         return _unauth()
     assert p.tenant_id is not None  # narrowed: _require_tenant guarantees a tenant
@@ -183,7 +193,9 @@ async def leads(authorization: str | None = _AUTHZ):
     return {
         "leads": [
             {
-                "email": r["email"], "phone": r["phone"], "has_intent": r["has_intent"],
+                "email": r["email"],
+                "phone": r["phone"],
+                "has_intent": r["has_intent"],
                 "source": r["source"],
                 "created_at": r["created_at"].isoformat() if r["created_at"] else None,
             }
@@ -196,8 +208,8 @@ async def leads(authorization: str | None = _AUTHZ):
 # API keys (list / create / revoke) — scoped to the tenant                    #
 # --------------------------------------------------------------------------- #
 @router.get("/keys")
-async def list_keys(authorization: str | None = _AUTHZ):
-    p = await _require_tenant(authorization)
+async def list_keys(authorization: str | None = _AUTHZ, vitrin_access: str | None = _COOKIE):
+    p = await _require_tenant(authorization, vitrin_access)
     if p is None:
         return _unauth()
     assert p.tenant_id is not None  # narrowed: _require_tenant guarantees a tenant
@@ -211,7 +223,9 @@ async def list_keys(authorization: str | None = _AUTHZ):
     return {
         "keys": [
             {
-                "id": str(r["id"]), "scope": r["scope"], "label": r["label"],
+                "id": str(r["id"]),
+                "scope": r["scope"],
+                "label": r["label"],
                 "revoked": r["revoked"],
                 "created_at": r["created_at"].isoformat() if r["created_at"] else None,
                 "last_used_at": r["last_used_at"].isoformat() if r["last_used_at"] else None,
@@ -222,8 +236,10 @@ async def list_keys(authorization: str | None = _AUTHZ):
 
 
 @router.post("/keys")
-async def create_key(payload: dict[str, Any], authorization: str | None = _AUTHZ):
-    p = await _require_tenant(authorization)
+async def create_key(
+    payload: dict[str, Any], authorization: str | None = _AUTHZ, vitrin_access: str | None = _COOKIE
+):
+    p = await _require_tenant(authorization, vitrin_access)
     if p is None:
         return _unauth()
     assert p.tenant_id is not None  # narrowed: _require_tenant guarantees a tenant
@@ -238,16 +254,26 @@ async def create_key(payload: dict[str, Any], authorization: str | None = _AUTHZ
     async with pool.acquire() as conn:
         await conn.execute(
             "INSERT INTO api_keys (tenant_id, key_hash, scope, label) VALUES ($1, $2, $3, $4)",
-            p.tenant_id, hash_key(raw_key), scope, label,
+            p.tenant_id,
+            hash_key(raw_key),
+            scope,
+            label,
         )
-    await audit(pool, actor=p.email, action="key.create", tenant_id=p.tenant_id,
-                detail={"scope": scope, "label": label})
+    await audit(
+        pool,
+        actor=p.email,
+        action="key.create",
+        tenant_id=p.tenant_id,
+        detail={"scope": scope, "label": label},
+    )
     return {"api_key": raw_key, "scope": scope, "label": label}
 
 
 @router.post("/keys/{key_id}/revoke")
-async def revoke_key(key_id: str, authorization: str | None = _AUTHZ):
-    p = await _require_tenant(authorization)
+async def revoke_key(
+    key_id: str, authorization: str | None = _AUTHZ, vitrin_access: str | None = _COOKIE
+):
+    p = await _require_tenant(authorization, vitrin_access)
     if p is None:
         return _unauth()
     assert p.tenant_id is not None  # narrowed: _require_tenant guarantees a tenant
@@ -257,10 +283,12 @@ async def revoke_key(key_id: str, authorization: str | None = _AUTHZ):
     async with pool.acquire() as conn:
         await conn.execute(
             "UPDATE api_keys SET revoked = TRUE WHERE id = $1 AND tenant_id = $2",
-            key_id, p.tenant_id,
+            key_id,
+            p.tenant_id,
         )
-    await audit(pool, actor=p.email, action="key.revoke", tenant_id=p.tenant_id,
-                detail={"key_id": key_id})
+    await audit(
+        pool, actor=p.email, action="key.revoke", tenant_id=p.tenant_id, detail={"key_id": key_id}
+    )
     return {"status": "revoked"}
 
 
@@ -268,8 +296,10 @@ async def revoke_key(key_id: str, authorization: str | None = _AUTHZ):
 # Store settings + white-label branding                                       #
 # --------------------------------------------------------------------------- #
 @router.patch("/settings")
-async def update_settings(payload: dict[str, Any], authorization: str | None = _AUTHZ):
-    p = await _require_tenant(authorization)
+async def update_settings(
+    payload: dict[str, Any], authorization: str | None = _AUTHZ, vitrin_access: str | None = _COOKIE
+):
+    p = await _require_tenant(authorization, vitrin_access)
     if p is None:
         return _unauth()
     assert p.tenant_id is not None  # narrowed: _require_tenant guarantees a tenant
@@ -281,9 +311,9 @@ async def update_settings(payload: dict[str, Any], authorization: str | None = _
     pool = await get_pg_pool()
     async with pool.acquire() as conn:
         await conn.execute(
-            "UPDATE tenants SET settings = settings || $1::jsonb, updated_at = now() "
-            "WHERE id = $2",
-            patch, p.tenant_id,
+            "UPDATE tenants SET settings = settings || $1::jsonb, updated_at = now() WHERE id = $2",
+            patch,
+            p.tenant_id,
         )
     await audit(pool, actor=p.email, action="settings.update", tenant_id=p.tenant_id, detail=patch)
     return {"status": "saved", "settings": patch}
@@ -293,8 +323,8 @@ async def update_settings(payload: dict[str, Any], authorization: str | None = _
 # Team (list + invite staff)                                                  #
 # --------------------------------------------------------------------------- #
 @router.get("/team")
-async def team(authorization: str | None = _AUTHZ):
-    p = await _require_tenant(authorization)
+async def team(authorization: str | None = _AUTHZ, vitrin_access: str | None = _COOKIE):
+    p = await _require_tenant(authorization, vitrin_access)
     if p is None:
         return _unauth()
     assert p.tenant_id is not None  # narrowed: _require_tenant guarantees a tenant
@@ -308,7 +338,9 @@ async def team(authorization: str | None = _AUTHZ):
     return {
         "members": [
             {
-                "email": r["email"], "full_name": r["full_name"], "role": r["role"],
+                "email": r["email"],
+                "full_name": r["full_name"],
+                "role": r["role"],
                 "status": r["status"],
                 "last_login_at": r["last_login_at"].isoformat() if r["last_login_at"] else None,
             }
@@ -318,8 +350,10 @@ async def team(authorization: str | None = _AUTHZ):
 
 
 @router.post("/team/invite")
-async def invite(payload: dict[str, Any], authorization: str | None = _AUTHZ):
-    p = await _require_tenant(authorization)
+async def invite(
+    payload: dict[str, Any], authorization: str | None = _AUTHZ, vitrin_access: str | None = _COOKIE
+):
+    p = await _require_tenant(authorization, vitrin_access)
     if p is None:
         return _unauth()
     assert p.tenant_id is not None  # narrowed: _require_tenant guarantees a tenant
@@ -338,20 +372,28 @@ async def invite(payload: dict[str, Any], authorization: str | None = _AUTHZ):
             user_id = await conn.fetchval(
                 "INSERT INTO users (email, password_hash, full_name, role, tenant_id, status) "
                 "VALUES ($1, $2, $3, 'store_staff', $4, 'pending') RETURNING id",
-                email, hash_password(secrets.token_urlsafe(24)), full_name, p.tenant_id,
+                email,
+                hash_password(secrets.token_urlsafe(24)),
+                full_name,
+                p.tenant_id,
             )
             await conn.execute(
                 "INSERT INTO invitations (tenant_id, email, role, invited_by) "
                 "VALUES ($1, $2, 'store_staff', $3)",
-                p.tenant_id, email, p.user_id,
+                p.tenant_id,
+                email,
+                p.user_id,
             )
             await conn.execute(
                 "INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES ($1, $2, $3)",
-                user_id, hash_key(setup_token), datetime.now(UTC) + timedelta(days=7),
+                user_id,
+                hash_key(setup_token),
+                datetime.now(UTC) + timedelta(days=7),
             )
         store_name = await conn.fetchval("SELECT name FROM tenants WHERE id = $1", p.tenant_id)
-    await audit(pool, actor=p.email, action="team.invite", tenant_id=p.tenant_id,
-                detail={"email": email})
+    await audit(
+        pool, actor=p.email, action="team.invite", tenant_id=p.tenant_id, detail={"email": email}
+    )
     s = get_settings()
     subject, text, html = invite_email(
         f"{s.app_base_url}/reset-password?token={setup_token}", store_name or "your store"
@@ -367,8 +409,8 @@ async def invite(payload: dict[str, Any], authorization: str | None = _AUTHZ):
 # GDPR self-serve (export / tracking)                                         #
 # --------------------------------------------------------------------------- #
 @router.get("/export")
-async def export_data(authorization: str | None = _AUTHZ):
-    p = await _require_tenant(authorization)
+async def export_data(authorization: str | None = _AUTHZ, vitrin_access: str | None = _COOKIE):
+    p = await _require_tenant(authorization, vitrin_access)
     if p is None:
         return _unauth()
     assert p.tenant_id is not None  # narrowed: _require_tenant guarantees a tenant
@@ -382,8 +424,10 @@ async def export_data(authorization: str | None = _AUTHZ):
 
 
 @router.post("/tracking")
-async def set_tracking(payload: dict[str, Any], authorization: str | None = _AUTHZ):
-    p = await _require_tenant(authorization)
+async def set_tracking(
+    payload: dict[str, Any], authorization: str | None = _AUTHZ, vitrin_access: str | None = _COOKIE
+):
+    p = await _require_tenant(authorization, vitrin_access)
     if p is None:
         return _unauth()
     assert p.tenant_id is not None  # narrowed: _require_tenant guarantees a tenant
@@ -395,6 +439,11 @@ async def set_tracking(payload: dict[str, Any], authorization: str | None = _AUT
         await conn.execute(
             "UPDATE tenants SET tracking_enabled = $1 WHERE id = $2", enabled, p.tenant_id
         )
-    await audit(pool, actor=p.email, action="tenant.tracking", tenant_id=p.tenant_id,
-                detail={"enabled": enabled})
+    await audit(
+        pool,
+        actor=p.email,
+        action="tenant.tracking",
+        tenant_id=p.tenant_id,
+        detail={"enabled": enabled},
+    )
     return {"tracking_enabled": enabled}

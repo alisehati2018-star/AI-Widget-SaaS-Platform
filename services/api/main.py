@@ -11,8 +11,13 @@ from contextlib import asynccontextmanager
 from acip_core.config import get_settings
 from acip_core.errors import unhandled_exception_handler
 from acip_core.logging import configure_logging, get_logger
-from acip_core.middleware import TraceIdMiddleware
+from acip_core.middleware import (
+    CsrfMiddleware,
+    SecurityHeadersMiddleware,
+    TraceIdMiddleware,
+)
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from .routers import admin, auth, billing, health, public, tenant, v1
 
@@ -34,7 +39,21 @@ def create_app() -> FastAPI:
         description="Vitrin — AI Commerce Intelligence Platform (public + auth + admin API).",
         lifespan=lifespan,
     )
+    # Middleware (added inner→outer; CORS added last = outermost so it also
+    # decorates error/preflight responses).
     app.add_middleware(TraceIdMiddleware)
+    if settings.csrf_enabled:
+        app.add_middleware(CsrfMiddleware)
+    if settings.security_headers_enabled:
+        app.add_middleware(SecurityHeadersMiddleware, hsts=settings.hsts_enabled)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins_list,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+        expose_headers=["x-request-id"],
+    )
     app.add_exception_handler(Exception, unhandled_exception_handler)
 
     app.include_router(health.router)

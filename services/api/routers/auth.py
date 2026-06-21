@@ -16,7 +16,7 @@ import hashlib
 import re
 import secrets
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, Literal, cast
 
 from acip_auth import (
     Role,
@@ -31,16 +31,71 @@ from acip_auth import (
 from acip_auth.models import AuthPrincipal
 from acip_auth.tokens import ExpiredTokenError, TokenError
 from acip_core.audit import audit
-from acip_core.clients import get_pg_pool
+from acip_core.clients import get_pg_pool, get_redis
 from acip_core.config import get_settings
 from acip_core.errors import error_response
+from acip_core.ratelimit import RateLimiter
 from acip_notify import reset_email, send_email, verification_email
-from fastapi import APIRouter, Header, Request
+from fastapi import APIRouter, Cookie, Header, Request, Response
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 _ADMIN = Header(default=None, alias="x-admin-token")
 _AUTHZ = Header(default=None, alias="authorization")
+_ACCESS_COOKIE = Cookie(default=None, alias="vitrin_access")
+_REFRESH_COOKIE = Cookie(default=None, alias="vitrin_refresh")
+
+
+def _set_auth_cookies(response: Response, access: str, refresh: str) -> None:
+    """Issue httpOnly access+refresh cookies + a readable CSRF token (dual-support
+    alongside the bearer tokens returned in the body)."""
+    s = get_settings()
+    secure = s.cookie_secure
+    samesite = cast(Literal["lax", "strict", "none"], s.cookie_samesite)
+    response.set_cookie(
+        "vitrin_access",
+        access,
+        httponly=True,
+        secure=secure,
+        samesite=samesite,
+        path="/",
+        max_age=s.access_token_ttl,
+    )
+    response.set_cookie(
+        "vitrin_refresh",
+        refresh,
+        httponly=True,
+        secure=secure,
+        samesite=samesite,
+        path="/",
+        max_age=s.refresh_token_ttl,
+    )
+    response.set_cookie(
+        "vitrin_csrf",
+        secrets.token_urlsafe(24),
+        httponly=False,
+        secure=secure,
+        samesite=samesite,
+        path="/",
+        max_age=s.refresh_token_ttl,
+    )
+
+
+def _clear_auth_cookies(response: Response) -> None:
+    for name in ("vitrin_access", "vitrin_refresh", "vitrin_csrf"):
+        response.delete_cookie(name, path="/")
+
+
+async def _ip_rate_ok(request: Request) -> bool:
+    """Per-IP throttle for unauthenticated auth endpoints (SE-4). Fails open if
+    Redis is down (the per-account lockout remains the backstop)."""
+    s = get_settings()
+    ip = request.client.host if request.client else "unknown"
+    limiter = RateLimiter(get_redis(), default_per_min=s.auth_ip_rate_per_min)
+    return await limiter.allow(f"authip:{ip}")
+
+
+_RATE_LIMITED = ("rate_limited", "Too many requests from your network. Please slow down.")
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
@@ -68,9 +123,10 @@ async def _create_verification(conn: Any, user_id: Any) -> str:
     """Insert a hashed email-verification token and return the raw token."""
     token = secrets.token_urlsafe(32)
     await conn.execute(
-        "INSERT INTO email_verifications (user_id, token_hash, expires_at) "
-        "VALUES ($1, $2, $3)",
-        user_id, _hash_token(token), _now() + timedelta(hours=24),
+        "INSERT INTO email_verifications (user_id, token_hash, expires_at) VALUES ($1, $2, $3)",
+        user_id,
+        _hash_token(token),
+        _now() + timedelta(hours=24),
     )
     return token
 
@@ -121,12 +177,14 @@ def _token_response(user: dict, tokens: dict[str, Any]) -> dict[str, Any]:
 # Signup (self-serve store owner)                                             #
 # --------------------------------------------------------------------------- #
 @router.post("/signup")
-async def signup(payload: dict[str, Any], request: Request):
+async def signup(payload: dict[str, Any], request: Request, response: Response):
     s = get_settings()
     if not s.signup_enabled:
         return error_response(403, "signup_disabled", "Self-serve signup is disabled.")
     if not s.auth_secret:
         return error_response(503, "auth_unconfigured", "Authentication is not configured.")
+    if not await _ip_rate_ok(request):
+        return error_response(429, *_RATE_LIMITED)
 
     email = str(payload.get("email", "")).strip().lower()
     password = str(payload.get("password", ""))
@@ -145,39 +203,52 @@ async def signup(payload: dict[str, Any], request: Request):
         if await conn.fetchval("SELECT 1 FROM users WHERE lower(email) = $1", email):
             return error_response(409, "email_taken", "An account with this email already exists.")
         async with conn.transaction():
-            plan_id = await conn.fetchval(
-                "SELECT id FROM plans WHERE code = $1", s.trial_plan_code
-            )
+            plan_id = await conn.fetchval("SELECT id FROM plans WHERE code = $1", s.trial_plan_code)
             tenant_id = await conn.fetchval(
                 "INSERT INTO tenants (slug, name, plan_id) VALUES ($1, $2, $3) RETURNING id",
-                _slugify(store_name), store_name, plan_id,
+                _slugify(store_name),
+                store_name,
+                plan_id,
             )
             user = await conn.fetchrow(
                 "INSERT INTO users (email, password_hash, full_name, role, tenant_id, "
                 "email_verified) VALUES ($1, $2, $3, 'store_owner', $4, FALSE) "
                 "RETURNING id, email, full_name, role, tenant_id",
-                email, hash_password(password), full_name, tenant_id,
+                email,
+                hash_password(password),
+                full_name,
+                tenant_id,
             )
             if plan_id is not None:
                 await conn.execute(
                     "INSERT INTO subscriptions (tenant_id, plan_id, status, current_period_end) "
                     "VALUES ($1, $2, 'trialing', $3)",
-                    tenant_id, plan_id, _now() + timedelta(days=14),
+                    tenant_id,
+                    plan_id,
+                    _now() + timedelta(days=14),
                 )
             tokens = _issue_tokens(conn, dict(user), request=request)
             await conn.execute(
                 "INSERT INTO auth_sessions (user_id, jti_hash, user_agent, ip, expires_at) "
                 "VALUES ($1, $2, $3, $4, $5)",
-                user["id"], tokens["jti_hash"], tokens["ua"], tokens["ip"], tokens["expires_at"],
+                user["id"],
+                tokens["jti_hash"],
+                tokens["ua"],
+                tokens["ip"],
+                tokens["expires_at"],
             )
             verify_token = await _create_verification(conn, user["id"])
-        await audit(pool, actor=email, action="auth.signup", tenant_id=str(tenant_id),
-                    detail={"store_name": store_name})
+        await audit(
+            pool,
+            actor=email,
+            action="auth.signup",
+            tenant_id=str(tenant_id),
+            detail={"store_name": store_name},
+        )
     # Send the verification email (best-effort, outside the txn).
-    subject, text, html = verification_email(
-        f"{s.app_base_url}/verify-email?token={verify_token}"
-    )
+    subject, text, html = verification_email(f"{s.app_base_url}/verify-email?token={verify_token}")
     await send_email(email, subject, text, html)
+    _set_auth_cookies(response, tokens["access"], tokens["refresh"])
     resp = _token_response(dict(user), tokens)
     if s.env != "production":
         resp["verify_token"] = verify_token  # dev convenience for testing
@@ -188,10 +259,12 @@ async def signup(payload: dict[str, Any], request: Request):
 # Login                                                                       #
 # --------------------------------------------------------------------------- #
 @router.post("/login")
-async def login(payload: dict[str, Any], request: Request):
+async def login(payload: dict[str, Any], request: Request, response: Response):
     s = get_settings()
     if not s.auth_secret:
         return error_response(503, "auth_unconfigured", "Authentication is not configured.")
+    if not await _ip_rate_ok(request):
+        return error_response(429, *_RATE_LIMITED)
     email = str(payload.get("email", "")).strip().lower()
     password = str(payload.get("password", ""))
     generic = error_response(401, "invalid_credentials", "Invalid email or password.")
@@ -209,40 +282,53 @@ async def login(payload: dict[str, Any], request: Request):
             return error_response(403, "account_disabled", "This account is not active.")
         if user["locked_until"] and user["locked_until"] > _now():
             return error_response(
-                429, "account_locked",
+                429,
+                "account_locked",
                 "Too many failed attempts. Try again later.",
             )
         if not verify_password(password, user["password_hash"]):
             attempts = int(user["failed_logins"]) + 1
             lock = (
                 _now() + timedelta(minutes=s.login_lockout_minutes)
-                if attempts >= s.login_max_attempts else None
+                if attempts >= s.login_max_attempts
+                else None
             )
             await conn.execute(
                 "UPDATE users SET failed_logins = $1, locked_until = $2 WHERE id = $3",
-                attempts, lock, user["id"],
+                attempts,
+                lock,
+                user["id"],
             )
             return generic
 
         # Success: reset counters, transparently upgrade weak hashes, issue tokens.
         async with conn.transaction():
-            new_hash = (
-                hash_password(password) if needs_rehash(user["password_hash"]) else None
-            )
+            new_hash = hash_password(password) if needs_rehash(user["password_hash"]) else None
             await conn.execute(
                 "UPDATE users SET failed_logins = 0, locked_until = NULL, "
                 "last_login_at = now(), password_hash = COALESCE($1, password_hash) "
                 "WHERE id = $2",
-                new_hash, user["id"],
+                new_hash,
+                user["id"],
             )
             tokens = _issue_tokens(conn, dict(user), request=request)
             await conn.execute(
                 "INSERT INTO auth_sessions (user_id, jti_hash, user_agent, ip, expires_at) "
                 "VALUES ($1, $2, $3, $4, $5)",
-                user["id"], tokens["jti_hash"], tokens["ua"], tokens["ip"], tokens["expires_at"],
+                user["id"],
+                tokens["jti_hash"],
+                tokens["ua"],
+                tokens["ip"],
+                tokens["expires_at"],
             )
-        await audit(pool, actor=email, action="auth.login",
-                    tenant_id=str(user["tenant_id"]) if user["tenant_id"] else None, detail={})
+        await audit(
+            pool,
+            actor=email,
+            action="auth.login",
+            tenant_id=str(user["tenant_id"]) if user["tenant_id"] else None,
+            detail={},
+        )
+    _set_auth_cookies(response, tokens["access"], tokens["refresh"])
     return _token_response(dict(user), tokens)
 
 
@@ -250,11 +336,16 @@ async def login(payload: dict[str, Any], request: Request):
 # Refresh (rotation: old jti is revoked, new one issued)                      #
 # --------------------------------------------------------------------------- #
 @router.post("/refresh")
-async def refresh(payload: dict[str, Any], request: Request):
+async def refresh(
+    payload: dict[str, Any],
+    request: Request,
+    response: Response,
+    vitrin_refresh: str | None = _REFRESH_COOKIE,
+):
     s = get_settings()
     if not s.auth_secret:
         return error_response(503, "auth_unconfigured", "Authentication is not configured.")
-    raw = str(payload.get("refresh_token", ""))
+    raw = str(payload.get("refresh_token", "") or vitrin_refresh or "")
     invalid = error_response(401, "invalid_token", "Invalid or expired refresh token.")
     try:
         claims = decode_token(raw, s.auth_secret)
@@ -282,8 +373,10 @@ async def refresh(payload: dict[str, Any], request: Request):
         if session["status"] != "active":
             return error_response(403, "account_disabled", "This account is not active.")
         user = {
-            "id": session["uid"], "email": session["email"],
-            "full_name": session["full_name"], "role": session["role"],
+            "id": session["uid"],
+            "email": session["email"],
+            "full_name": session["full_name"],
+            "role": session["role"],
             "tenant_id": session["tenant_id"],
         }
         async with conn.transaction():
@@ -294,8 +387,13 @@ async def refresh(payload: dict[str, Any], request: Request):
             await conn.execute(
                 "INSERT INTO auth_sessions (user_id, jti_hash, user_agent, ip, expires_at) "
                 "VALUES ($1, $2, $3, $4, $5)",
-                user["id"], tokens["jti_hash"], tokens["ua"], tokens["ip"], tokens["expires_at"],
+                user["id"],
+                tokens["jti_hash"],
+                tokens["ua"],
+                tokens["ip"],
+                tokens["expires_at"],
             )
+    _set_auth_cookies(response, tokens["access"], tokens["refresh"])
     return _token_response(user, tokens)
 
 
@@ -303,9 +401,13 @@ async def refresh(payload: dict[str, Any], request: Request):
 # Logout (revoke the presented refresh session)                              #
 # --------------------------------------------------------------------------- #
 @router.post("/logout")
-async def logout(payload: dict[str, Any]):
+async def logout(
+    payload: dict[str, Any],
+    response: Response,
+    vitrin_refresh: str | None = _REFRESH_COOKIE,
+):
     s = get_settings()
-    raw = str(payload.get("refresh_token", ""))
+    raw = str(payload.get("refresh_token", "") or vitrin_refresh or "")
     if raw and s.auth_secret:
         try:
             claims = decode_token(raw, s.auth_secret)
@@ -317,22 +419,32 @@ async def logout(payload: dict[str, Any]):
                 )
         except TokenError:
             pass
+    _clear_auth_cookies(response)
     return {"status": "logged_out"}
 
 
 # --------------------------------------------------------------------------- #
 # Current user                                                               #
 # --------------------------------------------------------------------------- #
-async def current_principal(authorization: str | None) -> AuthPrincipal | None:
-    """Resolve the bearer access token into a principal (or None)."""
+async def current_principal(
+    authorization: str | None, access_cookie: str | None = None
+) -> AuthPrincipal | None:
+    """Resolve the access token (bearer header OR httpOnly cookie) into a
+    principal (or None). Dual-support during the cookie migration window."""
     s = get_settings()
-    if not authorization or not s.auth_secret:
+    if not s.auth_secret:
         return None
-    parts = authorization.split(" ", 1)
-    if len(parts) != 2 or parts[0].lower() != "bearer":
+    token: str | None = None
+    if authorization:
+        parts = authorization.split(" ", 1)
+        if len(parts) == 2 and parts[0].lower() == "bearer":
+            token = parts[1]
+    if token is None and access_cookie:
+        token = access_cookie
+    if not token:
         return None
     try:
-        claims = decode_token(parts[1], s.auth_secret)
+        claims = decode_token(token, s.auth_secret)
     except (ExpiredTokenError, TokenError):
         return None
     if claims.get("typ") != "access":
@@ -351,8 +463,8 @@ async def current_principal(authorization: str | None) -> AuthPrincipal | None:
 
 
 @router.get("/me")
-async def me(authorization: str | None = _AUTHZ):
-    principal = await current_principal(authorization)
+async def me(authorization: str | None = _AUTHZ, vitrin_access: str | None = _ACCESS_COOKIE):
+    principal = await current_principal(authorization, vitrin_access)
     if principal is None:
         return error_response(401, "unauthenticated", "A valid access token is required.")
     return {
@@ -368,7 +480,9 @@ async def me(authorization: str | None = _AUTHZ):
 # Password reset (request + confirm) — no account enumeration                #
 # --------------------------------------------------------------------------- #
 @router.post("/password/reset-request")
-async def reset_request(payload: dict[str, Any]):
+async def reset_request(payload: dict[str, Any], request: Request):
+    if not await _ip_rate_ok(request):
+        return error_response(429, *_RATE_LIMITED)
     email = str(payload.get("email", "")).strip().lower()
     accepted = {"status": "accepted"}  # always generic
     if not _EMAIL_RE.match(email):
@@ -380,9 +494,10 @@ async def reset_request(payload: dict[str, Any]):
         if user is not None:
             token = secrets.token_urlsafe(32)
             await conn.execute(
-                "INSERT INTO password_resets (user_id, token_hash, expires_at) "
-                "VALUES ($1, $2, $3)",
-                user["id"], _hash_token(token), _now() + timedelta(hours=1),
+                "INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES ($1, $2, $3)",
+                user["id"],
+                _hash_token(token),
+                _now() + timedelta(hours=1),
             )
             subject, text, html = reset_email(f"{s.app_base_url}/reset-password?token={token}")
             await send_email(email, subject, text, html)
@@ -392,8 +507,10 @@ async def reset_request(payload: dict[str, Any]):
 
 
 @router.post("/verify-request")
-async def verify_request(payload: dict[str, Any]):
+async def verify_request(payload: dict[str, Any], request: Request):
     """(Re)send an email-verification link. Generic response (no enumeration)."""
+    if not await _ip_rate_ok(request):
+        return error_response(429, *_RATE_LIMITED)
     email = str(payload.get("email", "")).strip().lower()
     accepted: dict[str, Any] = {"status": "accepted"}
     if not _EMAIL_RE.match(email):
@@ -406,9 +523,7 @@ async def verify_request(payload: dict[str, Any]):
         )
         if user is not None and not user["email_verified"]:
             token = await _create_verification(conn, user["id"])
-            subject, text, html = verification_email(
-                f"{s.app_base_url}/verify-email?token={token}"
-            )
+            subject, text, html = verification_email(f"{s.app_base_url}/verify-email?token={token}")
             await send_email(email, subject, text, html)
             if s.env != "production":
                 accepted["verify_token"] = token
@@ -458,7 +573,8 @@ async def reset_confirm(payload: dict[str, Any]):
             await conn.execute(
                 "UPDATE users SET password_hash = $1, failed_logins = 0, locked_until = NULL "
                 "WHERE id = $2",
-                hash_password(new_password), row["user_id"],
+                hash_password(new_password),
+                row["user_id"],
             )
             await conn.execute(
                 "UPDATE password_resets SET used_at = now() WHERE id = $1", row["id"]
@@ -493,7 +609,9 @@ async def bootstrap_admin(payload: dict[str, Any], x_admin_token: str | None = _
         user_id = await conn.fetchval(
             "INSERT INTO users (email, password_hash, full_name, role, email_verified) "
             "VALUES ($1, $2, $3, 'platform_admin', TRUE) RETURNING id",
-            email, hash_password(password), full_name,
+            email,
+            hash_password(password),
+            full_name,
         )
     await audit(pool, actor="operator", action="auth.bootstrap_admin", detail={"email": email})
     return {"id": str(user_id), "email": email, "role": "platform_admin"}

@@ -20,7 +20,7 @@ from acip_core.audit import audit
 from acip_core.clients import get_es_client, get_pg_pool, get_redis
 from acip_core.config import get_settings
 from acip_core.errors import error_response
-from fastapi import APIRouter, Header
+from fastapi import APIRouter, Cookie, Header
 
 from ..deps import hash_key
 
@@ -28,6 +28,7 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 
 _ADMIN = Header(default=None, alias="x-admin-token")
 _AUTHZ = Header(default=None, alias="authorization")
+_COOKIE = Cookie(default=None, alias="vitrin_access")
 
 
 def _authorized(token: str | None) -> bool:
@@ -38,14 +39,16 @@ def _authorized(token: str | None) -> bool:
     return secrets.compare_digest(token, expected)
 
 
-async def _admin_ok(token: str | None, authorization: str | None) -> bool:
+async def _admin_ok(
+    token: str | None, authorization: str | None, access_cookie: str | None = None
+) -> bool:
     """Authorize the admin plane via EITHER the operator token (automation) OR a
-    platform-admin bearer JWT (the admin-panel UI). Phase 6 dual-auth."""
+    platform-admin JWT (bearer or cookie, the admin-panel UI). Phase 6 dual-auth."""
     if _authorized(token):
         return True
     from .auth import current_principal
 
-    principal = await current_principal(authorization)
+    principal = await current_principal(authorization, access_cookie)
     return principal is not None and principal.is_admin
 
 
@@ -69,23 +72,35 @@ async def create_tenant(payload: dict[str, Any], x_admin_token: str | None = _AD
             tenant_id = await conn.fetchval(
                 "INSERT INTO tenants (slug, name) VALUES ($1, $2) "
                 "ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name RETURNING id",
-                slug, name,
+                slug,
+                name,
             )
             await conn.execute(
-                "INSERT INTO api_keys (tenant_id, key_hash, scope, label) "
-                "VALUES ($1, $2, $3, $4)",
-                tenant_id, hash_key(raw_key), scope, "provisioned",
+                "INSERT INTO api_keys (tenant_id, key_hash, scope, label) VALUES ($1, $2, $3, $4)",
+                tenant_id,
+                hash_key(raw_key),
+                scope,
+                "provisioned",
             )
-    await audit(pool, actor="operator", action="tenant.create", tenant_id=str(tenant_id),
-                detail={"slug": slug, "scope": scope})
+    await audit(
+        pool,
+        actor="operator",
+        action="tenant.create",
+        tenant_id=str(tenant_id),
+        detail={"slug": slug, "scope": scope},
+    )
     # The raw key is returned exactly once; only its hash is stored.
     return {"tenant_id": str(tenant_id), "slug": slug, "api_key": raw_key, "scope": scope}
 
 
 @router.get("/overview")
-async def overview(x_admin_token: str | None = _ADMIN, authorization: str | None = _AUTHZ):
+async def overview(
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
     """Platform-wide counts for the admin dashboard (Phase 6)."""
-    if not await _admin_ok(x_admin_token, authorization):
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
     pool = await get_pg_pool()
     async with pool.acquire() as conn:
@@ -107,9 +122,13 @@ async def overview(x_admin_token: str | None = _ADMIN, authorization: str | None
 
 
 @router.get("/tenants")
-async def list_tenants(x_admin_token: str | None = _ADMIN, authorization: str | None = _AUTHZ):
+async def list_tenants(
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
     """List tenants with their plan + subscription status (Phase 6)."""
-    if not await _admin_ok(x_admin_token, authorization):
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
     pool = await get_pg_pool()
     async with pool.acquire() as conn:
@@ -124,8 +143,12 @@ async def list_tenants(x_admin_token: str | None = _ADMIN, authorization: str | 
     return {
         "tenants": [
             {
-                "id": str(r["id"]), "slug": r["slug"], "name": r["name"],
-                "status": r["status"], "plan": r["plan"], "sub_status": r["sub_status"],
+                "id": str(r["id"]),
+                "slug": r["slug"],
+                "name": r["name"],
+                "status": r["status"],
+                "plan": r["plan"],
+                "sub_status": r["sub_status"],
                 "created_at": r["created_at"].isoformat() if r["created_at"] else None,
             }
             for r in rows
@@ -134,9 +157,13 @@ async def list_tenants(x_admin_token: str | None = _ADMIN, authorization: str | 
 
 
 @router.get("/users")
-async def list_users(x_admin_token: str | None = _ADMIN, authorization: str | None = _AUTHZ):
+async def list_users(
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
     """List all platform users (Phase 6)."""
-    if not await _admin_ok(x_admin_token, authorization):
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
     pool = await get_pg_pool()
     async with pool.acquire() as conn:
@@ -148,8 +175,11 @@ async def list_users(x_admin_token: str | None = _ADMIN, authorization: str | No
     return {
         "users": [
             {
-                "email": r["email"], "full_name": r["full_name"], "role": r["role"],
-                "status": r["status"], "tenant": r["tenant"],
+                "email": r["email"],
+                "full_name": r["full_name"],
+                "role": r["role"],
+                "status": r["status"],
+                "tenant": r["tenant"],
                 "last_login_at": r["last_login_at"].isoformat() if r["last_login_at"] else None,
             }
             for r in rows
@@ -158,9 +188,13 @@ async def list_users(x_admin_token: str | None = _ADMIN, authorization: str | No
 
 
 @router.get("/audit")
-async def audit_log(x_admin_token: str | None = _ADMIN, authorization: str | None = _AUTHZ):
+async def audit_log(
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
     """Recent audit-log entries (Phase 6)."""
-    if not await _admin_ok(x_admin_token, authorization):
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
     pool = await get_pg_pool()
     async with pool.acquire() as conn:
@@ -171,7 +205,9 @@ async def audit_log(x_admin_token: str | None = _ADMIN, authorization: str | Non
     return {
         "entries": [
             {
-                "actor": r["actor"], "action": r["action"], "detail": r["detail"],
+                "actor": r["actor"],
+                "action": r["action"],
+                "detail": r["detail"],
                 "created_at": r["created_at"].isoformat() if r["created_at"] else None,
             }
             for r in rows
@@ -180,9 +216,13 @@ async def audit_log(x_admin_token: str | None = _ADMIN, authorization: str | Non
 
 
 @router.get("/orders")
-async def list_orders(x_admin_token: str | None = _ADMIN, authorization: str | None = _AUTHZ):
+async def list_orders(
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
     """Recent billing orders + paid-revenue total (Phase 6/7)."""
-    if not await _admin_ok(x_admin_token, authorization):
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
     pool = await get_pg_pool()
     async with pool.acquire() as conn:
@@ -199,9 +239,13 @@ async def list_orders(x_admin_token: str | None = _ADMIN, authorization: str | N
         "revenue_total": float(revenue or 0),
         "orders": [
             {
-                "id": str(r["id"]), "tenant": r["tenant"], "plan": r["plan"],
-                "amount": float(r["amount"]), "currency": r["currency"],
-                "status": r["status"], "provider": r["provider"],
+                "id": str(r["id"]),
+                "tenant": r["tenant"],
+                "plan": r["plan"],
+                "amount": float(r["amount"]),
+                "currency": r["currency"],
+                "status": r["status"],
+                "provider": r["provider"],
                 "created_at": r["created_at"].isoformat() if r["created_at"] else None,
             }
             for r in rows
@@ -210,10 +254,14 @@ async def list_orders(x_admin_token: str | None = _ADMIN, authorization: str | N
 
 
 @router.post("/orders/{order_id}/mark-paid")
-async def admin_mark_paid(order_id: str, x_admin_token: str | None = _ADMIN,
-                          authorization: str | None = _AUTHZ):
+async def admin_mark_paid(
+    order_id: str,
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
     """Operator confirmation of a manual/invoice payment → activates the plan."""
-    if not await _admin_ok(x_admin_token, authorization):
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
     from acip_billing import mark_order_paid
 
@@ -222,16 +270,25 @@ async def admin_mark_paid(order_id: str, x_admin_token: str | None = _ADMIN,
     result = await mark_order_paid(pool, order_id, period_days=days)
     if result is None:
         return error_response(404, "unknown_order", "No such order.")
-    await audit(pool, actor="operator", action="billing.mark_paid",
-                tenant_id=result["tenant_id"], detail={"order_id": order_id})
+    await audit(
+        pool,
+        actor="operator",
+        action="billing.mark_paid",
+        tenant_id=result["tenant_id"],
+        detail={"order_id": order_id},
+    )
     return {"status": "paid", "activated": result["plan_code"], "already": result.get("already")}
 
 
 @router.post("/orders/{order_id}/refund")
-async def admin_refund(order_id: str, x_admin_token: str | None = _ADMIN,
-                       authorization: str | None = _AUTHZ):
+async def admin_refund(
+    order_id: str,
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
     """Mark an order refunded (does not auto-downgrade the live subscription)."""
-    if not await _admin_ok(x_admin_token, authorization):
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
     pool = await get_pg_pool()
     async with pool.acquire() as conn:
@@ -240,8 +297,13 @@ async def admin_refund(order_id: str, x_admin_token: str | None = _ADMIN,
         )
     if row is None:
         return error_response(404, "unknown_order", "No such order.")
-    await audit(pool, actor="operator", action="billing.refund",
-                tenant_id=str(row["tenant_id"]), detail={"order_id": order_id})
+    await audit(
+        pool,
+        actor="operator",
+        action="billing.refund",
+        tenant_id=str(row["tenant_id"]),
+        detail={"order_id": order_id},
+    )
     return {"status": "refunded"}
 
 
@@ -338,8 +400,12 @@ async def erase_tenant_data(tenant_id: str, x_admin_token: str | None = _ADMIN):
             erased[index] = "skipped"
     redis = get_redis()
     if redis is not None:
-        for pattern in (f"chatmem:{tenant_id}:*", f"l2:{tenant_id}", f"synonyms:{tenant_id}",
-                        f"data_version:{tenant_id}"):
+        for pattern in (
+            f"chatmem:{tenant_id}:*",
+            f"l2:{tenant_id}",
+            f"synonyms:{tenant_id}",
+            f"data_version:{tenant_id}",
+        ):
             try:
                 async for key in redis.scan_iter(match=pattern):
                     await redis.delete(key)
@@ -389,6 +455,11 @@ async def set_tracking(tenant_id: str, payload: dict[str, Any], x_admin_token: s
             )
     except Exception:  # noqa: BLE001
         pass
-    await audit(pool, actor="operator", action="tenant.tracking", tenant_id=tenant_id,
-                detail={"enabled": enabled})
+    await audit(
+        pool,
+        actor="operator",
+        action="tenant.tracking",
+        tenant_id=tenant_id,
+        detail={"enabled": enabled},
+    )
     return {"tenant_id": tenant_id, "tracking_enabled": enabled}
