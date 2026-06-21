@@ -57,8 +57,13 @@ def _forbidden():
 
 
 @router.post("/tenants")
-async def create_tenant(payload: dict[str, Any], x_admin_token: str | None = _ADMIN):
-    if not _authorized(x_admin_token):
+async def create_tenant(
+    payload: dict[str, Any],
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
     slug = str(payload.get("slug", "")).strip()
     name = str(payload.get("name", slug)).strip()
@@ -308,8 +313,13 @@ async def admin_refund(
 
 
 @router.get("/analytics")
-async def analytics(tenant: str, x_admin_token: str | None = _ADMIN):
-    if not _authorized(x_admin_token):
+async def analytics(
+    tenant: str,
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
     pool = await get_pg_pool()
     redis = get_redis()
@@ -324,24 +334,40 @@ async def analytics(tenant: str, x_admin_token: str | None = _ADMIN):
 
 
 @router.get("/zero-results")
-async def zero_results(tenant: str, x_admin_token: str | None = _ADMIN):
-    if not _authorized(x_admin_token):
+async def zero_results(
+    tenant: str,
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
     return {"tenant_id": tenant, "terms": await _agg.zero_result_terms(get_es_client(), tenant)}
 
 
 @router.get("/insight")
-async def insight(tenant: str, x_admin_token: str | None = _ADMIN):
+async def insight(
+    tenant: str,
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
     """Insight 'why' engine (M10: REQ-M10-002): demand gaps + funnel drop-off."""
-    if not _authorized(x_admin_token):
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
     return {"tenant_id": tenant, "insight": await _why(get_es_client(), tenant)}
 
 
 @router.post("/analyst")
-async def analyst(payload: dict[str, Any], tenant: str, x_admin_token: str | None = _ADMIN):
+async def analyst(
+    payload: dict[str, Any],
+    tenant: str,
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
     """AI Business Analyst (M10: REQ-M10-003): NL question → grounded narration."""
-    if not _authorized(x_admin_token):
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
     question = str(payload.get("question", "")).strip()
     if not question:
@@ -357,8 +383,13 @@ def _syn_key(tenant: str) -> str:
 
 
 @router.get("/synonyms")
-async def get_synonyms(tenant: str, x_admin_token: str | None = _ADMIN):
-    if not _authorized(x_admin_token):
+async def get_synonyms(
+    tenant: str,
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
     redis = get_redis()
     raw = await redis.get(_syn_key(tenant)) if redis is not None else None
@@ -366,8 +397,14 @@ async def get_synonyms(tenant: str, x_admin_token: str | None = _ADMIN):
 
 
 @router.post("/synonyms")
-async def set_synonyms(payload: dict[str, Any], tenant: str, x_admin_token: str | None = _ADMIN):
-    if not _authorized(x_admin_token):
+async def set_synonyms(
+    payload: dict[str, Any],
+    tenant: str,
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
     lines = payload.get("synonyms", [])
     if not isinstance(lines, list):
@@ -384,9 +421,14 @@ async def set_synonyms(payload: dict[str, Any], tenant: str, x_admin_token: str 
 
 
 @router.post("/tenants/{tenant_id}/erase")
-async def erase_tenant_data(tenant_id: str, x_admin_token: str | None = _ADMIN):
+async def erase_tenant_data(
+    tenant_id: str,
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
     """Erase a tenant's data across index, memory, and logs (right to be forgotten)."""
-    if not _authorized(x_admin_token):
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
     s = get_settings()
     es = get_es_client()
@@ -422,9 +464,14 @@ async def erase_tenant_data(tenant_id: str, x_admin_token: str | None = _ADMIN):
 
 
 @router.get("/tenants/{tenant_id}/export")
-async def export_tenant_data(tenant_id: str, x_admin_token: str | None = _ADMIN):
+async def export_tenant_data(
+    tenant_id: str,
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
     """Export a tenant's portable data (PII included for the data subject)."""
-    if not _authorized(x_admin_token):
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
     pool = await get_pg_pool()
     leads: list[dict[str, Any]] = []
@@ -442,9 +489,15 @@ async def export_tenant_data(tenant_id: str, x_admin_token: str | None = _ADMIN)
 
 
 @router.post("/tenants/{tenant_id}/tracking")
-async def set_tracking(tenant_id: str, payload: dict[str, Any], x_admin_token: str | None = _ADMIN):
+async def set_tracking(
+    tenant_id: str,
+    payload: dict[str, Any],
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
     """Enable/disable behavioural capture for a tenant (REQ-M11-006)."""
-    if not _authorized(x_admin_token):
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
     enabled = bool(payload.get("enabled", True))
     pool = await get_pg_pool()
@@ -463,3 +516,274 @@ async def set_tracking(tenant_id: str, payload: dict[str, Any], x_admin_token: s
         detail={"enabled": enabled},
     )
     return {"tenant_id": tenant_id, "tracking_enabled": enabled}
+
+
+# --------------------------------------------------------------------------- #
+# Phase B — operational monitoring + management                              #
+# --------------------------------------------------------------------------- #
+@router.get("/security")
+async def security_monitoring(
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    """Locked accounts, failed-login counts, and recent auth events."""
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        locked = await conn.fetch(
+            "SELECT email, failed_logins, locked_until FROM users "
+            "WHERE locked_until IS NOT NULL AND locked_until > now() ORDER BY locked_until DESC"
+        )
+        at_risk = await conn.fetchval("SELECT count(*) FROM users WHERE failed_logins > 0")
+        events = await conn.fetch(
+            "SELECT actor, action, created_at FROM audit_log "
+            "WHERE action LIKE 'auth.%' ORDER BY created_at DESC LIMIT 50"
+        )
+    return {
+        "locked_accounts": [
+            {
+                "email": r["email"],
+                "failed_logins": r["failed_logins"],
+                "locked_until": r["locked_until"].isoformat() if r["locked_until"] else None,
+            }
+            for r in locked
+        ],
+        "accounts_with_failures": int(at_risk or 0),
+        "recent_auth_events": [
+            {
+                "actor": r["actor"],
+                "action": r["action"],
+                "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+            }
+            for r in events
+        ],
+    }
+
+
+@router.get("/health")
+async def system_health(
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    """Live dependency status for the ops dashboard (PG / Redis / Elasticsearch)."""
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    deps: dict[str, str] = {}
+    try:
+        pool = await get_pg_pool()
+        async with pool.acquire() as conn:
+            await conn.fetchval("SELECT 1")
+        deps["postgres"] = "ok"
+    except Exception:  # noqa: BLE001
+        deps["postgres"] = "unavailable"
+    redis = get_redis()
+    try:
+        deps["redis"] = "ok" if (redis is not None and await redis.ping()) else "unavailable"
+    except Exception:  # noqa: BLE001
+        deps["redis"] = "unavailable"
+    try:
+        deps["elasticsearch"] = "ok" if await get_es_client().ping() else "unavailable"
+    except Exception:  # noqa: BLE001
+        deps["elasticsearch"] = "unavailable"
+    overall = "ok" if all(v == "ok" for v in deps.values()) else "degraded"
+    return {"status": overall, "dependencies": deps}
+
+
+@router.get("/usage")
+async def usage_monitoring(
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    """Platform-wide usage + credit consumption (from usage_events / credit_ledger)."""
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        totals = await conn.fetchrow(
+            "SELECT count(*) AS calls, COALESCE(sum(tokens_in), 0) AS tin, "
+            "COALESCE(sum(tokens_out), 0) AS tout, COALESCE(sum(cost), 0) AS cost "
+            "FROM usage_events"
+        )
+        by_rung = await conn.fetch(
+            "SELECT COALESCE(rung, 'unknown') AS rung, count(*) AS n FROM usage_events "
+            "GROUP BY rung ORDER BY n DESC"
+        )
+        spent = await conn.fetchval(
+            "SELECT COALESCE(-sum(delta), 0) FROM credit_ledger WHERE delta < 0"
+        )
+    return {
+        "calls": int(totals["calls"]),
+        "tokens_in": int(totals["tin"]),
+        "tokens_out": int(totals["tout"]),
+        "cost": float(totals["cost"]),
+        "credits_spent": float(spent or 0),
+        "by_rung": [{"rung": r["rung"], "count": int(r["n"])} for r in by_rung],
+    }
+
+
+@router.get("/queue")
+async def queue_monitoring(
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    """Celery broker reachability + pending task depth (best-effort)."""
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    s = get_settings()
+    redis = get_redis()
+    depth: int | None = None
+    reachable = False
+    try:
+        if redis is not None and await redis.ping():
+            reachable = True
+            depth = int(await redis.llen("celery"))
+    except Exception:  # noqa: BLE001
+        reachable = False
+    return {"broker": s.celery_broker_url, "reachable": reachable, "pending": depth}
+
+
+@router.get("/models")
+async def model_monitoring(
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    """Gateway / inference configuration + per-rung call distribution."""
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    s = get_settings()
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        by_rung = await conn.fetch(
+            "SELECT COALESCE(rung, 'unknown') AS rung, count(*) AS n FROM usage_events "
+            "GROUP BY rung ORDER BY n DESC"
+        )
+    return {
+        "embeddings_url": s.embeddings_url,
+        "reranker_url": s.reranker_url,
+        "llm_url": s.llm_url,
+        "llm_model": s.llm_model,
+        "frontier_enabled": s.frontier_enabled,
+        "frontier_model": s.frontier_model or None,
+        "rerank_enabled": s.rerank_enabled,
+        "by_rung": [{"rung": r["rung"], "count": int(r["n"])} for r in by_rung],
+    }
+
+
+@router.get("/feature-flags")
+async def get_feature_flags(
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT key, enabled, description, updated_at FROM feature_flags ORDER BY key"
+        )
+    return {
+        "flags": [
+            {
+                "key": r["key"],
+                "enabled": r["enabled"],
+                "description": r["description"],
+                "updated_at": r["updated_at"].isoformat() if r["updated_at"] else None,
+            }
+            for r in rows
+        ]
+    }
+
+
+@router.post("/feature-flags/{key}")
+async def set_feature_flag(
+    key: str,
+    payload: dict[str, Any],
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    enabled = bool(payload.get("enabled", False))
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        updated = await conn.fetchval(
+            "UPDATE feature_flags SET enabled = $1, updated_at = now() "
+            "WHERE key = $2 RETURNING key",
+            enabled,
+            key,
+        )
+    if updated is None:
+        return error_response(404, "not_found", "No such flag.")
+    await audit(pool, actor="operator", action="flag.set", detail={"key": key, "enabled": enabled})
+    return {"key": key, "enabled": enabled}
+
+
+@router.post("/tenants/{tenant_id}/status")
+async def set_tenant_status(
+    tenant_id: str,
+    payload: dict[str, Any],
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    """Suspend or re-activate a tenant."""
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    status = str(payload.get("status", ""))
+    if status not in ("active", "suspended"):
+        return error_response(422, "invalid_request", "status must be active or suspended.")
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        updated = await conn.fetchval(
+            "UPDATE tenants SET status = $1, updated_at = now() WHERE id = $2 RETURNING id",
+            status,
+            tenant_id,
+        )
+    if updated is None:
+        return error_response(404, "not_found", "No such tenant.")
+    await audit(
+        pool,
+        actor="operator",
+        action="tenant.status",
+        tenant_id=tenant_id,
+        detail={"status": status},
+    )
+    return {"tenant_id": tenant_id, "status": status}
+
+
+@router.post("/users/{email}/status")
+async def set_user_status(
+    email: str,
+    payload: dict[str, Any],
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    """Suspend or re-activate a user; suspending also clears any lockout."""
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    status = str(payload.get("status", ""))
+    if status not in ("active", "suspended"):
+        return error_response(422, "invalid_request", "status must be active or suspended.")
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        updated = await conn.fetchval(
+            "UPDATE users SET status = $1, failed_logins = 0, locked_until = NULL "
+            "WHERE lower(email) = $2 RETURNING id",
+            status,
+            email.lower(),
+        )
+    if updated is None:
+        return error_response(404, "not_found", "No such user.")
+    await audit(
+        pool, actor="operator", action="user.status", detail={"email": email, "status": status}
+    )
+    return {"email": email, "status": status}

@@ -447,3 +447,265 @@ async def set_tracking(
         detail={"enabled": enabled},
     )
     return {"tracking_enabled": enabled}
+
+
+# --------------------------------------------------------------------------- #
+# Credits & usage history                                                     #
+# --------------------------------------------------------------------------- #
+@router.get("/credits")
+async def credits(authorization: str | None = _AUTHZ, vitrin_access: str | None = _COOKIE):
+    p = await _require_tenant(authorization, vitrin_access)
+    if p is None:
+        return _unauth()
+    assert p.tenant_id is not None
+    pool = await get_pg_pool()
+    usage = await usage_summary(pool, p.tenant_id)
+    status = await plan_status(pool, p.tenant_id)
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT delta, rung, reason, created_at FROM credit_ledger "
+            "WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 100",
+            p.tenant_id,
+        )
+    return {
+        "used": usage["used"],
+        "granted": usage["granted"],
+        "cap": status.get("cap"),
+        "within_plan": status.get("within_plan", True),
+        "ledger": [
+            {
+                "delta": float(r["delta"]),
+                "rung": r["rung"],
+                "reason": r["reason"],
+                "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+            }
+            for r in rows
+        ],
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Tenant audit log                                                            #
+# --------------------------------------------------------------------------- #
+@router.get("/audit")
+async def tenant_audit(authorization: str | None = _AUTHZ, vitrin_access: str | None = _COOKIE):
+    p = await _require_tenant(authorization, vitrin_access)
+    if p is None:
+        return _unauth()
+    assert p.tenant_id is not None
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT actor, action, detail, created_at FROM audit_log "
+            "WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 100",
+            p.tenant_id,
+        )
+    return {
+        "entries": [
+            {
+                "actor": r["actor"],
+                "action": r["action"],
+                "detail": r["detail"],
+                "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+            }
+            for r in rows
+        ]
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Knowledge base (assistant grounding content)                               #
+# --------------------------------------------------------------------------- #
+@router.get("/kb")
+async def kb_list(authorization: str | None = _AUTHZ, vitrin_access: str | None = _COOKIE):
+    p = await _require_tenant(authorization, vitrin_access)
+    if p is None:
+        return _unauth()
+    assert p.tenant_id is not None
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT id, title, body, published, updated_at FROM kb_articles "
+            "WHERE tenant_id = $1 ORDER BY updated_at DESC",
+            p.tenant_id,
+        )
+    return {
+        "articles": [
+            {
+                "id": str(r["id"]),
+                "title": r["title"],
+                "body": r["body"],
+                "published": r["published"],
+                "updated_at": r["updated_at"].isoformat() if r["updated_at"] else None,
+            }
+            for r in rows
+        ]
+    }
+
+
+@router.post("/kb")
+async def kb_create(
+    payload: dict[str, Any], authorization: str | None = _AUTHZ, vitrin_access: str | None = _COOKIE
+):
+    p = await _require_tenant(authorization, vitrin_access)
+    if p is None:
+        return _unauth()
+    assert p.tenant_id is not None
+    title = str(payload.get("title", "")).strip()
+    body = str(payload.get("body", "")).strip()
+    if not title or not body:
+        return error_response(422, "invalid_request", "title and body are required.")
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        new_id = await conn.fetchval(
+            "INSERT INTO kb_articles (tenant_id, title, body) VALUES ($1, $2, $3) RETURNING id",
+            p.tenant_id,
+            title,
+            body,
+        )
+    await audit(
+        pool, actor=p.email, action="kb.create", tenant_id=p.tenant_id, detail={"title": title}
+    )
+    return {"id": str(new_id), "status": "created"}
+
+
+@router.delete("/kb/{article_id}")
+async def kb_delete(
+    article_id: str, authorization: str | None = _AUTHZ, vitrin_access: str | None = _COOKIE
+):
+    p = await _require_tenant(authorization, vitrin_access)
+    if p is None:
+        return _unauth()
+    assert p.tenant_id is not None
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "DELETE FROM kb_articles WHERE id = $1 AND tenant_id = $2", article_id, p.tenant_id
+        )
+    await audit(
+        pool, actor=p.email, action="kb.delete", tenant_id=p.tenant_id, detail={"id": article_id}
+    )
+    return {"status": "deleted"}
+
+
+# --------------------------------------------------------------------------- #
+# Team management: change role / remove                                       #
+# --------------------------------------------------------------------------- #
+@router.post("/team/role")
+async def team_role(
+    payload: dict[str, Any], authorization: str | None = _AUTHZ, vitrin_access: str | None = _COOKIE
+):
+    p = await _require_tenant(authorization, vitrin_access)
+    if p is None:
+        return _unauth()
+    assert p.tenant_id is not None
+    if p.role != Role.STORE_OWNER:
+        return _owner_only()
+    email = str(payload.get("email", "")).strip().lower()
+    role = str(payload.get("role", ""))
+    if role not in ("store_owner", "store_staff"):
+        return error_response(422, "invalid_request", "role must be store_owner or store_staff.")
+    if email == p.email:
+        return error_response(422, "invalid_request", "You cannot change your own role.")
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        updated = await conn.fetchval(
+            "UPDATE users SET role = $1 WHERE lower(email) = $2 AND tenant_id = $3 RETURNING id",
+            role,
+            email,
+            p.tenant_id,
+        )
+    if updated is None:
+        return error_response(404, "not_found", "No such team member.")
+    await audit(
+        pool,
+        actor=p.email,
+        action="team.role",
+        tenant_id=p.tenant_id,
+        detail={"email": email, "role": role},
+    )
+    return {"status": "updated", "email": email, "role": role}
+
+
+@router.post("/team/remove")
+async def team_remove(
+    payload: dict[str, Any], authorization: str | None = _AUTHZ, vitrin_access: str | None = _COOKIE
+):
+    p = await _require_tenant(authorization, vitrin_access)
+    if p is None:
+        return _unauth()
+    assert p.tenant_id is not None
+    if p.role != Role.STORE_OWNER:
+        return _owner_only()
+    email = str(payload.get("email", "")).strip().lower()
+    if email == p.email:
+        return error_response(422, "invalid_request", "You cannot remove yourself.")
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        removed = await conn.fetchval(
+            "DELETE FROM users WHERE lower(email) = $1 AND tenant_id = $2 "
+            "AND role <> 'platform_admin' RETURNING id",
+            email,
+            p.tenant_id,
+        )
+    if removed is None:
+        return error_response(404, "not_found", "No such team member.")
+    await audit(
+        pool, actor=p.email, action="team.remove", tenant_id=p.tenant_id, detail={"email": email}
+    )
+    return {"status": "removed", "email": email}
+
+
+# --------------------------------------------------------------------------- #
+# GDPR self-serve erase (owner only)                                          #
+# --------------------------------------------------------------------------- #
+@router.post("/erase")
+async def self_erase(
+    payload: dict[str, Any], authorization: str | None = _AUTHZ, vitrin_access: str | None = _COOKIE
+):
+    """Erase the tenant's shopper-facing data (leads, chat memory, events, index
+    docs). Requires an explicit confirmation matching the store slug."""
+    p = await _require_tenant(authorization, vitrin_access)
+    if p is None:
+        return _unauth()
+    assert p.tenant_id is not None
+    if p.role != Role.STORE_OWNER:
+        return _owner_only()
+    s = get_settings()
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        slug = await conn.fetchval("SELECT slug FROM tenants WHERE id = $1", p.tenant_id)
+    if str(payload.get("confirm", "")) != slug:
+        return error_response(
+            422,
+            "confirmation_required",
+            f"Type your store slug '{slug}' to confirm erasure.",
+        )
+    es = get_es_client()
+    erased: dict[str, Any] = {}
+    query = {"query": {"term": {"tenant_id": p.tenant_id}}}
+    for index in (s.catalogue_alias, f"{s.es_index_prefix}-chatmem", f"{s.es_index_prefix}-events"):
+        try:
+            await es.delete_by_query(index=index, body=query, conflicts="proceed")
+            erased[index] = "ok"
+        except Exception:  # noqa: BLE001
+            erased[index] = "skipped"
+    redis = get_redis()
+    if redis is not None:
+        for pattern in (
+            f"chatmem:{p.tenant_id}:*",
+            f"l2:{p.tenant_id}",
+            f"synonyms:{p.tenant_id}",
+            f"data_version:{p.tenant_id}",
+        ):
+            try:
+                async for key in redis.scan_iter(match=pattern):
+                    await redis.delete(key)
+            except Exception:  # noqa: BLE001
+                pass
+    async with pool.acquire() as conn:
+        await conn.execute("DELETE FROM leads WHERE tenant_id = $1", p.tenant_id)
+    await audit(
+        pool, actor=p.email, action="tenant.self_erase", tenant_id=p.tenant_id, detail=erased
+    )
+    return {"status": "erased", "detail": erased}

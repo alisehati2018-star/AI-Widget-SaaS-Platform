@@ -42,6 +42,17 @@ export default function TeamPage() {
     }
   }
 
+  async function changeRole(memberEmail: string, role: string) {
+    await authFetch("/tenant/team/role", { body: { email: memberEmail, role } }).catch(() => {});
+    load();
+  }
+
+  async function removeMember(memberEmail: string) {
+    if (!window.confirm(`Remove ${memberEmail} from the team?`)) return;
+    await authFetch("/tenant/team/remove", { body: { email: memberEmail } }).catch(() => {});
+    load();
+  }
+
   return (
     <DashboardShell title="Team" nav={OWNER_NAV}>
       <p style={{ marginTop: "-1rem" }}>Invite staff to help manage your store. Staff have reduced privileges.</p>
@@ -75,7 +86,7 @@ export default function TeamPage() {
           <Spinner />
         ) : (
           <table className="table">
-            <thead><tr><th>Email</th><th>Name</th><th>Role</th><th>Status</th><th>Last login</th></tr></thead>
+            <thead><tr><th>Email</th><th>Name</th><th>Role</th><th>Status</th><th></th></tr></thead>
             <tbody>
               {members.map((m) => (
                 <tr key={m.email}>
@@ -83,7 +94,14 @@ export default function TeamPage() {
                   <td>{m.full_name ?? "—"}</td>
                   <td><Badge tone={m.role === "store_owner" ? "brand" : undefined}>{m.role.replace("store_", "")}</Badge></td>
                   <td>{m.status === "active" ? <Badge tone="success">active</Badge> : <Badge tone="warning">{m.status}</Badge>}</td>
-                  <td className="muted">{m.last_login_at?.slice(0, 10) ?? "—"}</td>
+                  <td>
+                    <div className="row" style={{ gap: "0.4rem" }}>
+                      <button className="btn btn-soft" onClick={() => void changeRole(m.email, m.role === "store_owner" ? "store_staff" : "store_owner")}>
+                        {m.role === "store_owner" ? "Make staff" : "Make owner"}
+                      </button>
+                      <button className="btn btn-danger" onClick={() => void removeMember(m.email)}>Remove</button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
