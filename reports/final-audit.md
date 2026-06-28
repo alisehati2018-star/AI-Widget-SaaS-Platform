@@ -63,9 +63,13 @@ All gates re-run green after fixes (110 passed).
 - **Search / RAG / Analytics / Assistant streaming are unvalidated** — code-
   complete but require Elasticsearch + inference (deferred by decision). Scores
   for these areas are capped.
-- **Auth tokens still default to `localStorage`** in the web client — cookie
-  auth is implemented server-side (dual-support) but the frontend cutover is
-  pending; XSS-token-theft risk remains until cutover (Phase-C/G exit item).
+- ~~**Auth tokens still default to `localStorage`** in the web client~~ —
+  **RESOLVED.** The web client now authenticates entirely via HttpOnly cookies
+  (`vitrin_access`/`vitrin_refresh`) with a readable `vitrin_csrf` double-submit
+  token; no token is stored in JS/`localStorage` and the bearer header is no
+  longer sent, so `CsrfMiddleware` now actively enforces CSRF on unsafe
+  cookie-auth requests. Validated end-to-end at runtime (signup→me→CSRF
+  reject/accept→refresh→logout). For production set `COOKIE_SECURE=true` (HTTPS).
 - **`/v1/*` (search/suggest/chat) return 500 when ES is absent** — acceptable
   pre-connection, but they are not "graceful 503" with a clear code; confirm
   graceful degradation (BM25-only when embeddings down) during ES bring-up.
@@ -112,7 +116,7 @@ fixed earlier; PG18-ready. Risk: **Low**.
 ---
 
 ## Technical debt & known limitations
-1. Web auth still uses `localStorage` (cookie cutover pending).
+1. ~~Web auth still uses `localStorage`~~ — DONE: full HttpOnly-cookie + CSRF cutover.
 2. Assistant SSE streaming is chunked post-hoc, not true per-token vLLM streaming.
 3. `apps/dashboard` legacy app retained (hosts the embeddable widget) — kept in CI.
 4. Invoice = emailed HTML/receipt + list; no PDF.
@@ -123,8 +127,8 @@ fixed earlier; PG18-ready. Risk: **Low**.
 
 ## Remaining items by priority
 - **P1:** connect Elasticsearch + inference and run search/RAG/analytics
-  validation; confirm `/v1/*` graceful degradation; frontend cookie cutover +
-  remove localStorage; true vLLM streaming.
+  validation; confirm `/v1/*` graceful degradation; true vLLM streaming.
+  (Frontend cookie cutover + remove localStorage — **done**.)
 - **P2:** invoice PDF; GDPR retention/consent; worker-level queue inspect; DR drill.
 - **P3:** live payment gateway (Stripe/ZarinPal); MFA/TOTP; multi-region.
 

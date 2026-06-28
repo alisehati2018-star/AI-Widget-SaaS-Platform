@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ApiError } from "../../../lib/api";
-import { clearTokens, login } from "../../../lib/auth";
+import { login, logout } from "../../../lib/auth";
 import { Alert, Brand, Field, Input, Spinner } from "../../../components/ui";
 
 export default function AdminLoginPage() {
@@ -20,7 +20,7 @@ export default function AdminLoginPage() {
     try {
       const user = await login(email, password);
       if (user.role !== "platform_admin") {
-        clearTokens();
+        await logout();
         setError("This account is not a platform administrator.");
         setBusy(false);
         return;

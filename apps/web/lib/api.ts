@@ -1,7 +1,17 @@
 // Thin client for the Vitrin backend. The browser calls same-origin /api/*,
 // which next.config.mjs proxies to the FastAPI backend (no CORS).
+//
+// Auth is cookie-based: the backend sets httpOnly `vitrin_access` /
+// `vitrin_refresh` cookies (sent automatically on same-origin requests) plus a
+// JS-readable `vitrin_csrf` cookie. We never read or store the access/refresh
+// tokens in JS — that's the whole point of the httpOnly cookies (XSS can't
+// exfiltrate them). For unsafe methods we echo the CSRF cookie back in the
+// `x-csrf-token` header (double-submit) so the backend's CsrfMiddleware passes.
 
 const BASE = "/api";
+const CSRF_COOKIE = "vitrin_csrf";
+const CSRF_HEADER = "x-csrf-token";
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
 export class ApiError extends Error {
   code: string;
@@ -11,6 +21,16 @@ export class ApiError extends Error {
     this.status = status;
     this.code = code;
   }
+}
+
+/** Read a non-httpOnly cookie value (used only for the CSRF token). */
+function readCookie(name: string): string | null {
+  if (typeof document === "undefined") return null;
+  for (const part of document.cookie.split(";")) {
+    const [k, ...v] = part.trim().split("=");
+    if (k === name) return decodeURIComponent(v.join("="));
+  }
+  return null;
 }
 
 export interface PlanInfo {
@@ -34,14 +54,20 @@ export interface SessionUser {
 
 export async function apiFetch<T = unknown>(
   path: string,
-  opts: { method?: string; body?: unknown; token?: string | null } = {},
+  opts: { method?: string; body?: unknown } = {},
 ): Promise<T> {
+  const method = opts.method ?? (opts.body ? "POST" : "GET");
   const headers: Record<string, string> = { "content-type": "application/json" };
-  if (opts.token) headers["authorization"] = `Bearer ${opts.token}`;
+  if (!SAFE_METHODS.has(method)) {
+    const csrf = readCookie(CSRF_COOKIE);
+    if (csrf) headers[CSRF_HEADER] = csrf;
+  }
   const resp = await fetch(`${BASE}${path}`, {
-    method: opts.method ?? (opts.body ? "POST" : "GET"),
+    method,
     headers,
     body: opts.body ? JSON.stringify(opts.body) : undefined,
+    // Send the httpOnly auth cookies (same-origin via the /api proxy).
+    credentials: "include",
   });
   const text = await resp.text();
   const data = text ? JSON.parse(text) : {};
