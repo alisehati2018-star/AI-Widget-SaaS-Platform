@@ -15,7 +15,10 @@ _redis: aioredis.Redis | None = None
 def get_redis() -> aioredis.Redis:
     global _redis
     if _redis is None:
-        _redis = aioredis.from_url(get_settings().redis_url, decode_responses=True)
+        # protocol=2 keeps compatibility with older local Redis (e.g. Windows 5.x).
+        _redis = aioredis.from_url(
+            get_settings().redis_url, decode_responses=True, protocol=2
+        )
     return _redis
 
 
