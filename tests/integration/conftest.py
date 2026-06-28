@@ -56,6 +56,12 @@ def live_client():
         "BILLING_WEBHOOK_SECRET": os.environ.get("BILLING_WEBHOOK_SECRET", "integration-whsec"),
         "AUTH_IP_RATE_PER_MIN": "100000",
         "EMAIL_PROVIDER": "console",
+        # Pin the security-relevant flags so the suite is deterministic and does
+        # not depend on a developer's local .env (which may relax these).
+        "EMAIL_VERIFICATION_REQUIRED": "true",
+        "SIGNUP_ENABLED": "true",
+        "CSRF_ENABLED": "true",
+        "BILLING_PROVIDER": "manual",
         "PYTHONPATH": "packages:services",
     }
     get_settings.cache_clear()
