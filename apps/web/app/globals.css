@@ -19,7 +19,11 @@
   --shadow: 0 20px 60px -20px rgba(0, 0, 0, 0.6);
   --shadow-glow: 0 0 0 1px rgba(124, 92, 255, 0.25), 0 24px 60px -24px rgba(124, 92, 255, 0.5);
   --maxw: 1140px;
-  --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Vazirmatn", sans-serif;
+  /* Font families are provided by next/font (see app/[locale]/layout.tsx). The
+     Latin face (Inter) is the default; RTL switches to the Persian face below. */
+  --font-latin: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-fa: "Vazirmatn", system-ui, "Segoe UI", Tahoma, sans-serif;
+  --font: var(--font-latin);
 }
 
 * { box-sizing: border-box; }
@@ -239,6 +243,7 @@ small { color: var(--faint); }
 }
 
 /* ---------- RTL ---------- */
+[dir="rtl"] body { font-family: var(--font-fa); }
 [dir="rtl"] .sidebar { border-right: none; border-left: 1px solid var(--border); }
 [dir="rtl"] .table th, [dir="rtl"] .table td { text-align: right; }
 [dir="rtl"] .feature-list li { flex-direction: row-reverse; }

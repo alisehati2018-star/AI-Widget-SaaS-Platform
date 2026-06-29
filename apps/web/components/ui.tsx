@@ -1,13 +1,13 @@
-import Link from "next/link";
+import { useTranslations } from "next-intl";
 import type { InputHTMLAttributes, ReactNode } from "react";
+import { Link } from "@/i18n/navigation";
 
 export function Brand({ href = "/" }: { href?: string }) {
+  const t = useTranslations("common");
   return (
     <Link href={href} className="brand">
       <span className="brand-mark">V</span>
-      <span>
-        Vitrin<span className="muted" style={{ fontWeight: 500 }}>.ai</span>
-      </span>
+      <span>{t("brand.name")}</span>
     </Link>
   );
 }
