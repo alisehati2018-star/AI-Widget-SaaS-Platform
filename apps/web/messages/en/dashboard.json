@@ -15,7 +15,11 @@
     "credits": "Credits",
     "billing": "Plan & billing",
     "activity": "Activity log",
-    "settings": "Settings"
+    "settings": "Settings",
+    "groupStore": "Store",
+    "groupAssistant": "Assistant & content",
+    "groupInsights": "Insights",
+    "groupAccount": "Account"
   },
   "common": {
     "saved": "Saved.",

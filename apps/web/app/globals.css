@@ -167,6 +167,8 @@ small { color: var(--faint); }
 /* ---------- Dashboard shell ---------- */
 .shell { display: grid; grid-template-columns: 248px 1fr; min-height: 100vh; }
 .sidebar { background: var(--bg-soft); border-right: 1px solid var(--border); padding: 1.2rem; display: flex; flex-direction: column; }
+.side-group { margin-bottom: 0.4rem; }
+.side-section-title { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--faint); padding: 0.7rem 0.8rem 0.25rem; }
 .side-link { display: flex; align-items: center; gap: 0.7rem; padding: 0.6rem 0.8rem; border-radius: var(--radius-sm); color: var(--muted); font-weight: 500; margin-bottom: 0.2rem; }
 .side-link:hover { background: var(--panel-2); color: var(--text); }
 .side-link.active { background: rgba(124,92,255,0.12); color: var(--text); border: 1px solid rgba(124,92,255,0.3); }

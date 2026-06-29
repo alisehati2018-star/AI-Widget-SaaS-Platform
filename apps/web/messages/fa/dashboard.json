@@ -15,7 +15,11 @@
     "credits": "اعتبارها",
     "billing": "پلن و صورت‌حساب",
     "activity": "گزارش فعالیت",
-    "settings": "تنظیمات"
+    "settings": "تنظیمات",
+    "groupStore": "فروشگاه",
+    "groupAssistant": "دستیار و محتوا",
+    "groupInsights": "بینش",
+    "groupAccount": "حساب"
   },
   "common": {
     "saved": "ذخیره شد.",

@@ -14,7 +14,10 @@
     "synonyms": "مترادف‌ها",
     "flags": "پرچم‌های ویژگی",
     "audit": "گزارش حسابرسی",
-    "settings": "تنظیمات"
+    "settings": "تنظیمات",
+    "groupCustomers": "مشتریان",
+    "groupRevenue": "درآمد",
+    "groupPlatform": "پلتفرم"
   },
   "common": {
     "ms": "میلی‌ثانیه",

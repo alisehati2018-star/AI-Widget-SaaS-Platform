@@ -13,48 +13,93 @@ export interface NavItem {
   icon: string;
 }
 
-/** Store-owner navigation, labels translated from the `dashboard` namespace. */
-export function useOwnerNav(): NavItem[] {
+/** A labelled group of nav items (heading omitted for the top/un-grouped set). */
+export interface NavSection {
+  heading?: string;
+  items: NavItem[];
+}
+
+/** Store-owner navigation, grouped into focused sections (Phase 4). */
+export function useOwnerNav(): NavSection[] {
   const t = useTranslations("dashboard");
   return [
-    { href: "/dashboard", label: t("nav.overview"), icon: "📊" },
-    { href: "/dashboard/catalog", label: t("nav.catalog"), icon: "📦" },
-    { href: "/dashboard/search", label: t("nav.search"), icon: "🔎" },
-    { href: "/dashboard/assistant", label: t("nav.assistant"), icon: "🤖" },
-    { href: "/dashboard/knowledge", label: t("nav.knowledge"), icon: "📚" },
-    { href: "/dashboard/analytics", label: t("nav.analytics"), icon: "📈" },
-    { href: "/dashboard/chat", label: t("nav.chat"), icon: "💬" },
-    { href: "/dashboard/sales", label: t("nav.conversion"), icon: "🛒" },
-    { href: "/dashboard/leads", label: t("nav.leads"), icon: "🎯" },
-    { href: "/dashboard/widget", label: t("nav.widget"), icon: "🎨" },
-    { href: "/dashboard/keys", label: t("nav.keys"), icon: "🔑" },
-    { href: "/dashboard/team", label: t("nav.team"), icon: "👥" },
-    { href: "/dashboard/credits", label: t("nav.credits"), icon: "🎟️" },
-    { href: "/dashboard/billing", label: t("nav.billing"), icon: "💳" },
-    { href: "/dashboard/audit", label: t("nav.activity"), icon: "📜" },
-    { href: "/dashboard/settings", label: t("nav.settings"), icon: "⚙️" },
+    {
+      items: [{ href: "/dashboard", label: t("nav.overview"), icon: "📊" }],
+    },
+    {
+      heading: t("nav.groupStore"),
+      items: [
+        { href: "/dashboard/catalog", label: t("nav.catalog"), icon: "📦" },
+        { href: "/dashboard/search", label: t("nav.search"), icon: "🔎" },
+        { href: "/dashboard/widget", label: t("nav.widget"), icon: "🎨" },
+      ],
+    },
+    {
+      heading: t("nav.groupAssistant"),
+      items: [
+        { href: "/dashboard/assistant", label: t("nav.assistant"), icon: "🤖" },
+        { href: "/dashboard/knowledge", label: t("nav.knowledge"), icon: "📚" },
+      ],
+    },
+    {
+      heading: t("nav.groupInsights"),
+      items: [
+        { href: "/dashboard/analytics", label: t("nav.analytics"), icon: "📈" },
+        { href: "/dashboard/chat", label: t("nav.chat"), icon: "💬" },
+        { href: "/dashboard/sales", label: t("nav.conversion"), icon: "🛒" },
+        { href: "/dashboard/leads", label: t("nav.leads"), icon: "🎯" },
+      ],
+    },
+    {
+      heading: t("nav.groupAccount"),
+      items: [
+        { href: "/dashboard/keys", label: t("nav.keys"), icon: "🔑" },
+        { href: "/dashboard/team", label: t("nav.team"), icon: "👥" },
+        { href: "/dashboard/credits", label: t("nav.credits"), icon: "🎟️" },
+        { href: "/dashboard/billing", label: t("nav.billing"), icon: "💳" },
+        { href: "/dashboard/audit", label: t("nav.activity"), icon: "📜" },
+        { href: "/dashboard/settings", label: t("nav.settings"), icon: "⚙️" },
+      ],
+    },
   ];
 }
 
-/** Platform-admin navigation, labels translated from the `admin` namespace. */
-export function useAdminNav(): NavItem[] {
+/** Platform-admin navigation, grouped into focused sections. */
+export function useAdminNav(): NavSection[] {
   const t = useTranslations("admin");
   return [
-    { href: "/admin", label: t("nav.overview"), icon: "📊" },
-    { href: "/admin/tenants", label: t("nav.tenants"), icon: "🏬" },
-    { href: "/admin/users", label: t("nav.users"), icon: "👤" },
-    { href: "/admin/plans", label: t("nav.plans"), icon: "🏷️" },
-    { href: "/admin/billing", label: t("nav.billing"), icon: "💳" },
-    { href: "/admin/usage", label: t("nav.usage"), icon: "📶" },
-    { href: "/admin/analytics", label: t("nav.analytics"), icon: "📈" },
-    { href: "/admin/models", label: t("nav.models"), icon: "🧠" },
-    { href: "/admin/queue", label: t("nav.queue"), icon: "🧵" },
-    { href: "/admin/health", label: t("nav.health"), icon: "❤️" },
-    { href: "/admin/security", label: t("nav.security"), icon: "🛡️" },
-    { href: "/admin/synonyms", label: t("nav.synonyms"), icon: "🔤" },
-    { href: "/admin/flags", label: t("nav.flags"), icon: "🚩" },
-    { href: "/admin/audit", label: t("nav.audit"), icon: "📜" },
-    { href: "/admin/settings", label: t("nav.settings"), icon: "⚙️" },
+    {
+      items: [{ href: "/admin", label: t("nav.overview"), icon: "📊" }],
+    },
+    {
+      heading: t("nav.groupCustomers"),
+      items: [
+        { href: "/admin/tenants", label: t("nav.tenants"), icon: "🏬" },
+        { href: "/admin/users", label: t("nav.users"), icon: "👤" },
+      ],
+    },
+    {
+      heading: t("nav.groupRevenue"),
+      items: [
+        { href: "/admin/plans", label: t("nav.plans"), icon: "🏷️" },
+        { href: "/admin/billing", label: t("nav.billing"), icon: "💳" },
+        { href: "/admin/usage", label: t("nav.usage"), icon: "📶" },
+        { href: "/admin/analytics", label: t("nav.analytics"), icon: "📈" },
+      ],
+    },
+    {
+      heading: t("nav.groupPlatform"),
+      items: [
+        { href: "/admin/models", label: t("nav.models"), icon: "🧠" },
+        { href: "/admin/queue", label: t("nav.queue"), icon: "🧵" },
+        { href: "/admin/health", label: t("nav.health"), icon: "❤️" },
+        { href: "/admin/security", label: t("nav.security"), icon: "🛡️" },
+        { href: "/admin/synonyms", label: t("nav.synonyms"), icon: "🔤" },
+        { href: "/admin/flags", label: t("nav.flags"), icon: "🚩" },
+        { href: "/admin/audit", label: t("nav.audit"), icon: "📜" },
+        { href: "/admin/settings", label: t("nav.settings"), icon: "⚙️" },
+      ],
+    },
   ];
 }
 
@@ -71,7 +116,7 @@ export function DashboardShell({
   children,
 }: {
   title: string;
-  nav: NavItem[];
+  nav: NavSection[];
   requireAdmin?: boolean;
   loginHref?: string;
   children: ReactNode;
@@ -134,16 +179,23 @@ export function DashboardShell({
           </button>
         </div>
         <nav style={{ flex: 1 }}>
-          {nav.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              aria-current={pathname === item.href ? "page" : undefined}
-              className={`side-link${pathname === item.href ? " active" : ""}`}
-            >
-              <span aria-hidden>{item.icon}</span>
-              <span>{item.label}</span>
-            </Link>
+          {nav.map((section, si) => (
+            <div className="side-group" key={section.heading ?? `g${si}`}>
+              {section.heading ? (
+                <div className="side-section-title">{section.heading}</div>
+              ) : null}
+              {section.items.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  aria-current={pathname === item.href ? "page" : undefined}
+                  className={`side-link${pathname === item.href ? " active" : ""}`}
+                >
+                  <span aria-hidden>{item.icon}</span>
+                  <span>{item.label}</span>
+                </Link>
+              ))}
+            </div>
           ))}
         </nav>
         <div className="divider" />

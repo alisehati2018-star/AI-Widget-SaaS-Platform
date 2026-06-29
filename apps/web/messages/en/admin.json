@@ -14,7 +14,10 @@
     "synonyms": "Synonyms",
     "flags": "Feature flags",
     "audit": "Audit log",
-    "settings": "Settings"
+    "settings": "Settings",
+    "groupCustomers": "Customers",
+    "groupRevenue": "Revenue",
+    "groupPlatform": "Platform"
   },
   "common": {
     "ms": "ms",
