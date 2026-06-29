@@ -7,13 +7,18 @@ const { chromium } = require("/opt/node22/lib/node_modules/playwright");
 const BASE = process.env.BASE || "http://127.0.0.1:3000";
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || "dev-admin-token";
 const EXE = "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
-const WIDTHS = [375, 768, 1280];
+const WIDTHS = [320, 375, 768, 1280];
 const TOL = 2; // px rounding tolerance
 
-const PUBLIC = ["/", "/en", "/pricing", "/features", "/docs", "/contact", "/login", "/signup"];
+const PUBLIC = ["/", "/en", "/pricing", "/features", "/docs", "/contact", "/login", "/signup",
+  "/forgot-password", "/reset-password", "/verify-email", "/legal/terms", "/legal/privacy"];
 const ADMIN = ["/admin", "/admin/tenants", "/admin/users", "/admin/plans", "/admin/billing",
   "/admin/usage", "/admin/analytics", "/admin/models", "/admin/health", "/admin/security",
   "/admin/flags", "/admin/audit", "/admin/settings"];
+const OWNER = ["/dashboard", "/onboarding", "/dashboard/catalog", "/dashboard/search",
+  "/dashboard/widget", "/dashboard/assistant", "/dashboard/knowledge", "/dashboard/analytics",
+  "/dashboard/chat", "/dashboard/sales", "/dashboard/leads", "/dashboard/keys", "/dashboard/team",
+  "/dashboard/credits", "/dashboard/billing", "/dashboard/audit", "/dashboard/settings"];
 
 let failures = 0;
 
@@ -76,6 +81,19 @@ async function check(ctx, paths, widths, label) {
     failures++;
   } else {
     await check(ctx, ADMIN, [375, 1280], "admin");
+  }
+
+  // Owner dashboard: log in as a seeded store owner and sweep.
+  await ctx.clearCookies();
+  const ownerLogin = await api.post(`${BASE}/api/auth/login`, {
+    headers: { "content-type": "application/json" },
+    data: { email: `owner.rc.${stamp}.1@store.com`, password: "Sup3r!Str0ng#2026" },
+  });
+  if (!ownerLogin.ok()) {
+    console.error(`✗ owner login failed: ${ownerLogin.status()}`);
+    failures++;
+  } else {
+    await check(ctx, OWNER, [375, 1280], "owner");
   }
 
   await browser.close();
