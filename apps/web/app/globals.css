@@ -215,10 +215,10 @@ small { color: var(--faint); }
 
 /* ---------- Accessibility ---------- */
 .skip-link {
-  position: absolute; left: -999px; top: 0; z-index: 200; padding: 0.6rem 1rem;
+  position: absolute; inset-inline-start: -999px; top: 0; z-index: 200; padding: 0.6rem 1rem;
   background: var(--brand); color: #0a0b14; border-radius: 0 0 8px 0; font-weight: 700;
 }
-.skip-link:focus { left: 0; }
+.skip-link:focus { inset-inline-start: 0; }
 :focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; border-radius: 4px; }
 
 /* ---------- Onboarding wizard ---------- */
