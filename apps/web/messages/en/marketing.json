@@ -18,11 +18,106 @@
         { "title": "Cost-controlled AI", "body": "A local-first gateway (cache → route → compress) keeps most traffic off paid APIs with credit-based billing." },
         { "title": "Secure multi-tenancy", "body": "Hard tenant isolation, scoped API keys, audit logging and GDPR controls — built for on-premise." }
       ]
+    }
+  },
+  "landing": {
+    "heroVisual": {
+      "tag": "Live shopping assistant",
+      "searchQuery": "men's running shoes size 43",
+      "result1": "Nike running shoe — in stock",
+      "result2": "Adidas walking shoe — 2 colors",
+      "chatUser": "I want wireless headphones under $200",
+      "chatBot": "Found three in-stock models that fit your budget — all from your own catalogue."
     },
-    "cta": {
-      "title": "Ready to upgrade your store search?",
-      "subtitle": "Spin up a free tenant in seconds. No credit card required.",
-      "button": "Create your store"
+    "stats": {
+      "items": [
+        { "value": "< 150ms", "label": "Search latency (p95)" },
+        { "value": "> 85%", "label": "Answered with no paid API" },
+        { "value": "99.9%", "label": "Availability" },
+        { "value": "0.80+", "label": "Result quality (NDCG@10)" }
+      ]
+    },
+    "deepDives": {
+      "title": "One platform, three core capabilities",
+      "subtitle": "Search, assistant, and analytics — all on your real store data.",
+      "items": [
+        {
+          "eyebrow": "Search",
+          "title": "Persian search that actually understands",
+          "body": "Keyword and semantic search fused, with ZWNJ normalization and synonyms, so shoppers find exactly what they mean.",
+          "points": ["Handles typos and synonyms", "Instant filters, sorting and autocomplete", "Relevant results in under 150ms"]
+        },
+        {
+          "eyebrow": "Assistant",
+          "title": "A shopping assistant grounded in your catalogue",
+          "body": "A RAG assistant that recommends real products, never hallucinated answers — with prompt-injection guardrails.",
+          "points": ["Grounded in your catalogue, no invented products", "Streaming, multilingual replies", "Captures leads mid-conversation"]
+        },
+        {
+          "eyebrow": "Analytics",
+          "title": "From search to growth, with data",
+          "body": "See what shoppers want, what they can't find, and where you're losing sales.",
+          "points": ["Unmet-demand and zero-result mining", "Search-to-purchase funnel", "AI-attributed revenue"]
+        }
+      ]
+    },
+    "analytics": {
+      "eyebrow": "Analytics dashboard",
+      "title": "Every metric you need to decide",
+      "subtitle": "Cost, latency, reliability and demand — at a glance.",
+      "cardCost": "No-paid share",
+      "cardCostValue": "87%",
+      "cardLatency": "Latency p95",
+      "cardLatencyValue": "138ms",
+      "cardTurns": "Assistant chats",
+      "cardTurnsValue": "12,403",
+      "mostWanted": "Most-wanted",
+      "row1": "wireless headphones",
+      "row2": "smart watch",
+      "row3": "fast charger"
+    },
+    "useCases": {
+      "title": "For any store that wants to sell more",
+      "items": [
+        { "icon": "📱", "title": "Digital & electronics", "body": "Large catalogues with technical specs; shoppers search in their own words and land on the right product." },
+        { "icon": "👗", "title": "Fashion & apparel", "body": "Style, colour and size search with smart recommendations lifts conversion." },
+        { "icon": "🏬", "title": "Multi-vendor marketplace", "body": "Hard isolation per seller with dedicated search and analytics, on one platform." },
+        { "icon": "🏠", "title": "Home & appliances", "body": "Guide shoppers across models and brands with an assistant that only answers from your stock." }
+      ]
+    },
+    "how": {
+      "title": "Go live in four steps",
+      "items": [
+        { "title": "Connect your store", "body": "Install the WooCommerce or OpenCart plugin and create an API key." },
+        { "title": "Index your catalogue", "body": "Products import via event-driven sync and stay fresh automatically." },
+        { "title": "Search & assist", "body": "Embed the search and chat widget — it goes live in minutes." },
+        { "title": "Grow with insight", "body": "See demand, gaps and opportunities, and increase sales." }
+      ]
+    },
+    "testimonials": {
+      "title": "Trusted by e-commerce teams",
+      "items": [
+        { "quote": "Our zero-result rate halved and shoppers reach products much faster.", "name": "Sara Mohammadi", "role": "Product Manager, Digital Store" },
+        { "quote": "The assistant truly answers from our catalogue — no more worrying about made-up replies.", "name": "Ali Rezaei", "role": "Founder, Fashion Marketplace" },
+        { "quote": "On-prem deployment was critical for us, and the AI cost control works great.", "name": "Negar Ahmadi", "role": "CTO, Retail" }
+      ]
+    },
+    "faq": {
+      "title": "Frequently asked questions",
+      "items": [
+        { "q": "Does our data stay on our servers?", "a": "Yes. Vitrin is on-premise; your catalogue and customer data never leave your environment." },
+        { "q": "Does it work with WooCommerce and OpenCart?", "a": "Yes — ready-made plugins, plus REST/webhook APIs for custom platforms." },
+        { "q": "How is it priced?", "a": "Usage-based credits. A free plan to start, and upgrades as your store grows." },
+        { "q": "Does it depend on a paid API?", "a": "No. The local-first architecture serves 85%+ of traffic from in-house models and cache." },
+        { "q": "Does the assistant invent products?", "a": "No. Answers are grounded in your synced catalogue and nothing outside it." },
+        { "q": "How long does setup take?", "a": "Connection and initial indexing usually complete the same day." }
+      ]
+    },
+    "finalCta": {
+      "title": "Make your store intelligent",
+      "subtitle": "Start free today — no credit card, no complexity.",
+      "primary": "Start free",
+      "secondary": "Contact sales"
     }
   },
   "features": {
