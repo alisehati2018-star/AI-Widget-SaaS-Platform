@@ -31,20 +31,5 @@
   "noteResume": "Subscription resumed.",
   "noteOrder": "Order created — pending confirmation.",
   "noteTopup": "Top-up order created for {credits} credits — pending confirmation.",
-  "topupFailed": "Top-up failed.",
-  "admin": {
-    "intro": "Billing orders across the platform.",
-    "pendingTitle": "Pending orders",
-    "allTitle": "All orders",
-    "empty": "No orders yet.",
-    "colTenant": "Tenant",
-    "colPlan": "Plan",
-    "colAmount": "Amount",
-    "colProvider": "Provider",
-    "colStatus": "Status",
-    "colDate": "Date",
-    "markPaid": "Mark paid",
-    "marked": "Order marked paid and activated.",
-    "markFailed": "Could not mark the order."
-  }
+  "topupFailed": "Top-up failed."
 }

@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // i18n quality gate (Phase 0/1):
-//  1. Locale parity — every key must exist in BOTH fa and en (per namespace).
-//  2. Missing — every t("…") key referenced in source must exist in messages.
-//  3. Unused — message keys never referenced in source (reported as warnings).
-// Exits non-zero on parity or missing failures so CI/build can block.
+//  1. Parity   — every key must exist in BOTH fa and en (per namespace).  [FAIL]
+//  2. Missing  — every t("…") key referenced in source must exist.        [FAIL]
+//  3. Unused   — message keys never referenced in source.              [warning]
+// Exits non-zero on parity or missing failures so the build/CI blocks.
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, dirname } from "node:path";
@@ -26,8 +26,7 @@ function loadLocale(locale) {
   const dir = join(MSG_DIR, locale);
   const ns = {};
   for (const file of readdirSync(dir).filter((f) => f.endsWith(".json"))) {
-    const name = file.replace(/\.json$/, "");
-    ns[name] = flatten(JSON.parse(readFileSync(join(dir, file), "utf8")));
+    ns[file.replace(/\.json$/, "")] = flatten(JSON.parse(readFileSync(join(dir, file), "utf8")));
   }
   return ns;
 }
@@ -52,26 +51,19 @@ let warnings = 0;
 for (const ns of namespaces) {
   const fa = data.fa[ns] ?? {};
   const en = data.en[ns] ?? {};
-  for (const key of Object.keys(fa)) {
-    if (!(key in en)) {
-      console.error(`✗ parity: missing in en/${ns}.json → ${key}`);
-      errors++;
-    }
-  }
-  for (const key of Object.keys(en)) {
-    if (!(key in fa)) {
-      console.error(`✗ parity: missing in fa/${ns}.json → ${key}`);
-      errors++;
-    }
-  }
+  for (const key of Object.keys(fa))
+    if (!(key in en)) (console.error(`✗ parity: missing in en/${ns}.json → ${key}`), errors++);
+  for (const key of Object.keys(en))
+    if (!(key in fa)) (console.error(`✗ parity: missing in fa/${ns}.json → ${key}`), errors++);
 }
 
-// Collect referenced keys from source: t("x"), tErrors("x"), t.raw("x"), …
+// Collect ONLY translation-function calls: t("x") / tc("x") / tErrors("x") /
+// t.raw("x"). Precise capture avoids matching apiFetch()/useState()/etc.
 const src = walk(join(ROOT, "app")).concat(walk(join(ROOT, "components")));
 const referenced = new Set();
 const rawPrefixes = new Set();
-const callRe = /\b[a-zA-Z]\w*(?:\.raw)?\(\s*["'`]([A-Za-z0-9_.]+)["'`]/g;
-const rawRe = /\.raw\(\s*["'`]([A-Za-z0-9_.]+)["'`]/g;
+const callRe = /\b(?:t|tc|t[A-Z][A-Za-z]*)\(\s*["'`]([A-Za-z0-9_.]+)["'`]/g;
+const rawRe = /\b(?:t|tc|t[A-Z][A-Za-z]*)\.raw\(\s*["'`]([A-Za-z0-9_.]+)["'`]/g;
 for (const file of src) {
   const text = readFileSync(file, "utf8");
   let m;
@@ -79,37 +71,30 @@ for (const file of src) {
   while ((m = rawRe.exec(text))) rawPrefixes.add(m[1]);
 }
 
-// Build the set of all relative key paths that exist in any namespace (fa).
-const relKeys = new Map(); // relPath -> Set(namespaces)
-for (const ns of namespaces) {
+// Relative key paths present in any namespace (fa is the source of truth).
+const relKeys = new Map();
+for (const ns of namespaces)
   for (const key of Object.keys(data.fa[ns] ?? {})) {
     if (!relKeys.has(key)) relKeys.set(key, new Set());
     relKeys.get(key).add(ns);
   }
-}
+const allRel = [...relKeys.keys()];
 
-// 2) Missing — referenced but not present in any namespace -----------------
-for (const ref of referenced) {
+// 2) Missing — referenced key not present in any namespace -----------------
+for (const ref of [...referenced, ...rawPrefixes]) {
   if (relKeys.has(ref)) continue;
-  // Allow raw-array references whose children exist (e.g. "home.features.items").
-  const hasChildren = [...relKeys.keys()].some((k) => k.startsWith(`${ref}.`));
-  if (hasChildren) continue;
-  // Ignore non-message dotted strings (api paths, etc.) — only flag when the
-  // first segment matches a namespace sub-tree convention (heuristic): skip.
+  if (allRel.some((k) => k.startsWith(`${ref}.`))) continue; // parent of leaves
+  console.error(`✗ missing: t("${ref}") has no entry in any namespace`);
+  errors++;
 }
 
 // 3) Unused — message keys never referenced (warnings) ---------------------
-for (const [rel] of relKeys) {
+for (const rel of allRel) {
   const used =
     referenced.has(rel) ||
     [...rawPrefixes].some((p) => rel === p || rel.startsWith(`${p}.`)) ||
-    // a parent object referenced directly (t("nav") then nav.x) — keep keys
-    // whose parent path is referenced
     [...referenced].some((r) => rel.startsWith(`${r}.`));
-  if (!used) {
-    console.warn(`⚠ unused: ${rel}`);
-    warnings++;
-  }
+  if (!used) (console.warn(`⚠ unused: ${rel}`), warnings++);
 }
 
 console.log(`\ni18n-check: ${errors} error(s), ${warnings} warning(s).`);
