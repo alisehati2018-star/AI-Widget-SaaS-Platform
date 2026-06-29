@@ -1,13 +1,17 @@
+"use client";
+
+import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import { Spinner } from "./ui";
 
 /** Standardized loading / empty / error states for consistent UX across pages. */
 
-export function Loading({ label = "Loading…" }: { label?: string }) {
+export function Loading({ label }: { label?: string }) {
+  const t = useTranslations("common");
   return (
     <div className="state" role="status" aria-live="polite">
       <Spinner />
-      <p style={{ marginTop: "0.6rem" }}>{label}</p>
+      <p style={{ marginTop: "0.6rem" }}>{label ?? t("states.loading")}</p>
     </div>
   );
 }
@@ -36,12 +40,13 @@ export function EmptyState({
 }
 
 export function ErrorState({ message }: { message?: string }) {
+  const t = useTranslations("common");
   return (
     <div className="state" role="alert">
       <div className="state-icon" aria-hidden>
         ⚠️
       </div>
-      <strong style={{ color: "var(--danger)" }}>Something went wrong</strong>
+      <strong style={{ color: "var(--danger)" }}>{t("states.errorTitle")}</strong>
       {message ? <p style={{ marginTop: "0.4rem" }}>{message}</p> : null}
     </div>
   );

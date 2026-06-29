@@ -1,10 +1,10 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { type ReactNode, useEffect, useState } from "react";
-import { logout, useSession } from "../lib/auth";
-import { DirectionToggle } from "./direction";
+import { Link, usePathname, useRouter } from "@/i18n/navigation";
+import { logout, useSession } from "@/lib/auth";
+import { LocaleSwitch } from "./locale-switch";
 import { Brand, Spinner } from "./ui";
 
 export interface NavItem {
@@ -13,42 +13,95 @@ export interface NavItem {
   icon: string;
 }
 
-export const OWNER_NAV: NavItem[] = [
-  { href: "/dashboard", label: "Overview", icon: "📊" },
-  { href: "/dashboard/catalog", label: "Catalog & sync", icon: "📦" },
-  { href: "/dashboard/search", label: "Search tuning", icon: "🔎" },
-  { href: "/dashboard/assistant", label: "Assistant", icon: "🤖" },
-  { href: "/dashboard/knowledge", label: "Knowledge base", icon: "📚" },
-  { href: "/dashboard/analytics", label: "Search analytics", icon: "📈" },
-  { href: "/dashboard/chat", label: "Chat analytics", icon: "💬" },
-  { href: "/dashboard/sales", label: "Conversion", icon: "🛒" },
-  { href: "/dashboard/leads", label: "Leads", icon: "🎯" },
-  { href: "/dashboard/widget", label: "Widget & brand", icon: "🎨" },
-  { href: "/dashboard/keys", label: "API keys", icon: "🔑" },
-  { href: "/dashboard/team", label: "Team", icon: "👥" },
-  { href: "/dashboard/credits", label: "Credits", icon: "🎟️" },
-  { href: "/dashboard/billing", label: "Plan & billing", icon: "💳" },
-  { href: "/dashboard/audit", label: "Activity log", icon: "📜" },
-  { href: "/dashboard/settings", label: "Settings", icon: "⚙️" },
-];
+/** A labelled group of nav items (heading omitted for the top/un-grouped set). */
+export interface NavSection {
+  heading?: string;
+  items: NavItem[];
+}
 
-export const ADMIN_NAV: NavItem[] = [
-  { href: "/admin", label: "Overview", icon: "📊" },
-  { href: "/admin/tenants", label: "Tenants", icon: "🏬" },
-  { href: "/admin/users", label: "Users", icon: "👤" },
-  { href: "/admin/plans", label: "Plans", icon: "🏷️" },
-  { href: "/admin/billing", label: "Billing", icon: "💳" },
-  { href: "/admin/usage", label: "Usage", icon: "📶" },
-  { href: "/admin/analytics", label: "Analytics", icon: "📈" },
-  { href: "/admin/models", label: "Models", icon: "🧠" },
-  { href: "/admin/queue", label: "Queue", icon: "🧵" },
-  { href: "/admin/health", label: "System health", icon: "❤️" },
-  { href: "/admin/security", label: "Security", icon: "🛡️" },
-  { href: "/admin/synonyms", label: "Synonyms", icon: "🔤" },
-  { href: "/admin/flags", label: "Feature flags", icon: "🚩" },
-  { href: "/admin/audit", label: "Audit log", icon: "📜" },
-  { href: "/admin/settings", label: "Settings", icon: "⚙️" },
-];
+/** Store-owner navigation, grouped into focused sections (Phase 4). */
+export function useOwnerNav(): NavSection[] {
+  const t = useTranslations("dashboard");
+  return [
+    {
+      items: [{ href: "/dashboard", label: t("nav.overview"), icon: "📊" }],
+    },
+    {
+      heading: t("nav.groupStore"),
+      items: [
+        { href: "/dashboard/catalog", label: t("nav.catalog"), icon: "📦" },
+        { href: "/dashboard/search", label: t("nav.search"), icon: "🔎" },
+        { href: "/dashboard/widget", label: t("nav.widget"), icon: "🎨" },
+      ],
+    },
+    {
+      heading: t("nav.groupAssistant"),
+      items: [
+        { href: "/dashboard/assistant", label: t("nav.assistant"), icon: "🤖" },
+        { href: "/dashboard/knowledge", label: t("nav.knowledge"), icon: "📚" },
+      ],
+    },
+    {
+      heading: t("nav.groupInsights"),
+      items: [
+        { href: "/dashboard/analytics", label: t("nav.analytics"), icon: "📈" },
+        { href: "/dashboard/chat", label: t("nav.chat"), icon: "💬" },
+        { href: "/dashboard/sales", label: t("nav.conversion"), icon: "🛒" },
+        { href: "/dashboard/leads", label: t("nav.leads"), icon: "🎯" },
+      ],
+    },
+    {
+      heading: t("nav.groupAccount"),
+      items: [
+        { href: "/dashboard/keys", label: t("nav.keys"), icon: "🔑" },
+        { href: "/dashboard/team", label: t("nav.team"), icon: "👥" },
+        { href: "/dashboard/credits", label: t("nav.credits"), icon: "🎟️" },
+        { href: "/dashboard/billing", label: t("nav.billing"), icon: "💳" },
+        { href: "/dashboard/audit", label: t("nav.activity"), icon: "📜" },
+        { href: "/dashboard/settings", label: t("nav.settings"), icon: "⚙️" },
+      ],
+    },
+  ];
+}
+
+/** Platform-admin navigation, grouped into focused sections. */
+export function useAdminNav(): NavSection[] {
+  const t = useTranslations("admin");
+  return [
+    {
+      items: [{ href: "/admin", label: t("nav.overview"), icon: "📊" }],
+    },
+    {
+      heading: t("nav.groupCustomers"),
+      items: [
+        { href: "/admin/tenants", label: t("nav.tenants"), icon: "🏬" },
+        { href: "/admin/users", label: t("nav.users"), icon: "👤" },
+      ],
+    },
+    {
+      heading: t("nav.groupRevenue"),
+      items: [
+        { href: "/admin/plans", label: t("nav.plans"), icon: "🏷️" },
+        { href: "/admin/billing", label: t("nav.billing"), icon: "💳" },
+        { href: "/admin/usage", label: t("nav.usage"), icon: "📶" },
+        { href: "/admin/analytics", label: t("nav.analytics"), icon: "📈" },
+      ],
+    },
+    {
+      heading: t("nav.groupPlatform"),
+      items: [
+        { href: "/admin/models", label: t("nav.models"), icon: "🧠" },
+        { href: "/admin/queue", label: t("nav.queue"), icon: "🧵" },
+        { href: "/admin/health", label: t("nav.health"), icon: "❤️" },
+        { href: "/admin/security", label: t("nav.security"), icon: "🛡️" },
+        { href: "/admin/synonyms", label: t("nav.synonyms"), icon: "🔤" },
+        { href: "/admin/flags", label: t("nav.flags"), icon: "🚩" },
+        { href: "/admin/audit", label: t("nav.audit"), icon: "📜" },
+        { href: "/admin/settings", label: t("nav.settings"), icon: "⚙️" },
+      ],
+    },
+  ];
+}
 
 /**
  * Guards a logged-in surface. `requireAdmin` enforces the platform-admin role;
@@ -63,11 +116,12 @@ export function DashboardShell({
   children,
 }: {
   title: string;
-  nav: NavItem[];
+  nav: NavSection[];
   requireAdmin?: boolean;
   loginHref?: string;
   children: ReactNode;
 }) {
+  const t = useTranslations("common");
   const { user, loading } = useSession();
   const router = useRouter();
   const pathname = usePathname();
@@ -102,7 +156,7 @@ export function DashboardShell({
   return (
     <div className="shell">
       <a href="#main-content" className="skip-link">
-        Skip to content
+        {t("a11y.skipToContent")}
       </a>
       <div
         className={`sidebar-backdrop${navOpen ? " open" : ""}`}
@@ -112,37 +166,44 @@ export function DashboardShell({
       <aside
         className={`sidebar${navOpen ? " open" : ""}`}
         role="navigation"
-        aria-label="Dashboard"
+        aria-label={title}
       >
         <div className="row-between" style={{ marginBottom: "1.6rem" }}>
           <Brand href={home} />
           <button
             className="hamburger sidebar-close"
             onClick={() => setNavOpen(false)}
-            aria-label="Close menu"
+            aria-label={t("a11y.closeMenu")}
           >
             ✕
           </button>
         </div>
         <nav style={{ flex: 1 }}>
-          {nav.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              aria-current={pathname === item.href ? "page" : undefined}
-              className={`side-link${pathname === item.href ? " active" : ""}`}
-            >
-              <span aria-hidden>{item.icon}</span>
-              <span>{item.label}</span>
-            </Link>
+          {nav.map((section, si) => (
+            <div className="side-group" key={section.heading ?? `g${si}`}>
+              {section.heading ? (
+                <div className="side-section-title">{section.heading}</div>
+              ) : null}
+              {section.items.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  aria-current={pathname === item.href ? "page" : undefined}
+                  className={`side-link${pathname === item.href ? " active" : ""}`}
+                >
+                  <span aria-hidden>{item.icon}</span>
+                  <span>{item.label}</span>
+                </Link>
+              ))}
+            </div>
           ))}
         </nav>
         <div className="divider" />
         <div className="stack" style={{ gap: "0.5rem" }}>
-          <DirectionToggle className="btn btn-soft" />
+          <LocaleSwitch className="btn btn-soft" />
           <small>{user?.email}</small>
           <button className="btn btn-soft" onClick={() => void onLogout()}>
-            Sign out
+            {t("actions.signOut")}
           </button>
         </div>
       </aside>
@@ -151,7 +212,7 @@ export function DashboardShell({
           <button
             className="hamburger"
             onClick={() => setNavOpen(true)}
-            aria-label="Open menu"
+            aria-label={t("a11y.openMenu")}
             aria-expanded={navOpen}
           >
             ☰

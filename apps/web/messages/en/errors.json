@@ -1,0 +1,11 @@
+{
+  "generic": "Something went wrong. Please try again.",
+  "saveFailed": "Failed to save your changes.",
+  "checkoutFailed": "Checkout failed.",
+  "sendFailed": "Could not send your message.",
+  "page": {
+    "notFoundTitle": "Page not found",
+    "notFoundBody": "The address you were looking for doesn't exist or has moved.",
+    "backHome": "Back to home"
+  }
+}

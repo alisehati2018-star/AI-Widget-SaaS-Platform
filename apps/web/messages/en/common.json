@@ -1,0 +1,40 @@
+{
+  "brand": {
+    "name": "Vitrin",
+    "tagline": "The commerce intelligence platform for Persian stores"
+  },
+  "nav": {
+    "features": "Features",
+    "pricing": "Pricing",
+    "docs": "Docs",
+    "contact": "Contact",
+    "signIn": "Sign in",
+    "startFree": "Start free"
+  },
+  "footer": {
+    "tagline": "Persian hybrid search, a grounded shopping assistant, and a business-insight engine — on-premise and multi-tenant.",
+    "terms": "Terms",
+    "privacy": "Privacy",
+    "admin": "Admin",
+    "copyright": "© {year} Vitrin — AI Commerce Intelligence Platform. On-premise & multi-tenant."
+  },
+  "locale": {
+    "switchToFa": "فارسی",
+    "switchToEn": "English",
+    "label": "Change language"
+  },
+  "actions": {
+    "save": "Save",
+    "delete": "Delete",
+    "signOut": "Sign out"
+  },
+  "states": {
+    "loading": "Loading…",
+    "errorTitle": "Something went wrong"
+  },
+  "a11y": {
+    "skipToContent": "Skip to content",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu"
+  }
+}

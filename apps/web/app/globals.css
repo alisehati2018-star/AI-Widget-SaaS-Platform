@@ -19,7 +19,11 @@
   --shadow: 0 20px 60px -20px rgba(0, 0, 0, 0.6);
   --shadow-glow: 0 0 0 1px rgba(124, 92, 255, 0.25), 0 24px 60px -24px rgba(124, 92, 255, 0.5);
   --maxw: 1140px;
-  --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Vazirmatn", sans-serif;
+  /* Font families are provided by next/font (see app/[locale]/layout.tsx). The
+     Latin face (Inter) is the default; RTL switches to the Persian face below. */
+  --font-latin: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-fa: "Vazirmatn", system-ui, "Segoe UI", Tahoma, sans-serif;
+  --font: var(--font-latin);
 }
 
 * { box-sizing: border-box; }
@@ -163,6 +167,8 @@ small { color: var(--faint); }
 /* ---------- Dashboard shell ---------- */
 .shell { display: grid; grid-template-columns: 248px 1fr; min-height: 100vh; }
 .sidebar { background: var(--bg-soft); border-right: 1px solid var(--border); padding: 1.2rem; display: flex; flex-direction: column; }
+.side-group { margin-bottom: 0.4rem; }
+.side-section-title { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--faint); padding: 0.7rem 0.8rem 0.25rem; }
 .side-link { display: flex; align-items: center; gap: 0.7rem; padding: 0.6rem 0.8rem; border-radius: var(--radius-sm); color: var(--muted); font-weight: 500; margin-bottom: 0.2rem; }
 .side-link:hover { background: var(--panel-2); color: var(--text); }
 .side-link.active { background: rgba(124,92,255,0.12); color: var(--text); border: 1px solid rgba(124,92,255,0.3); }
@@ -187,6 +193,14 @@ small { color: var(--faint); }
 .table th { text-align: left; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--faint); padding: 0.7rem 0.8rem; border-bottom: 1px solid var(--border); }
 .table td { padding: 0.8rem; border-bottom: 1px solid var(--border-soft); font-size: 0.9rem; }
 .table tr:hover td { background: var(--panel); }
+/* Responsive tables: a table never forces page-level horizontal scroll. The
+   wrapper (or any card directly containing a table) scrolls within itself while
+   columns keep a sensible minimum width. */
+.table-wrap { width: 100%; overflow-x: auto; }
+@media (max-width: 760px) {
+  .table { min-width: 560px; }
+  .card:has(> table.table) { overflow-x: auto; }
+}
 
 /* ---------- Misc ---------- */
 .divider { height: 1px; background: var(--border); margin: 1.2rem 0; }
@@ -238,7 +252,82 @@ small { color: var(--faint); }
   .nav-links { display: none; }
 }
 
+/* ---------- Marketing: hero split + product mock ---------- */
+.section-tight { padding: 1rem 0 2rem; }
+.section-head { margin-bottom: 2.5rem; }
+.hero-split { padding: 4.5rem 0 3rem; }
+.hero-grid { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 2.5rem; align-items: center; }
+.hero-copy .hero-sub { margin: 0 0 2rem; }
+.app-mock { border: 1px solid var(--border); border-radius: var(--radius); background: linear-gradient(180deg, var(--panel), var(--bg-soft)); box-shadow: var(--shadow); overflow: hidden; }
+.app-mock-bar { display: flex; align-items: center; gap: 0.4rem; padding: 0.7rem 0.9rem; border-bottom: 1px solid var(--border); background: var(--panel-2); }
+.app-mock-bar .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--faint); opacity: 0.6; }
+.app-mock-tag { margin-inline-start: auto; font-size: 0.72rem; font-weight: 600; color: var(--brand-2); }
+.app-mock-body { padding: 1rem; display: flex; flex-direction: column; gap: 0.6rem; }
+.mock-search { display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 0.8rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-soft); color: var(--muted); font-size: 0.9rem; }
+.mock-result { padding: 0.55rem 0.8rem; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); font-size: 0.85rem; color: var(--text); background: var(--panel); }
+.mock-chat { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.4rem; }
+.mock-bubble { max-width: 85%; padding: 0.55rem 0.8rem; border-radius: 12px; font-size: 0.84rem; line-height: 1.5; }
+.mock-bubble.user { align-self: flex-end; background: var(--brand-grad); color: #0a0b14; font-weight: 500; }
+.mock-bubble.bot { align-self: flex-start; background: var(--panel-2); border: 1px solid var(--border); color: var(--text); }
+
+/* ---------- Stats band ---------- */
+.stats-band { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; padding: 1.5rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); }
+.stats-item { text-align: center; }
+.stats-value { font-size: 1.8rem; font-weight: 800; }
+.stats-label { font-size: 0.82rem; color: var(--muted); margin-top: 0.2rem; }
+
+/* ---------- Deep-dive rows ---------- */
+.deep-row { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 2rem; align-items: center; }
+.deep-row.reverse .deep-copy { order: 2; }
+.deep-copy h3 { font-size: 1.5rem; margin: 0.5rem 0; }
+.deep-visual { display: flex; align-items: center; justify-content: center; min-height: 200px; background: radial-gradient(60% 60% at 50% 40%, rgba(124,92,255,0.18), transparent 70%), linear-gradient(180deg, var(--panel), var(--bg-soft)); }
+.deep-glyph { font-size: 4rem; filter: drop-shadow(0 8px 24px rgba(124,92,255,0.4)); }
+
+/* ---------- Analytics preview ---------- */
+.analytics-preview { display: grid; grid-template-columns: 0.9fr 1.1fr; gap: 2rem; align-items: center; padding: 2.2rem; }
+.analytics-copy h2 { margin: 0.4rem 0; }
+.mini-stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.7rem; margin-bottom: 0.9rem; }
+.mini-stat { padding: 0.8rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-soft); }
+.mini-stat-label { font-size: 0.72rem; color: var(--faint); text-transform: uppercase; letter-spacing: 0.04em; }
+.mini-stat-value { font-size: 1.4rem; font-weight: 800; margin-top: 0.2rem; }
+.mini-list { padding: 0.9rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-soft); }
+.mini-list-title { font-size: 0.78rem; color: var(--faint); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.5rem; }
+.mini-list-row { display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; font-size: 0.85rem; padding: 0.25rem 0; }
+.mini-list-row .bar { height: 8px; border-radius: 999px; background: var(--brand-grad); flex-shrink: 0; max-width: 55%; }
+
+/* ---------- How it works ---------- */
+.how-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.2rem; }
+.how-step { padding: 1.4rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); }
+.how-num { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 50%; background: var(--brand-grad); color: #0a0b14; font-weight: 800; margin-bottom: 0.7rem; }
+
+/* ---------- Testimonials ---------- */
+.quote-card { display: flex; flex-direction: column; gap: 1rem; }
+.quote-card blockquote { margin: 0; font-size: 1rem; line-height: 1.7; color: var(--text); }
+.quote-card figcaption { display: flex; flex-direction: column; gap: 0.1rem; font-size: 0.85rem; }
+
+/* ---------- FAQ ---------- */
+.faq-list { display: flex; flex-direction: column; gap: 0.7rem; }
+.faq-item { border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); overflow: hidden; }
+.faq-item.open { border-color: rgba(124,92,255,0.4); }
+.faq-q { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1.2rem; background: none; border: none; color: var(--text); font: inherit; font-weight: 600; text-align: start; cursor: pointer; }
+.faq-chevron { color: var(--brand-2); font-size: 1.3rem; flex-shrink: 0; }
+.faq-a { margin: 0; padding: 0 1.2rem 1.1rem; color: var(--muted); }
+
+/* ---------- Final CTA ---------- */
+.final-cta { padding: 3rem 2rem; }
+
+@media (max-width: 880px) {
+  .hero-grid, .deep-row, .analytics-preview { grid-template-columns: 1fr; }
+  .deep-row.reverse .deep-copy { order: 0; }
+  .stats-band, .how-grid { grid-template-columns: 1fr 1fr; }
+  .app-mock { order: -1; }
+}
+@media (max-width: 560px) {
+  .stats-band, .how-grid, .mini-stat-grid { grid-template-columns: 1fr; }
+}
+
 /* ---------- RTL ---------- */
+[dir="rtl"] body { font-family: var(--font-fa); }
 [dir="rtl"] .sidebar { border-right: none; border-left: 1px solid var(--border); }
 [dir="rtl"] .table th, [dir="rtl"] .table td { text-align: right; }
 [dir="rtl"] .feature-list li { flex-direction: row-reverse; }

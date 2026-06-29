@@ -1,13 +1,13 @@
-import Link from "next/link";
+import { useTranslations } from "next-intl";
 import type { InputHTMLAttributes, ReactNode } from "react";
+import { Link } from "@/i18n/navigation";
 
 export function Brand({ href = "/" }: { href?: string }) {
+  const t = useTranslations("common");
   return (
     <Link href={href} className="brand">
       <span className="brand-mark">V</span>
-      <span>
-        Vitrin<span className="muted" style={{ fontWeight: 500 }}>.ai</span>
-      </span>
+      <span>{t("brand.name")}</span>
     </Link>
   );
 }
@@ -50,6 +50,12 @@ export function Badge({
   tone?: "success" | "warning" | "brand";
 }) {
   return <span className={`badge${tone ? ` badge-${tone}` : ""}`}>{children}</span>;
+}
+
+/** Wraps a table so it scrolls within its own box instead of overflowing the
+ *  page. Use for wide tables that may exceed the viewport on small screens. */
+export function TableWrap({ children }: { children: ReactNode }) {
+  return <div className="table-wrap">{children}</div>;
 }
 
 export function Stat({ label, value }: { label: string; value: ReactNode }) {
