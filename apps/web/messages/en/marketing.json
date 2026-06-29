@@ -1,0 +1,109 @@
+{
+  "home": {
+    "eyebrow": "◆ AI Revenue & Intelligence Layer for E-Commerce",
+    "titleLead": "Make your store",
+    "titleHighlight": "intelligent",
+    "titleTail": ".",
+    "subtitle": "Vitrin adds Persian hybrid search, a grounded shopping assistant, and a business-insight engine to OpenCart & WooCommerce — on-premise, multi-tenant, and cost-controlled.",
+    "ctaPrimary": "Start free",
+    "ctaSecondary": "See pricing",
+    "features": {
+      "heading": "Not a chat widget. A revenue layer.",
+      "subheading": "Three AI roles in one system: sales assistant, business analyst, and insight engine.",
+      "items": [
+        { "title": "Persian hybrid search", "body": "BM25 + dense vectors fused with RRF, ZWNJ-aware analysis and synonyms — search that actually understands Farsi." },
+        { "title": "Grounded shopping assistant", "body": "A RAG assistant that answers only from the store's own catalogue — no hallucinated products, with streaming replies." },
+        { "title": "AI business analyst", "body": "Ask 'why did sales drop?' in plain language and get grounded answers from your real store data." },
+        { "title": "Customer insight engine", "body": "Demand gaps, zero-result mining, lead capture and AI-attributed revenue — turn search into growth." },
+        { "title": "Cost-controlled AI", "body": "A local-first gateway (cache → route → compress) keeps most traffic off paid APIs with credit-based billing." },
+        { "title": "Secure multi-tenancy", "body": "Hard tenant isolation, scoped API keys, audit logging and GDPR controls — built for on-premise." }
+      ]
+    },
+    "cta": {
+      "title": "Ready to upgrade your store search?",
+      "subtitle": "Spin up a free tenant in seconds. No credit card required.",
+      "button": "Create your store"
+    }
+  },
+  "features": {
+    "title": "Everything your store needs to get intelligent",
+    "subtitle": "Search, assistant, and analytics — one on-premise platform.",
+    "cta": "Start free",
+    "sections": [
+      { "title": "Persian hybrid search", "points": ["BM25 keyword + dense-vector semantic search fused with RRF.", "ZWNJ normalization, a Persian analyzer, and editable synonyms.", "Sub-150ms p95 latency with DiskBBQ vector compression."] },
+      { "title": "Grounded shopping assistant", "points": ["RAG over your own catalogue — never invents products.", "Streaming replies with prompt-injection guardrails.", "Multilingual: Persian, English, German, Arabic."] },
+      { "title": "Business analyst & insight engine", "points": ["Ask 'why did sales drop?' in natural language.", "Most-wanted, zero-result mining, and demand-gap discovery.", "Lead capture, intent detection, and AI-attributed revenue."] },
+      { "title": "Secure, on-premise multi-tenancy", "points": ["Hard tenant isolation enforced on every query.", "Scoped least-privilege API keys + full audit log.", "GDPR controls: export, erase, and tracking toggles."] },
+      { "title": "Cost-controlled AI gateway", "points": ["Cache → route → compress ladder keeps traffic off paid APIs.", "Credit-based billing with per-model multipliers.", "Multi-provider failover ending at a local model."] },
+      { "title": "Drop-in integrations", "points": ["OpenCart module + WooCommerce plugin.", "Event-driven incremental sync — only deltas are sent.", "Custom REST / webhook / bulk-import APIs."] }
+    ]
+  },
+  "pricing": {
+    "title": "Simple, usage-based pricing",
+    "subtitle": "Start free. Upgrade when your store grows. Cancel anytime.",
+    "mostPopular": "Most popular",
+    "custom": "Custom",
+    "free": "Free",
+    "perMonth": "/mo",
+    "getStarted": "Get started",
+    "contactSales": "Contact sales",
+    "fallback": {
+      "free": { "name": "Free", "description": "Try Persian hybrid search on one store.", "features": ["1 store", "Hybrid Persian search", "5k AI credits/mo", "Community support"] },
+      "starter": { "name": "Starter", "description": "For growing stores that want the assistant.", "features": ["1 store", "Search + RAG assistant", "50k AI credits/mo", "Analytics dashboard", "Email support"] },
+      "pro": { "name": "Pro", "description": "Full intelligence layer with insight + leads.", "features": ["3 stores", "Everything in Starter", "Insight & lead engine", "250k AI credits/mo", "Priority support"] },
+      "enterprise": { "name": "Enterprise", "description": "On-prem, SSO, custom limits and SLA.", "features": ["Unlimited stores", "Self-hosted models", "SSO + audit", "Custom SLA", "Dedicated support"] }
+    }
+  },
+  "docs": {
+    "title": "Documentation",
+    "subtitle": "Everything you need to integrate Vitrin into your store.",
+    "ctaTitle": "Ready to build?",
+    "ctaSubtitle": "Create your store and grab an API key in minutes.",
+    "ctaButton": "Start free",
+    "sections": [
+      { "title": "Getting started", "items": ["Create an account and verify your email.", "Open your dashboard → create a sync-scoped API key.", "Connect your store (WooCommerce / OpenCart) and run the first import.", "Add a widget-scoped key and embed the search + chat widget."] },
+      { "title": "API surface", "items": ["POST /v1/search — hybrid Persian search (filters + pagination).", "GET /v1/suggest — instant autocomplete.", "POST /v1/chat (+ /chat/stream) — grounded RAG assistant.", "POST /v1/sync/webhook — push catalogue changes.", "All /v1 calls authenticate with an x-api-key and are tenant-scoped."] },
+      { "title": "Widget", "items": ["Embed the loader snippet before </body> with your widget key.", "Customize logo and accent color under Widget & brand.", "The widget calls /v1/search and /v1/chat on the shopper's behalf."] },
+      { "title": "Security & data", "items": ["Hard tenant isolation: every query carries a mandatory tenant filter.", "Scoped least-privilege API keys; only hashes are stored.", "GDPR: export, erase, and disable tracking from dashboard settings."] }
+    ]
+  },
+  "contact": {
+    "title": "Talk to us",
+    "subtitle": "Questions about enterprise, on-prem deployment, or pricing? We'll get back to you.",
+    "success": "Thanks — we've received your message and will reply soon.",
+    "name": "Name",
+    "email": "Email",
+    "message": "Message",
+    "send": "Send message"
+  },
+  "legal": {
+    "updated": "Last updated: 2026-06-21",
+    "contactPrefix": "Questions? Reach us via the ",
+    "contactLink": "contact page",
+    "contactSuffix": ".",
+    "terms": {
+      "title": "Terms of Service",
+      "sections": [
+        { "heading": "1. Agreement", "body": "These Terms govern your access to and use of the Vitrin platform (\"Service\"). By creating an account or using the Service you agree to these Terms. If you are using the Service on behalf of an organization, you accept these Terms for that organization." },
+        { "heading": "2. Accounts", "body": "You are responsible for safeguarding your credentials and for all activity under your account. Notify us promptly of any unauthorized use. You must provide accurate information and verify your email address." },
+        { "heading": "3. Plans & billing", "body": "Paid plans are billed per the pricing shown at checkout. Credits and quotas reset each billing period. Manual/invoice payments activate access on confirmation. Fees are non-refundable except where required by law." },
+        { "heading": "4. Acceptable use", "body": "You may not use the Service to violate any law, infringe rights, transmit malware, or attempt to breach tenant isolation or access data that is not yours." },
+        { "heading": "5. Data & tenancy", "body": "Each store is an isolated tenant. You retain ownership of your catalogue and customer data. We process it solely to provide the Service, per our Privacy Policy." },
+        { "heading": "6. Availability & changes", "body": "We aim for high availability but the Service is provided \"as is\". We may update features and these Terms; material changes will be communicated." },
+        { "heading": "7. Termination", "body": "You may cancel at any time. We may suspend accounts that violate these Terms. On termination you may export your data for a reasonable period." }
+      ]
+    },
+    "privacy": {
+      "title": "Privacy Policy",
+      "sections": [
+        { "heading": "1. Who we are", "body": "Vitrin is an on-premise, multi-tenant AI commerce intelligence platform. This policy explains what we process and your rights. For self-hosted deployments, the store operator is the data controller." },
+        { "heading": "2. What we process", "body": "Account data (name, email, hashed password), tenant/store settings, catalogue data you sync, search and chat events, and in-conversation leads. Passwords are stored only as salted PBKDF2 hashes; API keys only as hashes." },
+        { "heading": "3. How we use it", "body": "To provide search, the assistant, analytics, and billing; to secure the Service; and to communicate essential account notices (verification, password resets, invoices)." },
+        { "heading": "4. Tenant isolation", "body": "Every query is scoped to your tenant. Data is never shared across tenants. Access is governed by scoped least-privilege API keys and role-based controls." },
+        { "heading": "5. Your rights (GDPR)", "body": "You can export your tenant's data, disable behavioural tracking, and request erasure from your dashboard settings or via support. We honor access, rectification, and deletion requests." },
+        { "heading": "6. Retention", "body": "We retain data for the life of your account and a limited period afterward for legal and operational needs, then erase or anonymize it." },
+        { "heading": "7. Sub-processors & AI", "body": "The platform is local-first: most traffic is served by self-hosted models and cache. Any external AI provider is used only as a fallback and receives the minimum necessary context." }
+      ]
+    }
+  }
+}
