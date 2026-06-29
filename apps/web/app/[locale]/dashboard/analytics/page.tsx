@@ -1,10 +1,9 @@
 "use client";
 
 import { useLocale, useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
 import type { AnalyticsBundle } from "@/lib/api";
-import { authFetch } from "@/lib/auth";
 import { formatNumber } from "@/lib/datetime";
+import { useResource } from "@/lib/hooks/useResource";
 import type { Locale } from "@/i18n/routing";
 import { DashboardShell, useOwnerNav } from "@/components/shell";
 import { Stat } from "@/components/ui";
@@ -13,11 +12,7 @@ export default function AnalyticsPage() {
   const t = useTranslations("dashboard");
   const locale = useLocale() as Locale;
   const nav = useOwnerNav();
-  const [data, setData] = useState<AnalyticsBundle | null>(null);
-
-  useEffect(() => {
-    authFetch<AnalyticsBundle>("/tenant/analytics").then(setData).catch(() => setData(null));
-  }, []);
+  const { data } = useResource<AnalyticsBundle>("/tenant/analytics");
 
   const fd = data?.four_dimensions;
   const pct = (v: number) => formatNumber(v, locale, { style: "percent", maximumFractionDigits: 0 });

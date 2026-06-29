@@ -1,9 +1,8 @@
 "use client";
 
 import { useLocale, useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
-import { authFetch } from "@/lib/auth";
 import { formatDateTime, formatNumber } from "@/lib/datetime";
+import { useResource } from "@/lib/hooks/useResource";
 import type { Locale } from "@/i18n/routing";
 import { DashboardShell, useOwnerNav } from "@/components/shell";
 import { Badge, Spinner, Stat } from "@/components/ui";
@@ -26,11 +25,7 @@ export default function CreditsPage() {
   const t = useTranslations("dashboard");
   const locale = useLocale() as Locale;
   const nav = useOwnerNav();
-  const [data, setData] = useState<CreditsResp | null>(null);
-
-  useEffect(() => {
-    authFetch<CreditsResp>("/tenant/credits").then(setData).catch(() => setData(null));
-  }, []);
+  const { data } = useResource<CreditsResp>("/tenant/credits");
 
   const remaining = data?.cap != null ? Math.max(0, data.cap - data.used) : null;
   const num = (n: number | null | undefined) =>

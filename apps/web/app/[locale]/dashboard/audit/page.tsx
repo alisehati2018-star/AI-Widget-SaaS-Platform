@@ -1,10 +1,9 @@
 "use client";
 
 import { useLocale, useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
 import type { AuditEntry } from "@/lib/api";
-import { authFetch } from "@/lib/auth";
 import { formatDateTime } from "@/lib/datetime";
+import { useResource } from "@/lib/hooks/useResource";
 import type { Locale } from "@/i18n/routing";
 import { DashboardShell, useOwnerNav } from "@/components/shell";
 import { Badge, Spinner } from "@/components/ui";
@@ -13,13 +12,8 @@ export default function ActivityPage() {
   const t = useTranslations("dashboard");
   const locale = useLocale() as Locale;
   const nav = useOwnerNav();
-  const [entries, setEntries] = useState<AuditEntry[] | null>(null);
-
-  useEffect(() => {
-    authFetch<{ entries: AuditEntry[] }>("/tenant/audit")
-      .then((r) => setEntries(r.entries))
-      .catch(() => setEntries([]));
-  }, []);
+  const { data, loading } = useResource<{ entries: AuditEntry[] }>("/tenant/audit");
+  const entries = loading ? null : (data?.entries ?? []);
 
   return (
     <DashboardShell title={t("nav.activity")} nav={nav}>

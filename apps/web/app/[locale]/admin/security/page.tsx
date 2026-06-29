@@ -1,9 +1,8 @@
 "use client";
 
 import { useLocale, useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
-import { authFetch } from "@/lib/auth";
 import { formatDateTime, formatNumber } from "@/lib/datetime";
+import { useResource } from "@/lib/hooks/useResource";
 import type { Locale } from "@/i18n/routing";
 import { DashboardShell, useAdminNav } from "@/components/shell";
 import { Badge, Spinner, Stat } from "@/components/ui";
@@ -20,11 +19,7 @@ export default function AdminSecurity() {
   const t = useTranslations("admin");
   const locale = useLocale() as Locale;
   const nav = useAdminNav();
-  const [data, setData] = useState<SecResp | null>(null);
-
-  useEffect(() => {
-    authFetch<SecResp>("/admin/security").then(setData).catch(() => setData(null));
-  }, []);
+  const { data } = useResource<SecResp>("/admin/security");
 
   const num = (n: number | undefined) => (n != null ? formatNumber(n, locale) : "—");
 

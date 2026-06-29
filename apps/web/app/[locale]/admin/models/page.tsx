@@ -1,9 +1,8 @@
 "use client";
 
 import { useLocale, useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
-import { authFetch } from "@/lib/auth";
 import { formatNumber } from "@/lib/datetime";
+import { useResource } from "@/lib/hooks/useResource";
 import type { Locale } from "@/i18n/routing";
 import { DashboardShell, useAdminNav } from "@/components/shell";
 import { Badge, Spinner } from "@/components/ui";
@@ -23,11 +22,7 @@ export default function AdminModels() {
   const t = useTranslations("admin");
   const locale = useLocale() as Locale;
   const nav = useAdminNav();
-  const [data, setData] = useState<Models | null>(null);
-
-  useEffect(() => {
-    authFetch<Models>("/admin/models").then(setData).catch(() => setData(null));
-  }, []);
+  const { data } = useResource<Models>("/admin/models");
 
   if (!data) {
     return (

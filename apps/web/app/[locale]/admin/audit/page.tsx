@@ -1,10 +1,9 @@
 "use client";
 
 import { useLocale, useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
 import type { AuditEntry } from "@/lib/api";
-import { authFetch } from "@/lib/auth";
 import { formatDateTime } from "@/lib/datetime";
+import { useResource } from "@/lib/hooks/useResource";
 import type { Locale } from "@/i18n/routing";
 import { DashboardShell, useAdminNav } from "@/components/shell";
 import { Badge, Spinner } from "@/components/ui";
@@ -13,14 +12,8 @@ export default function AdminAudit() {
   const t = useTranslations("admin");
   const locale = useLocale() as Locale;
   const nav = useAdminNav();
-  const [entries, setEntries] = useState<AuditEntry[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    authFetch<{ entries: AuditEntry[] }>("/admin/audit")
-      .then((r) => setEntries(r.entries))
-      .catch((e) => setError(String(e.message ?? e)));
-  }, []);
+  const { data, error, loading } = useResource<{ entries: AuditEntry[] }>("/admin/audit");
+  const entries = loading ? null : (data?.entries ?? []);
 
   return (
     <DashboardShell title={t("audit.title")} nav={nav} requireAdmin loginHref="/admin/login">

@@ -1,9 +1,8 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
 import { Link } from "@/i18n/navigation";
-import { authFetch } from "@/lib/auth";
+import { useResource } from "@/lib/hooks/useResource";
 import { DashboardShell, useAdminNav } from "@/components/shell";
 import { Badge } from "@/components/ui";
 
@@ -20,14 +19,8 @@ interface Tenant {
 export default function AdminTenants() {
   const t = useTranslations("admin");
   const nav = useAdminNav();
-  const [tenants, setTenants] = useState<Tenant[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    authFetch<{ tenants: Tenant[] }>("/admin/tenants")
-      .then((r) => setTenants(r.tenants))
-      .catch((e) => setError(String(e.message ?? e)));
-  }, []);
+  const { data, error, loading } = useResource<{ tenants: Tenant[] }>("/admin/tenants");
+  const tenants = loading ? null : (data?.tenants ?? []);
 
   return (
     <DashboardShell title={t("tenants.title")} nav={nav} requireAdmin loginHref="/admin/login">

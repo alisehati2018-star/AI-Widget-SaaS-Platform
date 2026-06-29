@@ -1,9 +1,8 @@
 "use client";
 
 import { useLocale, useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
-import { authFetch } from "@/lib/auth";
 import { formatNumber } from "@/lib/datetime";
+import { useResource } from "@/lib/hooks/useResource";
 import type { Locale } from "@/i18n/routing";
 import { DashboardShell, useAdminNav } from "@/components/shell";
 import { Stat } from "@/components/ui";
@@ -19,14 +18,7 @@ export default function AdminOverview() {
   const t = useTranslations("admin");
   const locale = useLocale() as Locale;
   const nav = useAdminNav();
-  const [data, setData] = useState<Overview | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    authFetch<Overview>("/admin/overview")
-      .then(setData)
-      .catch((e) => setError(String(e.message ?? e)));
-  }, []);
+  const { data, error } = useResource<Overview>("/admin/overview");
 
   const num = (n: number | undefined) => (n != null ? formatNumber(n, locale) : "—");
 

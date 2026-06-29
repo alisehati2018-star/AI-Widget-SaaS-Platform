@@ -191,6 +191,14 @@ small { color: var(--faint); }
 .table th { text-align: left; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--faint); padding: 0.7rem 0.8rem; border-bottom: 1px solid var(--border); }
 .table td { padding: 0.8rem; border-bottom: 1px solid var(--border-soft); font-size: 0.9rem; }
 .table tr:hover td { background: var(--panel); }
+/* Responsive tables: a table never forces page-level horizontal scroll. The
+   wrapper (or any card directly containing a table) scrolls within itself while
+   columns keep a sensible minimum width. */
+.table-wrap { width: 100%; overflow-x: auto; }
+@media (max-width: 760px) {
+  .table { min-width: 560px; }
+  .card:has(> table.table) { overflow-x: auto; }
+}
 
 /* ---------- Misc ---------- */
 .divider { height: 1px; background: var(--border); margin: 1.2rem 0; }

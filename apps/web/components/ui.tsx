@@ -52,6 +52,12 @@ export function Badge({
   return <span className={`badge${tone ? ` badge-${tone}` : ""}`}>{children}</span>;
 }
 
+/** Wraps a table so it scrolls within its own box instead of overflowing the
+ *  page. Use for wide tables that may exceed the viewport on small screens. */
+export function TableWrap({ children }: { children: ReactNode }) {
+  return <div className="table-wrap">{children}</div>;
+}
+
 export function Stat({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="card stat">

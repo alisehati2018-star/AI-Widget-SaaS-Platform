@@ -1,10 +1,10 @@
 "use client";
 
 import { useLocale, useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
 import type { Lead } from "@/lib/api";
 import { authFetch } from "@/lib/auth";
 import { formatDate, formatNumber } from "@/lib/datetime";
+import { useResource } from "@/lib/hooks/useResource";
 import type { Locale } from "@/i18n/routing";
 import { DashboardShell, useOwnerNav } from "@/components/shell";
 import { Badge, Spinner, Stat } from "@/components/ui";
@@ -13,11 +13,8 @@ export default function LeadsPage() {
   const t = useTranslations("dashboard");
   const locale = useLocale() as Locale;
   const nav = useOwnerNav();
-  const [leads, setLeads] = useState<Lead[] | null>(null);
-
-  useEffect(() => {
-    authFetch<{ leads: Lead[] }>("/tenant/leads").then((r) => setLeads(r.leads)).catch(() => setLeads([]));
-  }, []);
+  const { data, loading } = useResource<{ leads: Lead[] }>("/tenant/leads");
+  const leads = loading ? null : (data?.leads ?? []);
 
   async function exportData() {
     const data = await authFetch<unknown>("/tenant/export").catch(() => null);
