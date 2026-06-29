@@ -7,7 +7,9 @@
   --border-soft: #20243454;
   --text: #eef0f6;
   --muted: #9aa0b4;
-  --faint: #6b7187;
+  /* --faint lightened from #6b7187 → meets WCAG AA (~5:1) for small text on
+     the dark background (used for hints, timestamps, captions). */
+  --faint: #858ca3;
   --brand: #7c5cff;
   --brand-2: #4dd0e1;
   --brand-grad: linear-gradient(120deg, #7c5cff 0%, #5b8cff 50%, #4dd0e1 100%);
@@ -27,6 +29,7 @@
 }
 
 * { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
 html, body { padding: 0; margin: 0; }
 body {
   background: var(--bg);
@@ -340,4 +343,14 @@ small { color: var(--faint); }
 @media (max-width: 880px) {
   [dir="rtl"] .sidebar { inset: 0 0 0 auto; transform: translateX(100%); }
   [dir="rtl"] .sidebar.open { transform: translateX(0); }
+}
+
+/* ---------- Reduced motion (a11y) ---------- */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
