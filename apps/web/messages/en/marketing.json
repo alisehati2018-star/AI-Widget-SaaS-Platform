@@ -79,10 +79,10 @@
     "useCases": {
       "title": "For any store that wants to sell more",
       "items": [
-        { "icon": "📱", "title": "Digital & electronics", "body": "Large catalogues with technical specs; shoppers search in their own words and land on the right product." },
-        { "icon": "👗", "title": "Fashion & apparel", "body": "Style, colour and size search with smart recommendations lifts conversion." },
-        { "icon": "🏬", "title": "Multi-vendor marketplace", "body": "Hard isolation per seller with dedicated search and analytics, on one platform." },
-        { "icon": "🏠", "title": "Home & appliances", "body": "Guide shoppers across models and brands with an assistant that only answers from your stock." }
+        { "icon": "smartphone", "title": "Digital & electronics", "body": "Large catalogues with technical specs; shoppers search in their own words and land on the right product." },
+        { "icon": "fashion", "title": "Fashion & apparel", "body": "Style, colour and size search with smart recommendations lifts conversion." },
+        { "icon": "tenants", "title": "Multi-vendor marketplace", "body": "Hard isolation per seller with dedicated search and analytics, on one platform." },
+        { "icon": "home", "title": "Home & appliances", "body": "Guide shoppers across models and brands with an assistant that only answers from your stock." }
       ]
     },
     "how": {

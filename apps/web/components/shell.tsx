@@ -4,13 +4,14 @@ import { useTranslations } from "next-intl";
 import { type ReactNode, useEffect, useState } from "react";
 import { Link, usePathname, useRouter } from "@/i18n/navigation";
 import { logout, useSession } from "@/lib/auth";
+import { Icon, type IconName } from "./icons";
 import { LocaleSwitch } from "./locale-switch";
 import { Brand, Spinner } from "./ui";
 
 export interface NavItem {
   href: string;
   label: string;
-  icon: string;
+  icon: IconName;
 }
 
 /** A labelled group of nav items (heading omitted for the top/un-grouped set). */
@@ -24,41 +25,41 @@ export function useOwnerNav(): NavSection[] {
   const t = useTranslations("dashboard");
   return [
     {
-      items: [{ href: "/dashboard", label: t("nav.overview"), icon: "📊" }],
+      items: [{ href: "/dashboard", label: t("nav.overview"), icon: "overview" }],
     },
     {
       heading: t("nav.groupStore"),
       items: [
-        { href: "/dashboard/catalog", label: t("nav.catalog"), icon: "📦" },
-        { href: "/dashboard/search", label: t("nav.search"), icon: "🔎" },
-        { href: "/dashboard/widget", label: t("nav.widget"), icon: "🎨" },
+        { href: "/dashboard/catalog", label: t("nav.catalog"), icon: "catalog" },
+        { href: "/dashboard/search", label: t("nav.search"), icon: "search" },
+        { href: "/dashboard/widget", label: t("nav.widget"), icon: "widget" },
       ],
     },
     {
       heading: t("nav.groupAssistant"),
       items: [
-        { href: "/dashboard/assistant", label: t("nav.assistant"), icon: "🤖" },
-        { href: "/dashboard/knowledge", label: t("nav.knowledge"), icon: "📚" },
+        { href: "/dashboard/assistant", label: t("nav.assistant"), icon: "assistant" },
+        { href: "/dashboard/knowledge", label: t("nav.knowledge"), icon: "knowledge" },
       ],
     },
     {
       heading: t("nav.groupInsights"),
       items: [
-        { href: "/dashboard/analytics", label: t("nav.analytics"), icon: "📈" },
-        { href: "/dashboard/chat", label: t("nav.chat"), icon: "💬" },
-        { href: "/dashboard/sales", label: t("nav.conversion"), icon: "🛒" },
-        { href: "/dashboard/leads", label: t("nav.leads"), icon: "🎯" },
+        { href: "/dashboard/analytics", label: t("nav.analytics"), icon: "analytics" },
+        { href: "/dashboard/chat", label: t("nav.chat"), icon: "chat" },
+        { href: "/dashboard/sales", label: t("nav.conversion"), icon: "conversion" },
+        { href: "/dashboard/leads", label: t("nav.leads"), icon: "leads" },
       ],
     },
     {
       heading: t("nav.groupAccount"),
       items: [
-        { href: "/dashboard/keys", label: t("nav.keys"), icon: "🔑" },
-        { href: "/dashboard/team", label: t("nav.team"), icon: "👥" },
-        { href: "/dashboard/credits", label: t("nav.credits"), icon: "🎟️" },
-        { href: "/dashboard/billing", label: t("nav.billing"), icon: "💳" },
-        { href: "/dashboard/audit", label: t("nav.activity"), icon: "📜" },
-        { href: "/dashboard/settings", label: t("nav.settings"), icon: "⚙️" },
+        { href: "/dashboard/keys", label: t("nav.keys"), icon: "keys" },
+        { href: "/dashboard/team", label: t("nav.team"), icon: "team" },
+        { href: "/dashboard/credits", label: t("nav.credits"), icon: "credits" },
+        { href: "/dashboard/billing", label: t("nav.billing"), icon: "billing" },
+        { href: "/dashboard/audit", label: t("nav.activity"), icon: "activity" },
+        { href: "/dashboard/settings", label: t("nav.settings"), icon: "settings" },
       ],
     },
   ];
@@ -69,35 +70,35 @@ export function useAdminNav(): NavSection[] {
   const t = useTranslations("admin");
   return [
     {
-      items: [{ href: "/admin", label: t("nav.overview"), icon: "📊" }],
+      items: [{ href: "/admin", label: t("nav.overview"), icon: "overview" }],
     },
     {
       heading: t("nav.groupCustomers"),
       items: [
-        { href: "/admin/tenants", label: t("nav.tenants"), icon: "🏬" },
-        { href: "/admin/users", label: t("nav.users"), icon: "👤" },
+        { href: "/admin/tenants", label: t("nav.tenants"), icon: "tenants" },
+        { href: "/admin/users", label: t("nav.users"), icon: "users" },
       ],
     },
     {
       heading: t("nav.groupRevenue"),
       items: [
-        { href: "/admin/plans", label: t("nav.plans"), icon: "🏷️" },
-        { href: "/admin/billing", label: t("nav.billing"), icon: "💳" },
-        { href: "/admin/usage", label: t("nav.usage"), icon: "📶" },
-        { href: "/admin/analytics", label: t("nav.analytics"), icon: "📈" },
+        { href: "/admin/plans", label: t("nav.plans"), icon: "plans" },
+        { href: "/admin/billing", label: t("nav.billing"), icon: "billing" },
+        { href: "/admin/usage", label: t("nav.usage"), icon: "usage" },
+        { href: "/admin/analytics", label: t("nav.analytics"), icon: "analytics" },
       ],
     },
     {
       heading: t("nav.groupPlatform"),
       items: [
-        { href: "/admin/models", label: t("nav.models"), icon: "🧠" },
-        { href: "/admin/queue", label: t("nav.queue"), icon: "🧵" },
-        { href: "/admin/health", label: t("nav.health"), icon: "❤️" },
-        { href: "/admin/security", label: t("nav.security"), icon: "🛡️" },
-        { href: "/admin/synonyms", label: t("nav.synonyms"), icon: "🔤" },
-        { href: "/admin/flags", label: t("nav.flags"), icon: "🚩" },
-        { href: "/admin/audit", label: t("nav.audit"), icon: "📜" },
-        { href: "/admin/settings", label: t("nav.settings"), icon: "⚙️" },
+        { href: "/admin/models", label: t("nav.models"), icon: "models" },
+        { href: "/admin/queue", label: t("nav.queue"), icon: "queue" },
+        { href: "/admin/health", label: t("nav.health"), icon: "health" },
+        { href: "/admin/security", label: t("nav.security"), icon: "security" },
+        { href: "/admin/synonyms", label: t("nav.synonyms"), icon: "synonyms" },
+        { href: "/admin/flags", label: t("nav.flags"), icon: "flags" },
+        { href: "/admin/audit", label: t("nav.audit"), icon: "activity" },
+        { href: "/admin/settings", label: t("nav.settings"), icon: "settings" },
       ],
     },
   ];
@@ -191,7 +192,7 @@ export function DashboardShell({
                   aria-current={pathname === item.href ? "page" : undefined}
                   className={`side-link${pathname === item.href ? " active" : ""}`}
                 >
-                  <span aria-hidden>{item.icon}</span>
+                  <Icon name={item.icon} />
                   <span>{item.label}</span>
                 </Link>
               ))}

@@ -26,9 +26,9 @@ resume at any time. Branch: `claude/gallant-shannon-8b31td`.
 | 8 | Design-system polish (a11y contrast, reduced motion) | ✅ done | `c765ad4` |
 | 9 | Consolidated QA automation | ✅ done | `3c50e76` |
 | — | RTL skip-link + verification pass | ✅ done | `4b45db8` |
-| **10** | **Functional Frontend Completion** | ✅ **done** | _this phase_ |
-| 11 | Iconography — emoji → SVG icon set | ⏳ planned | — |
-| 12 | Marketing supporting-page redesign (features/pricing/docs/contact) | ⏳ planned | — |
+| 10 | Functional Frontend Completion | ✅ done | `9f49202` |
+| **11** | **Iconography — emoji → SVG icon set** | ✅ **done** | _this phase_ |
+| 12 | Marketing supporting-page redesign (pricing/docs/contact) | ⏳ planned | — |
 | 13 | Measurement (Lighthouse/axe) + localized backend emails | ⏳ planned | — |
 
 > Note: the visual redesign phases (3–9) were already complete when the
@@ -46,11 +46,16 @@ intentionally read-only. Full audit: `reports/frontend/phase-10-functional.md`.
 - **Needs a backend endpoint first** (not frontend gaps): KB edit, plan editing,
   authenticated change-password/email, lead status. Tracked for backend.
 
+## Phase 11 — Iconography (done)
+Replaced every emoji glyph with a cohesive inline-SVG `Icon` set
+(`components/icons.tsx`, ~34 line icons, 24×24, currentColor). Rewired the owner
++ admin sidebars, marketing feature/use-case/deep-dive/hero icons, the features
+page, and the localized 404. Verified: 14 SVGs render on the landing, 0 emoji
+remain, responsive sweep 0 overflow. (`/features` content already done;
+`pricing` keeps its data-driven cards — its icons were already non-emoji.)
+
 ## Remaining design phases (planned)
-- **11 — Iconography:** replace emoji glyphs (nav, features, use-cases, steps)
-  with a cohesive inline-SVG `Icon` component. Biggest remaining visual/“enterprise”
-  win. Files: `components/ui` (+ new `icons`), `shell`, marketing sections.
-- **12 — Marketing supporting pages:** give `/features`, `/pricing`, `/docs`,
+- **12 — Marketing supporting pages:** give `/pricing`, `/docs`,
   `/contact` the same section quality as the landing (Phase 3).
 - **13 — Measurement & emails:** run Lighthouse + axe, fix findings; localize the
   backend notification emails (verification/reset/invoice) per recipient locale.
