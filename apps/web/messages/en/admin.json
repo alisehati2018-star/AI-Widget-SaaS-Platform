@@ -60,7 +60,17 @@
     "colPlan": "Plan",
     "colSubscription": "Subscription",
     "colStatus": "Status",
-    "empty": "No tenants yet."
+    "empty": "No tenants yet.",
+    "createTitle": "Create a tenant",
+    "slug": "Slug",
+    "slugPlaceholder": "demo-store",
+    "name": "Store name",
+    "namePlaceholder": "Demo Store",
+    "scope": "Initial key scope",
+    "scopeWidget": "widget",
+    "scopeSync": "sync",
+    "create": "Create tenant",
+    "created": "Tenant created — copy this API key now (it won't be shown again):"
   },
   "tenantDetail": {
     "title": "Tenant detail",
@@ -73,6 +83,7 @@
     "governanceHint": "Operator controls for this tenant's data.",
     "enableTracking": "Enable tracking",
     "disableTracking": "Disable tracking",
+    "exportData": "Export data (JSON)",
     "eraseData": "Erase all data",
     "eraseConfirm": "Erase ALL data for this tenant? This cannot be undone.",
     "noteTrackingOn": "Tracking enabled.",

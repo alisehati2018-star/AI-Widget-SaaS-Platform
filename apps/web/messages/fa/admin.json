@@ -60,7 +60,17 @@
     "colPlan": "پلن",
     "colSubscription": "اشتراک",
     "colStatus": "وضعیت",
-    "empty": "هنوز مستأجری نیست."
+    "empty": "هنوز مستأجری نیست.",
+    "createTitle": "ساخت مستأجر جدید",
+    "slug": "شناسه (slug)",
+    "slugPlaceholder": "demo-store",
+    "name": "نام فروشگاه",
+    "namePlaceholder": "فروشگاه نمونه",
+    "scope": "دامنهٔ کلید اولیه",
+    "scopeWidget": "ویجت",
+    "scopeSync": "همگام‌سازی",
+    "create": "ساخت مستأجر",
+    "created": "مستأجر ساخته شد — این کلید API را همین حالا کپی کنید (دیگر نمایش داده نمی‌شود):"
   },
   "tenantDetail": {
     "title": "جزئیات مستأجر",
@@ -73,6 +83,7 @@
     "governanceHint": "کنترل‌های اپراتور برای دادهٔ این مستأجر.",
     "enableTracking": "فعال‌سازی ردیابی",
     "disableTracking": "غیرفعال‌سازی ردیابی",
+    "exportData": "خروجی داده‌ها (JSON)",
     "eraseData": "حذف همهٔ داده‌ها",
     "eraseConfirm": "همهٔ دادهٔ این مستأجر حذف شود؟ این عمل بازگشت‌ناپذیر است.",
     "noteTrackingOn": "ردیابی فعال شد.",
