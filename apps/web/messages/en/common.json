@@ -29,8 +29,7 @@
     "signOut": "Sign out"
   },
   "states": {
-    "loading": "Loading…",
-    "errorTitle": "Something went wrong"
+    "loading": "Loading…"
   },
   "a11y": {
     "skipToContent": "Skip to content",

@@ -140,7 +140,7 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Frontend QA gates (web)
         if: matrix.app == 'apps/web'
-        run: npm run lint
+        run: npm run check:all
       - name: Type-check
         run: npx tsc --noEmit
       - name: Build

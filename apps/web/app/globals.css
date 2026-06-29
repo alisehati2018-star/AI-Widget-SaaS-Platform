@@ -199,7 +199,6 @@ small { color: var(--faint); }
 /* Responsive tables: a table never forces page-level horizontal scroll. The
    wrapper (or any card directly containing a table) scrolls within itself while
    columns keep a sensible minimum width. */
-.table-wrap { width: 100%; overflow-x: auto; }
 /* Any card that directly holds a table scrolls it internally (all widths) so a
    wide table never expands the page. Paired with `.main { min-width: 0 }` to
    defeat the CSS grid min-content blowout. */

@@ -29,8 +29,7 @@
     "signOut": "خروج"
   },
   "states": {
-    "loading": "در حال بارگذاری…",
-    "errorTitle": "مشکلی پیش آمد"
+    "loading": "در حال بارگذاری…"
   },
   "a11y": {
     "skipToContent": "پرش به محتوا",
