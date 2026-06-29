@@ -10,7 +10,10 @@
     "typecheck": "tsc --noEmit",
     "i18n:check": "node scripts/fe-qa/i18n-check.mjs",
     "check:hardcoded": "node scripts/fe-qa/check-hardcoded.mjs",
-    "lint": "npm run i18n:check && npm run check:hardcoded"
+    "check:size": "node scripts/fe-qa/check-size.mjs",
+    "check:responsive": "node scripts/fe-qa/responsive-check.cjs",
+    "lint": "npm run i18n:check && npm run check:hardcoded && npm run check:size",
+    "prebuild": "npm run lint"
   },
   "dependencies": {
     "next": "16.2.9",

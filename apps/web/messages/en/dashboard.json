@@ -1,7 +1,7 @@
 {
   "nav": {
     "overview": "Overview",
-    "catalog": "Catalog & sync",
+    "catalog": "Catalogue & sync",
     "search": "Search tuning",
     "assistant": "Assistant",
     "knowledge": "Knowledge base",
@@ -23,7 +23,6 @@
   },
   "common": {
     "saved": "Saved.",
-    "noDataYet": "No data yet.",
     "query": "Query",
     "count": "Count",
     "when": "When",
@@ -121,7 +120,7 @@
     "bodyPlaceholder": "We accept returns within 30 days…",
     "addArticle": "Add article",
     "articles": "Articles",
-    "empty": "No articles yet.",
+    "empty": "No articles yet — add FAQ or policy articles so the assistant can ground its answers on them.",
     "colTitle": "Title",
     "colUpdated": "Updated",
     "published": "published"
@@ -169,7 +168,7 @@
     "withEmail": "With email",
     "captured": "Captured leads",
     "exportJson": "Export JSON",
-    "empty": "No leads captured yet.",
+    "empty": "No leads yet — once your widget is live, the assistant captures shopper contacts during conversations.",
     "colEmail": "Email",
     "colPhone": "Phone",
     "colIntent": "Intent",
@@ -198,7 +197,7 @@
     "labelPlaceholder": "e.g. Storefront widget",
     "createKey": "Create key",
     "yourKeys": "Your keys",
-    "empty": "No keys yet.",
+    "empty": "No API keys yet — create a sync key to import your catalogue, or a widget key for your storefront.",
     "colLabel": "Label",
     "colScope": "Scope",
     "colCreated": "Created",

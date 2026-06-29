@@ -39,7 +39,8 @@ export function Alert({ kind, children }: { kind: "error" | "success"; children:
 }
 
 export function Spinner() {
-  return <span className="spinner" aria-label="loading" />;
+  const t = useTranslations("common");
+  return <span className="spinner" role="status" aria-label={t("states.loading")} />;
 }
 
 export function Badge({
