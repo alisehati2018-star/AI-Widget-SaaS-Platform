@@ -24,6 +24,16 @@ export default function DocsPage() {
             ))}
           </div>
 
+          <div className="card card-glow" style={{ marginBottom: "1.5rem" }}>
+            <h3>{t("docs.snippetTitle")}</h3>
+            <p className="hint">{t("docs.snippetHint")}</p>
+            <pre className="code-block">{`<script
+  src="https://cdn.vitrin.ai/widget.js"
+  data-tenant="your-store"
+  data-key="YOUR_WIDGET_KEY"
+  defer></script>`}</pre>
+          </div>
+
           {sections.map((s, i) => (
             <div className="card" key={IDS[i]} id={IDS[i]} style={{ marginBottom: "1.2rem" }}>
               <h3>{s.title}</h3>

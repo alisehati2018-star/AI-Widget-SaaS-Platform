@@ -27,8 +27,8 @@ resume at any time. Branch: `claude/gallant-shannon-8b31td`.
 | 9 | Consolidated QA automation | ✅ done | `3c50e76` |
 | — | RTL skip-link + verification pass | ✅ done | `4b45db8` |
 | 10 | Functional Frontend Completion | ✅ done | `9f49202` |
-| **11** | **Iconography — emoji → SVG icon set** | ✅ **done** | _this phase_ |
-| 12 | Marketing supporting-page redesign (pricing/docs/contact) | ⏳ planned | — |
+| 11 | Iconography — emoji → SVG icon set | ✅ done | `cd80b29` |
+| **12** | **Marketing supporting-page redesign (pricing/docs/contact)** | ✅ **done** | _this phase_ |
 | 13 | Measurement (Lighthouse/axe) + localized backend emails | ⏳ planned | — |
 
 > Note: the visual redesign phases (3–9) were already complete when the
@@ -54,9 +54,16 @@ page, and the localized 404. Verified: 14 SVGs render on the landing, 0 emoji
 remain, responsive sweep 0 overflow. (`/features` content already done;
 `pricing` keeps its data-driven cards — its icons were already non-emoji.)
 
-## Remaining design phases (planned)
-- **12 — Marketing supporting pages:** give `/pricing`, `/docs`,
-  `/contact` the same section quality as the landing (Phase 3).
+## Phase 12 — Marketing supporting pages (done)
+- **Pricing:** added an "In every plan" feature strip (SVG icons + copy) below
+  the plan cards.
+- **Contact:** two-column layout — contact-method cards (Sales / Support /
+  Security) beside the form.
+- **Docs:** added a "Quick widget install" code-snippet card.
+- Bilingual copy in `marketing.json`; new CSS responsive at 880/560px; full
+  responsive sweep 0 overflow.
+
+## Remaining (planned)
 - **13 — Measurement & emails:** run Lighthouse + axe, fix findings; localize the
   backend notification emails (verification/reset/invoice) per recipient locale.
 
