@@ -44,7 +44,12 @@ intentionally read-only. Full audit: `reports/frontend/phase-10-functional.md`.
 - Conclusion: dashboards were already largely functional; read-only pages are
   analytics/monitoring/logs (correctly read-only). No placeholder buttons remain.
 - **Needs a backend endpoint first** (not frontend gaps): KB edit, plan editing,
-  authenticated change-password/email, lead status. Tracked for backend.
+  change-email, lead status. Tracked for backend.
+- ✅ **Authenticated change-password** added (full-stack): `POST /auth/change-password`
+  (verifies current password) + a form in owner Settings. E2E-verified — old
+  password is invalidated, new one works, wrong current → 403.
+- ✅ **Persian content nativized** — replaced literal translations (e.g. «مستأجر»
+  → «فروشگاه», «دروازه» → «موتور هوش مصنوعی») with native, function-based copy.
 
 ## Phase 11 — Iconography (done)
 Replaced every emoji glyph with a cohesive inline-SVG `Icon` set

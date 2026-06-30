@@ -612,6 +612,38 @@ async def reset_confirm(payload: dict[str, Any]):
 
 
 # --------------------------------------------------------------------------- #
+# Change password (authenticated; verifies the current password)             #
+# --------------------------------------------------------------------------- #
+@router.post("/change-password")
+async def change_password(
+    payload: dict[str, Any],
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _ACCESS_COOKIE,
+):
+    principal = await current_principal(authorization, vitrin_access)
+    if principal is None:
+        return error_response(401, "unauthenticated", "A valid access token is required.")
+    current = str(payload.get("current_password", ""))
+    new_password = str(payload.get("new_password", ""))
+    pw_problems = validate_password_strength(new_password)
+    if pw_problems:
+        return error_response(422, "weak_password", " ".join(pw_problems))
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT password_hash FROM users WHERE id = $1::uuid", principal.user_id
+        )
+        if row is None or not verify_password(current, row["password_hash"]):
+            return error_response(403, "invalid_password", "Your current password is incorrect.")
+        await conn.execute(
+            "UPDATE users SET password_hash = $1 WHERE id = $2::uuid",
+            hash_password(new_password),
+            principal.user_id,
+        )
+    return {"status": "password_updated"}
+
+
+# --------------------------------------------------------------------------- #
 # Bootstrap the first platform admin (operator-token gated, one-time)        #
 # --------------------------------------------------------------------------- #
 @router.post("/bootstrap-admin")

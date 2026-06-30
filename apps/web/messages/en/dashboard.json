@@ -266,6 +266,13 @@
     "erasePrompt": "This erases ALL shopper data (leads, chat memory, events, index). Type your store slug \"{slug}\" to confirm.",
     "erased": "Your store data has been erased.",
     "eraseFailed": "Erase failed — confirmation did not match.",
+    "changePwTitle": "Change password",
+    "changePwHint": "For better security, choose a strong, unique password.",
+    "currentPw": "Current password",
+    "newPw": "New password",
+    "confirmPw": "Confirm new password",
+    "changePwSubmit": "Update password",
+    "pwUpdated": "Password changed successfully.",
     "roleOwner": "owner",
     "roleStaff": "staff"
   }
