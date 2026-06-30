@@ -7,24 +7,11 @@
     <link>https://acip.example</link>
 
     <!--
-      Register the storefront footer event so the widget loader is injected on
-      every page without editing core templates. The admin module registers the
-      product change/delete events on install.
-    -->
-    <file path="catalog/controller/startup/startup.php">
-        <operation>
-            <search><![CDATA[public function index() {]]></search>
-            <add position="after"><![CDATA[
-        // ACIP: inject the widget loader before the footer renders.
-        $this->event->register('catalog/view/common/footer/before',
-            new \Opencart\System\Engine\Action('extension/module/acip.injectWidget'));
-            ]]></add>
-        </operation>
-    </file>
+      The widget-injection and product-sync events are registered in the admin
+      module's install() via the OC3 event table — no core template edits needed.
 
-    <!--
-      Optional: redirect the native product search to ACIP results. Stores that
-      prefer a softer integration can disable "Replace native search" instead.
+      Optional below: redirect the native product search to ACIP results. Stores
+      that prefer a softer integration can disable "Replace native search".
     -->
     <file path="catalog/controller/product/search.php">
         <operation error="skip">

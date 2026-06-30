@@ -96,18 +96,23 @@ class ControllerExtensionModuleAcip extends Controller {
         $this->response->setOutput(json_encode($json));
     }
 
-    /** Register admin product-change events on install. */
+    /** Register product-change + storefront widget events on install.
+     *  OC3 action routes use a slash before the method (extension/module/acip/method). */
     public function install() {
         $this->load->model('setting/event');
         $this->model_setting_event->addEvent('acip_product_edit',
             'admin/model/catalog/product/editProduct/after',
-            'extension/module/acip.onProductChange');
+            'extension/module/acip/onProductChange');
         $this->model_setting_event->addEvent('acip_product_add',
             'admin/model/catalog/product/addProduct/after',
-            'extension/module/acip.onProductChange');
+            'extension/module/acip/onProductChange');
         $this->model_setting_event->addEvent('acip_product_delete',
             'admin/model/catalog/product/deleteProduct/after',
-            'extension/module/acip.onProductDelete');
+            'extension/module/acip/onProductDelete');
+        // Storefront: inject the widget loader into the rendered footer.
+        $this->model_setting_event->addEvent('acip_widget_footer',
+            'catalog/view/common/footer/after',
+            'extension/module/acip/injectWidget');
     }
 
     public function uninstall() {
@@ -115,6 +120,7 @@ class ControllerExtensionModuleAcip extends Controller {
         $this->model_setting_event->deleteEventByCode('acip_product_edit');
         $this->model_setting_event->deleteEventByCode('acip_product_add');
         $this->model_setting_event->deleteEventByCode('acip_product_delete');
+        $this->model_setting_event->deleteEventByCode('acip_widget_footer');
     }
 
     /** Event: a product was added/edited → upsert into ACIP. */

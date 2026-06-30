@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useTranslations } from "next-intl";
+import { Link } from "@/i18n/navigation";
 import { useEffect, useState } from "react";
 import { authFetch } from "@/lib/auth";
 import { DashboardShell, useOwnerNav } from "@/components/shell";
