@@ -45,6 +45,7 @@ _ADMIN = Header(default=None, alias="x-admin-token")
 _AUTHZ = Header(default=None, alias="authorization")
 _ACCESS_COOKIE = Cookie(default=None, alias="vitrin_access")
 _REFRESH_COOKIE = Cookie(default=None, alias="vitrin_refresh")
+_LOCALE_COOKIE = Cookie(default=None, alias="NEXT_LOCALE")  # recipient's UI locale
 
 
 def _set_auth_cookies(response: Response, access: str, refresh: str) -> None:
@@ -186,7 +187,12 @@ def _token_response(user: dict, tokens: dict[str, Any]) -> dict[str, Any]:
 # Signup (self-serve store owner)                                             #
 # --------------------------------------------------------------------------- #
 @router.post("/signup")
-async def signup(payload: dict[str, Any], request: Request, response: Response):
+async def signup(
+    payload: dict[str, Any],
+    request: Request,
+    response: Response,
+    next_locale: str | None = _LOCALE_COOKIE,
+):
     s = get_settings()
     if not s.signup_enabled:
         return error_response(403, "signup_disabled", "Self-serve signup is disabled.")
@@ -255,7 +261,9 @@ async def signup(payload: dict[str, Any], request: Request, response: Response):
             detail={"store_name": store_name},
         )
     # Send the verification email (best-effort, outside the txn).
-    subject, text, html = verification_email(f"{s.app_base_url}/verify-email?token={verify_token}")
+    subject, text, html = verification_email(
+        f"{s.app_base_url}/verify-email?token={verify_token}", next_locale
+    )
     await send_email(email, subject, text, html)
     _set_auth_cookies(response, tokens["access"], tokens["refresh"])
     resp = _token_response(dict(user), tokens)
@@ -489,7 +497,9 @@ async def me(authorization: str | None = _AUTHZ, vitrin_access: str | None = _AC
 # Password reset (request + confirm) — no account enumeration                #
 # --------------------------------------------------------------------------- #
 @router.post("/password/reset-request")
-async def reset_request(payload: dict[str, Any], request: Request):
+async def reset_request(
+    payload: dict[str, Any], request: Request, next_locale: str | None = _LOCALE_COOKIE
+):
     if not await _ip_rate_ok(request):
         return error_response(429, *_RATE_LIMITED)
     email = str(payload.get("email", "")).strip().lower()
@@ -508,7 +518,9 @@ async def reset_request(payload: dict[str, Any], request: Request):
                 _hash_token(token),
                 _now() + timedelta(hours=1),
             )
-            subject, text, html = reset_email(f"{s.app_base_url}/reset-password?token={token}")
+            subject, text, html = reset_email(
+                f"{s.app_base_url}/reset-password?token={token}", next_locale
+            )
             await send_email(email, subject, text, html)
             if s.env != "production":  # dev convenience for testing
                 accepted["reset_token"] = token
@@ -516,7 +528,9 @@ async def reset_request(payload: dict[str, Any], request: Request):
 
 
 @router.post("/verify-request")
-async def verify_request(payload: dict[str, Any], request: Request):
+async def verify_request(
+    payload: dict[str, Any], request: Request, next_locale: str | None = _LOCALE_COOKIE
+):
     """(Re)send an email-verification link. Generic response (no enumeration)."""
     if not await _ip_rate_ok(request):
         return error_response(429, *_RATE_LIMITED)
@@ -532,7 +546,9 @@ async def verify_request(payload: dict[str, Any], request: Request):
         )
         if user is not None and not user["email_verified"]:
             token = await _create_verification(conn, user["id"])
-            subject, text, html = verification_email(f"{s.app_base_url}/verify-email?token={token}")
+            subject, text, html = verification_email(
+                f"{s.app_base_url}/verify-email?token={token}", next_locale
+            )
             await send_email(email, subject, text, html)
             if s.env != "production":
                 accepted["verify_token"] = token

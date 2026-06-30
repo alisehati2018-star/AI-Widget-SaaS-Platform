@@ -27,7 +27,21 @@ def _wrap(
     )
 
 
-def verification_email(link: str) -> tuple[str, str, str]:
+def _loc(locale: str | None) -> str:
+    """Normalize a request locale to a supported email locale (fa/en)."""
+    return "fa" if (locale or "").lower().startswith("fa") else "en"
+
+
+def verification_email(link: str, locale: str | None = "en") -> tuple[str, str, str]:
+    if _loc(locale) == "fa":
+        subject = f"ایمیل {_BRAND} خود را تأیید کنید"
+        text = (
+            f"به {_BRAND} خوش آمدید!\n\nبرای فعال‌سازی حسابتان ایمیل خود را تأیید کنید:\n{link}\n\n"
+            "این لینک تا ۲۴ ساعت معتبر است. اگر شما ثبت‌نام نکرده‌اید، این ایمیل را نادیده بگیرید."
+        )
+        html = _wrap("تأیید ایمیل", "<p>برای فعال‌سازی حساب، ایمیل خود را تأیید کنید.</p>",
+                     "تأیید ایمیل", link)
+        return subject, text, html
     subject = f"Verify your {_BRAND} email"
     text = (
         f"Welcome to {_BRAND}!\n\nConfirm your email to activate your account:\n{link}\n\n"
@@ -38,7 +52,16 @@ def verification_email(link: str) -> tuple[str, str, str]:
     return subject, text, html
 
 
-def reset_email(link: str) -> tuple[str, str, str]:
+def reset_email(link: str, locale: str | None = "en") -> tuple[str, str, str]:
+    if _loc(locale) == "fa":
+        subject = f"بازنشانی گذرواژهٔ {_BRAND}"
+        text = (
+            f"درخواست بازنشانی گذرواژهٔ {_BRAND} شما را دریافت کردیم:\n{link}\n\n"
+            "این لینک تا ۱ ساعت معتبر است. اگر شما درخواست نداده‌اید، این ایمیل را نادیده بگیرید."
+        )
+        html = _wrap("بازنشانی گذرواژه", "<p>برای انتخاب گذرواژهٔ جدید روی دکمه بزنید.</p>",
+                     "بازنشانی گذرواژه", link)
+        return subject, text, html
     subject = f"Reset your {_BRAND} password"
     text = (
         f"We received a request to reset your {_BRAND} password:\n{link}\n\n"
@@ -49,7 +72,17 @@ def reset_email(link: str) -> tuple[str, str, str]:
     return subject, text, html
 
 
-def invite_email(link: str, store_name: str) -> tuple[str, str, str]:
+def invite_email(link: str, store_name: str, locale: str | None = "en") -> tuple[str, str, str]:
+    if _loc(locale) == "fa":
+        subject = f"به {store_name} در {_BRAND} دعوت شده‌اید"
+        text = (
+            f"شما به پیوستن به {store_name} در {_BRAND} دعوت شده‌اید.\n\n"
+            f"برای پذیرش، گذرواژهٔ خود را تنظیم کنید:\n{link}\n\nاین لینک تا ۷ روز معتبر است."
+        )
+        html = _wrap(f"پیوستن به {store_name}",
+                     f"<p>شما به پیوستن به <b>{store_name}</b> دعوت شده‌اید.</p>",
+                     "پذیرش دعوت", link)
+        return subject, text, html
     subject = f"You've been invited to {store_name} on {_BRAND}"
     text = (
         f"You've been invited to join {store_name} on {_BRAND}.\n\n"

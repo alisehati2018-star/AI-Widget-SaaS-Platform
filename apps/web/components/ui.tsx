@@ -21,12 +21,14 @@ export function Field({
   hint?: string;
   children: ReactNode;
 }) {
+  // The <label> wraps the control so it's programmatically associated (no id
+  // wiring needed) — gives every form field a proper accessible name.
   return (
-    <div className="field">
-      <label className="label">{label}</label>
+    <label className="field">
+      <span className="label">{label}</span>
       {children}
       {hint ? <span className="hint">{hint}</span> : null}
-    </div>
+    </label>
   );
 }
 

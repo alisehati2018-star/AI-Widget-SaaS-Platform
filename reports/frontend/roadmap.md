@@ -28,8 +28,8 @@ resume at any time. Branch: `claude/gallant-shannon-8b31td`.
 | — | RTL skip-link + verification pass | ✅ done | `4b45db8` |
 | 10 | Functional Frontend Completion | ✅ done | `9f49202` |
 | 11 | Iconography — emoji → SVG icon set | ✅ done | `cd80b29` |
-| **12** | **Marketing supporting-page redesign (pricing/docs/contact)** | ✅ **done** | _this phase_ |
-| 13 | Measurement (Lighthouse/axe) + localized backend emails | ⏳ planned | — |
+| 12 | Marketing supporting-page redesign (pricing/docs/contact) | ✅ done | `e658336` |
+| **13** | **Measurement (axe) + localized backend emails** | ✅ **done** | _this phase_ |
 
 > Note: the visual redesign phases (3–9) were already complete when the
 > Functional Completion phase was requested, so it lands as Phase 10; the
@@ -63,9 +63,16 @@ remain, responsive sweep 0 overflow. (`/features` content already done;
 - Bilingual copy in `marketing.json`; new CSS responsive at 880/560px; full
   responsive sweep 0 overflow.
 
-## Remaining (planned)
-- **13 — Measurement & emails:** run Lighthouse + axe, fix findings; localize the
-  backend notification emails (verification/reset/invoice) per recipient locale.
+## Phase 13 — Measurement & localized emails (done)
+- **axe a11y audit** (`npm run check:a11y`): found 1 critical (unlabelled form
+  controls); fixed `Field` to wrap the input in its `<label>` → **0 serious/
+  critical** across public pages. Report: `reports/frontend/phase-13-measurement.md`.
+- **Localized emails:** verification/reset/invite templates render fa/en; auth
+  endpoints pass the recipient's `NEXT_LOCALE` cookie through.
+
+## Status: frontend roadmap complete (Phases 0–13)
+All planned frontend + functional + design phases are done. Remaining work is
+outside the frontend (see backlog).
 
 ## QA system (enforced: CI `check:all` + `prebuild`)
 Static gates (fail build): i18n parity+missing+unused · hardcoded strings ·
