@@ -111,6 +111,9 @@ class Settings(BaseSettings):
     smtp_starttls: bool = Field(default=True, alias="SMTP_STARTTLS")
     # Public base URL used to build links in emails (verify, reset, invite).
     app_base_url: str = Field(default="http://localhost:3000", alias="APP_BASE_URL")
+    # Public origin of the API that serves the embeddable widget loader
+    # (/widget/v1.js). Empty falls back to APP_BASE_URL.
+    widget_base_url: str = Field(default="", alias="WIDGET_BASE_URL")
     # Where contact-form messages are delivered.
     contact_inbox: str = Field(default="hello@vitrin.ai", alias="CONTACT_INBOX")
     # Require a verified email before sensitive actions (e.g. buying a plan).

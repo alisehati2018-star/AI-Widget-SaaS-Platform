@@ -49,7 +49,10 @@ async def _embed_text(text: str) -> list[float] | None:
 async def _apply_upsert(tenant_id: str, source: str, raw: dict) -> None:
     es = get_es_client()
     product = normalize_product(tenant_id, source, raw)
-    vector = await _embed_text(f"{product.title}\n{product.description}") if product.title else None
+    # Embed the rich text (title + brand + categories + attributes + description)
+    # so brand/category are indexed semantically with the product, not just as
+    # BM25 keyword fields.
+    vector = await _embed_text(product.embedding_text()) if product.title else None
     await upsert_product(es, product, embedding=vector)
     await bump_data_version(get_redis(), tenant_id)
 

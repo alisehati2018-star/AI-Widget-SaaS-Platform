@@ -79,6 +79,36 @@ remain, responsive sweep 0 overflow. (`/features` content already done;
 All planned frontend + functional + design phases are done. Remaining work is
 outside the frontend (see backlog).
 
+## Phase 14 — Backend completion: ES control, agent console, widget, plugins
+Full-stack expansion driven by `reports/backend/gap-analysis.md`:
+- **Semantic brand/category indexing** — `CanonicalProduct.embedding_text()` now
+  embeds title + brand + categories + attributes + description (worker uses it),
+  so brand/category are indexed *with* the product semantically, not only as
+  BM25 keyword fields.
+- **Admin Elasticsearch control panel** — new `/admin/es/*` endpoints (health,
+  indices, mapping, tenant-count, ensure-index, reindex+alias-swap, alias,
+  delete-index) wired to `acip_search.index_admin`, plus `/admin/elasticsearch`
+  UI (cluster health, index table, mapping viewer, zero-downtime reindex).
+- **Agent test console** — `/admin/agent/test` + `/admin/agent/search` run the
+  RAG assistant / hybrid search against a chosen tenant's data with operator
+  auth; `/admin/agent` UI (tenant picker, chat + raw-search tabs, rung/latency/
+  citations).
+- **Widget** — self-contained single-line loader (`/widget/v1.js` →
+  `apps/dashboard/widget/loader.js`), `/v1/widget/config` (global defaults ←
+  tenant overrides), admin `/admin/widget-defaults` + `/admin/widget` UI,
+  dashboard widget page now shows the real one-line embed (gated on active store
+  + widget key) and per-store widget behaviour settings.
+- **Remaining functional items** — KB edit (`PATCH /tenant/kb/{id}`), lead
+  status/notes (`POST /tenant/leads/{id}` + migration 0010), admin plan editing
+  (`GET/PATCH /admin/plans` + editable UI), authenticated change-email
+  (`POST /auth/change-email`), all wired in the UI.
+- **Store integrations** — new root `integrations/` folder with a full OpenCart
+  3.x module (admin/catalog controllers + model + twig + language + OCMOD) and a
+  WordPress/WooCommerce plugin (settings, real-time + bulk sync, widget
+  injection, search replacement).
+- Gates: backend 103 passed/10 ES-skipped, ruff clean, mypy clean (87 files);
+  web typecheck + i18n 0/0 + hardcoded 0 + size 0 + routes 0 + dead 0.
+
 ## QA system (enforced: CI `check:all` + `prebuild`)
 Static gates (fail build): i18n parity+missing+unused · hardcoded strings ·
 component size ≤300 · broken routes · missing assets. Reported: dead components.

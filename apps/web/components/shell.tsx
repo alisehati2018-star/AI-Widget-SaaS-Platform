@@ -91,6 +91,9 @@ export function useAdminNav(): NavSection[] {
     {
       heading: t("nav.groupPlatform"),
       items: [
+        { href: "/admin/elasticsearch", label: t("nav.elasticsearch"), icon: "search" },
+        { href: "/admin/agent", label: t("nav.agent"), icon: "assistant" },
+        { href: "/admin/widget", label: t("nav.widget"), icon: "widget" },
         { href: "/admin/models", label: t("nav.models"), icon: "models" },
         { href: "/admin/queue", label: t("nav.queue"), icon: "queue" },
         { href: "/admin/health", label: t("nav.health"), icon: "health" },

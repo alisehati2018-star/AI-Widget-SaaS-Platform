@@ -643,6 +643,58 @@ async def change_password(
     return {"status": "password_updated"}
 
 
+@router.post("/change-email")
+async def change_email(
+    payload: dict[str, Any],
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _ACCESS_COOKIE,
+    next_locale: str | None = _LOCALE_COOKIE,
+):
+    """Change the signed-in user's email. Re-auth with the current password,
+    then set the new address as unverified and send a verification email."""
+    principal = await current_principal(authorization, vitrin_access)
+    if principal is None:
+        return error_response(401, "unauthenticated", "A valid access token is required.")
+    current = str(payload.get("current_password", ""))
+    new_email = str(payload.get("new_email", "")).strip().lower()
+    if not _EMAIL_RE.match(new_email):
+        return error_response(422, "invalid_email", "A valid email is required.")
+    s = get_settings()
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT email, password_hash FROM users WHERE id = $1::uuid", principal.user_id
+        )
+        if row is None or not verify_password(current, row["password_hash"]):
+            return error_response(403, "invalid_password", "Your current password is incorrect.")
+        if new_email == row["email"]:
+            return error_response(422, "invalid_email", "This is already your email address.")
+        if await conn.fetchval(
+            "SELECT 1 FROM users WHERE lower(email) = $1 AND id <> $2::uuid",
+            new_email,
+            principal.user_id,
+        ):
+            return error_response(409, "email_taken", "An account with this email already exists.")
+        async with conn.transaction():
+            await conn.execute(
+                "UPDATE users SET email = $1, email_verified = FALSE WHERE id = $2::uuid",
+                new_email,
+                principal.user_id,
+            )
+            verify_token = await _create_verification(conn, principal.user_id)
+        await audit(
+            pool, actor=row["email"], action="auth.change_email", detail={"new_email": new_email}
+        )
+    subject, text, html = verification_email(
+        f"{s.app_base_url}/verify-email?token={verify_token}", next_locale
+    )
+    await send_email(new_email, subject, text, html)
+    resp = {"status": "email_changed", "email": new_email}
+    if s.env != "production":
+        resp["verify_token"] = verify_token
+    return resp
+
+
 # --------------------------------------------------------------------------- #
 # Bootstrap the first platform admin (operator-token gated, one-time)        #
 # --------------------------------------------------------------------------- #

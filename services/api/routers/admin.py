@@ -845,3 +845,391 @@ async def set_user_status(
         pool, actor="operator", action="user.status", detail={"email": email, "status": status}
     )
     return {"email": email, "status": status}
+
+
+# --------------------------------------------------------------------------- #
+# Elasticsearch control panel (M2/M9) — operator-plane index management.       #
+# Non-destructive reads + guarded create/reindex/alias/delete operations so an #
+# operator can fully control the cluster from the admin dashboard.             #
+# --------------------------------------------------------------------------- #
+@router.get("/es/health")
+async def es_health(
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    from acip_search import index_admin as ia
+
+    es = get_es_client()
+    try:
+        health = await ia.cluster_health(es)
+    except Exception as exc:  # noqa: BLE001 - surface a clean "unreachable" state
+        return {"reachable": False, "error": str(exc)}
+    return {"reachable": True, **health}
+
+
+@router.get("/es/indices")
+async def es_indices(
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    from acip_search import index_admin as ia
+
+    es = get_es_client()
+    s = get_settings()
+    return {
+        "alias": s.catalogue_alias,
+        "indices": await ia.list_indices(es),
+        "aliases": await ia.list_aliases(es),
+    }
+
+
+@router.get("/es/mapping")
+async def es_mapping(
+    index: str,
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    from acip_search import index_admin as ia
+
+    try:
+        return {"index": index, **await ia.get_mapping_and_settings(get_es_client(), index)}
+    except Exception as exc:  # noqa: BLE001
+        return error_response(404, "not_found", f"Index not found: {exc}")
+
+
+@router.get("/es/tenant-count")
+async def es_tenant_count(
+    tenant: str,
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    """How many catalogue docs a given store has indexed (sync verification)."""
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    from acip_search import index_admin as ia
+
+    return {"tenant_id": tenant, "docs": await ia.tenant_doc_count(get_es_client(), tenant)}
+
+
+@router.post("/es/ensure-index")
+async def es_ensure_index(
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    """Idempotently create the catalogue index behind the read alias."""
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    from acip_search import index_admin as ia
+
+    try:
+        result = await ia.ensure_catalogue_index(get_es_client())
+    except Exception as exc:  # noqa: BLE001
+        return error_response(500, "es_error", str(exc))
+    await audit(await get_pg_pool(), actor="operator", action="es.ensure_index", detail=result)
+    return result
+
+
+@router.post("/es/reindex")
+async def es_reindex(
+    payload: dict[str, Any],
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    """Build a fresh index, reindex into it, then swap the read alias (zero
+    downtime, instant rollback by re-pointing the alias)."""
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    source = str(payload.get("source_index", "")).strip()
+    if not source:
+        return error_response(422, "invalid_request", "Field 'source_index' is required.")
+    from acip_search import index_admin as ia
+
+    try:
+        new_index = await ia.reindex_and_swap(get_es_client(), source)
+    except Exception as exc:  # noqa: BLE001
+        return error_response(500, "es_error", str(exc))
+    await audit(
+        await get_pg_pool(),
+        actor="operator",
+        action="es.reindex",
+        detail={"source": source, "new_index": new_index},
+    )
+    return {"status": "reindexed", "source_index": source, "new_index": new_index}
+
+
+@router.post("/es/alias")
+async def es_alias(
+    payload: dict[str, Any],
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    """Atomically point the read alias at a chosen index (manual rollback/swap)."""
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    to_index = str(payload.get("index", "")).strip()
+    if not to_index:
+        return error_response(422, "invalid_request", "Field 'index' is required.")
+    alias = str(payload.get("alias") or get_settings().catalogue_alias)
+    from acip_search import index_admin as ia
+
+    try:
+        await ia.point_alias(get_es_client(), alias, to_index)
+    except Exception as exc:  # noqa: BLE001
+        return error_response(500, "es_error", str(exc))
+    await audit(
+        await get_pg_pool(),
+        actor="operator",
+        action="es.alias_swap",
+        detail={"alias": alias, "index": to_index},
+    )
+    return {"status": "swapped", "alias": alias, "index": to_index}
+
+
+@router.post("/es/delete-index")
+async def es_delete_index(
+    payload: dict[str, Any],
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    """Delete a concrete index (e.g. an old version after a successful swap).
+
+    Refuses to delete an index that the read alias currently points at."""
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    index = str(payload.get("index", "")).strip()
+    if not index:
+        return error_response(422, "invalid_request", "Field 'index' is required.")
+    from acip_search import index_admin as ia
+
+    es = get_es_client()
+    live = {a["index"] for a in await ia.list_aliases(es)}
+    if index in live:
+        return error_response(
+            409, "alias_in_use", "This index is live behind an alias; swap the alias first."
+        )
+    try:
+        await ia.delete_index(es, index)
+    except Exception as exc:  # noqa: BLE001
+        return error_response(500, "es_error", str(exc))
+    await audit(await get_pg_pool(), actor="operator", action="es.delete_index",
+                detail={"index": index})
+    return {"status": "deleted", "index": index}
+
+
+# --------------------------------------------------------------------------- #
+# Agent test console (M7/M9) — run the RAG assistant against a chosen store's   #
+# data with operator auth (no per-tenant widget key needed).                   #
+# --------------------------------------------------------------------------- #
+@router.post("/agent/test")
+async def agent_test(
+    payload: dict[str, Any],
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    """Send a message to the grounded assistant as a specific tenant and return
+    the full turn (answer, rung, citations, latency) for operator testing."""
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    tenant_id = str(payload.get("tenant_id", "")).strip()
+    message = str(payload.get("message", "")).strip()
+    if not tenant_id:
+        return error_response(422, "invalid_request", "Field 'tenant_id' is required.")
+    if not message:
+        return error_response(422, "invalid_request", "Field 'message' is required.")
+    session_id = str(payload.get("session_id") or f"admin-test-{secrets.token_hex(6)}")
+    from ..runtime import get_assistant
+
+    try:
+        result = await get_assistant().answer(tenant_id, session_id, message)
+    except Exception as exc:  # noqa: BLE001 - report failures back to the console
+        return error_response(500, "agent_error", str(exc))
+    return {"tenant_id": tenant_id, "session_id": session_id, **result}
+
+
+@router.post("/agent/search")
+async def agent_search(
+    payload: dict[str, Any],
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    """Run a raw hybrid search for a tenant (inspect retrieval before chat)."""
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    tenant_id = str(payload.get("tenant_id", "")).strip()
+    query = str(payload.get("query", "")).strip()
+    if not tenant_id or not query:
+        return error_response(422, "invalid_request", "tenant_id and query are required.")
+    from ..runtime import get_search_service
+
+    try:
+        result = await get_search_service().search(
+            tenant_id, query, filters=payload.get("filters"), size=payload.get("size")
+        )
+    except Exception as exc:  # noqa: BLE001
+        return error_response(500, "search_error", str(exc))
+    return {"tenant_id": tenant_id, **result}
+
+
+# --------------------------------------------------------------------------- #
+# Plan management (M11) — operators edit pricing/credits/limits of plans.       #
+# --------------------------------------------------------------------------- #
+@router.get("/plans")
+async def list_plans(
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT id, code, name, description, price_monthly, currency, credits_per_month, "
+            "monthly_credit_cap, rate_limit_per_min, is_public, sort_order, features "
+            "FROM plans ORDER BY sort_order ASC, price_monthly ASC"
+        )
+    return {
+        "plans": [
+            {
+                "id": str(r["id"]),
+                "code": r["code"],
+                "name": r["name"],
+                "description": r["description"],
+                "price_monthly": float(r["price_monthly"]),
+                "currency": r["currency"],
+                "credits_per_month": float(r["credits_per_month"]),
+                "monthly_credit_cap": float(r["monthly_credit_cap"]),
+                "rate_limit_per_min": r["rate_limit_per_min"],
+                "is_public": r["is_public"],
+                "sort_order": r["sort_order"],
+                "features": r["features"],
+            }
+            for r in rows
+        ]
+    }
+
+
+@router.patch("/plans/{plan_id}")
+async def update_plan(
+    plan_id: str,
+    payload: dict[str, Any],
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    """Edit a plan's pricing, included credits, caps, limits and visibility."""
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    columns = {
+        "name": str,
+        "description": str,
+        "price_monthly": float,
+        "currency": str,
+        "credits_per_month": float,
+        "monthly_credit_cap": float,
+        "rate_limit_per_min": int,
+        "is_public": bool,
+        "sort_order": int,
+    }
+    sets: list[str] = []
+    values: list[Any] = []
+    for col, caster in columns.items():
+        if col in payload:
+            try:
+                values.append(caster(payload[col]))
+            except (TypeError, ValueError):
+                return error_response(422, "invalid_request", f"Invalid value for '{col}'.")
+            sets.append(f"{col} = ${len(values)}")
+    if not sets:
+        return error_response(422, "invalid_request", "No editable fields supplied.")
+    values.append(plan_id)
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        updated = await conn.fetchval(
+            f"UPDATE plans SET {', '.join(sets)} WHERE id = ${len(values)}::uuid RETURNING id",
+            *values,
+        )
+    if updated is None:
+        return error_response(404, "not_found", "No such plan.")
+    await audit(pool, actor="operator", action="plan.update",
+                detail={"plan_id": plan_id, "fields": list(payload.keys())})
+    return {"plan_id": plan_id, "status": "updated"}
+
+
+# --------------------------------------------------------------------------- #
+# Widget global defaults (M8) — platform-wide widget configuration set by the   #
+# operator; per-store overrides live in the tenant settings.                   #
+# --------------------------------------------------------------------------- #
+_WIDGET_DEFAULTS_KEY = "widget:global_defaults"
+
+
+@router.get("/widget-defaults")
+async def get_widget_defaults(
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    import json
+
+    redis = get_redis()
+    raw = await redis.get(_WIDGET_DEFAULTS_KEY) if redis is not None else None
+    defaults = json.loads(raw) if raw else _default_widget_config()
+    return {"defaults": defaults}
+
+
+@router.post("/widget-defaults")
+async def set_widget_defaults(
+    payload: dict[str, Any],
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    import json
+
+    allowed = {
+        "primary_color",
+        "chat_enabled",
+        "search_enabled",
+        "position",
+        "platform_brand",
+        "max_results",
+        "greeting",
+    }
+    defaults = {**_default_widget_config(), **{k: v for k, v in payload.items() if k in allowed}}
+    redis = get_redis()
+    if redis is not None:
+        await redis.set(_WIDGET_DEFAULTS_KEY, json.dumps(defaults))
+    await audit(await get_pg_pool(), actor="operator", action="widget.defaults", detail=defaults)
+    return {"status": "saved", "defaults": defaults}
+
+
+def _default_widget_config() -> dict[str, Any]:
+    return {
+        "primary_color": "#1A7A4B",
+        "chat_enabled": True,
+        "search_enabled": True,
+        "position": "bottom-right",
+        "platform_brand": True,
+        "max_results": 12,
+        "greeting": "سلام! چطور می‌تونم در پیدا کردن محصول کمکتون کنم؟",
+    }

@@ -28,6 +28,8 @@ export default function KnowledgePage() {
   const [body, setBody] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState<Article | null>(null);
+  const [note, setNote] = useState<string | null>(null);
 
   const load = useCallback(() => {
     authFetch<{ articles: Article[] }>("/tenant/kb").then((r) => setArticles(r.articles)).catch(() => setArticles([]));
@@ -55,6 +57,18 @@ export default function KnowledgePage() {
     load();
   }
 
+  async function saveEdit() {
+    if (!editing) return;
+    setNote(null);
+    await authFetch(`/tenant/kb/${editing.id}`, {
+      method: "PATCH",
+      body: { title: editing.title, body: editing.body, published: editing.published },
+    }).catch(() => {});
+    setEditing(null);
+    setNote(t("knowledge.updated"));
+    load();
+  }
+
   return (
     <DashboardShell title={t("nav.knowledge")} nav={nav}>
       <p style={{ marginTop: "-1rem" }}>{t("knowledge.intro")}</p>
@@ -75,8 +89,28 @@ export default function KnowledgePage() {
         </form>
       </div>
 
+      {editing ? (
+        <div className="card" style={{ marginBottom: "1.5rem" }}>
+          <h3>{t("knowledge.editTitle")}</h3>
+          <Field label={t("knowledge.titleLabel")}>
+            <Input value={editing.title} onChange={(e) => setEditing({ ...editing, title: e.target.value })} />
+          </Field>
+          <Field label={t("knowledge.bodyLabel")}>
+            <textarea className="input" style={{ minHeight: 120 }} value={editing.body} onChange={(e) => setEditing({ ...editing, body: e.target.value })} />
+          </Field>
+          <div className="row" style={{ gap: ".5rem", flexWrap: "wrap" }}>
+            <button className="btn btn-primary" onClick={() => void saveEdit()}>{tc("actions.save")}</button>
+            <button className="btn btn-soft" onClick={() => setEditing({ ...editing, published: !editing.published })}>
+              {editing.published ? t("knowledge.unpublish") : t("knowledge.publish")}
+            </button>
+            <button className="btn btn-ghost" onClick={() => setEditing(null)}>{tc("actions.cancel")}</button>
+          </div>
+        </div>
+      ) : null}
+
       <div className="card">
         <h3>{t("knowledge.articles")}</h3>
+        {note ? <Alert kind="success">{note}</Alert> : null}
         {articles === null ? (
           <Spinner />
         ) : articles.length === 0 ? (
@@ -90,7 +124,12 @@ export default function KnowledgePage() {
                   <td>{a.title}</td>
                   <td>{a.published ? <Badge tone="success">{t("knowledge.published")}</Badge> : <Badge>{t("common.draft")}</Badge>}</td>
                   <td className="muted">{formatDate(a.updated_at, locale)}</td>
-                  <td><button className="btn btn-danger" onClick={() => void remove(a.id)}>{tc("actions.delete")}</button></td>
+                  <td>
+                    <div className="row" style={{ gap: ".3rem", flexWrap: "wrap" }}>
+                      <button className="btn btn-ghost" onClick={() => { setNote(null); setEditing({ ...a }); }}>{tc("actions.edit")}</button>
+                      <button className="btn btn-danger" onClick={() => void remove(a.id)}>{tc("actions.delete")}</button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>

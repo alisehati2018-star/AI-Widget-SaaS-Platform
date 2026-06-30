@@ -19,6 +19,10 @@ export default function SettingsPage() {
   const [pwNote, setPwNote] = useState<string | null>(null);
   const [pwError, setPwError] = useState<string | null>(null);
   const [pwBusy, setPwBusy] = useState(false);
+  const [em, setEm] = useState({ password: "", email: "" });
+  const [emNote, setEmNote] = useState<string | null>(null);
+  const [emError, setEmError] = useState<string | null>(null);
+  const [emBusy, setEmBusy] = useState(false);
 
   useEffect(() => {
     authFetch<TenantProfile>("/tenant/profile")
@@ -80,6 +84,24 @@ export default function SettingsPage() {
     }
   }
 
+  async function changeEmail(e: React.FormEvent) {
+    e.preventDefault();
+    setEmError(null);
+    setEmNote(null);
+    setEmBusy(true);
+    try {
+      await authFetch("/auth/change-email", {
+        body: { current_password: em.password, new_email: em.email },
+      });
+      setEm({ password: "", email: "" });
+      setEmNote(t("settings.emailChanged"));
+    } catch (err) {
+      setEmError(err instanceof ApiError ? err.message : t("settings.eraseFailed"));
+    } finally {
+      setEmBusy(false);
+    }
+  }
+
   const roleLabel = profile?.role === "store_owner" ? t("settings.roleOwner") : t("settings.roleStaff");
 
   return (
@@ -133,6 +155,24 @@ export default function SettingsPage() {
           </Field>
           <button className="btn btn-primary" disabled={pwBusy}>
             {pwBusy ? <Spinner /> : t("settings.changePwSubmit")}
+          </button>
+        </form>
+      </div>
+
+      <div className="card" style={{ marginBottom: "1.5rem" }}>
+        <h3>{t("settings.changeEmailTitle")}</h3>
+        <p className="hint">{t("settings.changeEmailHint")}</p>
+        {emNote ? <Alert kind="success">{emNote}</Alert> : null}
+        {emError ? <Alert kind="error">{emError}</Alert> : null}
+        <form onSubmit={changeEmail} style={{ maxWidth: 420 }}>
+          <Field label={t("settings.newEmail")}>
+            <Input type="email" value={em.email} onChange={(e) => setEm({ ...em, email: e.target.value })} required />
+          </Field>
+          <Field label={t("settings.currentPw")}>
+            <Input type="password" value={em.password} onChange={(e) => setEm({ ...em, password: e.target.value })} required />
+          </Field>
+          <button className="btn btn-primary" disabled={emBusy}>
+            {emBusy ? <Spinner /> : t("settings.changeEmailSubmit")}
           </button>
         </form>
       </div>

@@ -102,6 +102,57 @@ async def profile(authorization: str | None = _AUTHZ, vitrin_access: str | None 
     }
 
 
+@router.get("/widget")
+async def widget_embed(authorization: str | None = _AUTHZ, vitrin_access: str | None = _COOKIE):
+    """Widget install info for the dashboard: the public loader base, whether the
+    store is approved + has an active widget key (so the embed line is 'ready'),
+    the one-line snippet, and the store's per-store widget settings."""
+    p = await _require_tenant(authorization, vitrin_access)
+    if p is None:
+        return _unauth()
+    assert p.tenant_id is not None
+    s = get_settings()
+    api_base = (s.widget_base_url or s.app_base_url).rstrip("/")
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT status, settings FROM tenants WHERE id = $1", p.tenant_id
+        )
+        has_widget_key = bool(
+            await conn.fetchval(
+                "SELECT 1 FROM api_keys WHERE tenant_id = $1 AND scope = 'widget' "
+                "AND revoked = FALSE LIMIT 1",
+                p.tenant_id,
+            )
+        )
+    status = row["status"] if row else "pending"
+    approved = status == "active"
+    ready = approved and has_widget_key
+    settings = row["settings"] if row else {}
+    if isinstance(settings, str):
+        import json as _json
+
+        try:
+            settings = _json.loads(settings)
+        except (ValueError, TypeError):
+            settings = {}
+    key_hint = "YOUR_WIDGET_KEY"
+    snippet = (
+        f'<script src="{api_base}/widget/v1.js"\n'
+        f'        data-acip-key="{key_hint}"\n'
+        f'        data-acip-base="{api_base}" async></script>'
+    )
+    return {
+        "api_base": api_base,
+        "status": status,
+        "approved": approved,
+        "has_widget_key": has_widget_key,
+        "ready": ready,
+        "snippet": snippet,
+        "settings": settings or {},
+    }
+
+
 # --------------------------------------------------------------------------- #
 # Analytics (tenant-scoped)                                                   #
 # --------------------------------------------------------------------------- #
@@ -186,22 +237,68 @@ async def leads(authorization: str | None = _AUTHZ, vitrin_access: str | None = 
     pool = await get_pg_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            "SELECT email, phone, has_intent, source, created_at FROM leads "
+            "SELECT id, email, phone, has_intent, source, status, notes, created_at FROM leads "
             "WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 500",
             p.tenant_id,
         )
     return {
         "leads": [
             {
+                "id": r["id"],
                 "email": r["email"],
                 "phone": r["phone"],
                 "has_intent": r["has_intent"],
                 "source": r["source"],
+                "status": r["status"],
+                "notes": r["notes"],
                 "created_at": r["created_at"].isoformat() if r["created_at"] else None,
             }
             for r in rows
         ]
     }
+
+
+_LEAD_STATUSES = ("new", "contacted", "qualified", "won", "lost")
+
+
+@router.post("/leads/{lead_id}")
+async def update_lead(
+    lead_id: int,
+    payload: dict[str, Any],
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    """Update a lead's pipeline status and/or notes (tenant-scoped)."""
+    p = await _require_tenant(authorization, vitrin_access)
+    if p is None:
+        return _unauth()
+    assert p.tenant_id is not None
+    sets: list[str] = []
+    values: list[Any] = []
+    if "status" in payload:
+        status = str(payload["status"])
+        if status not in _LEAD_STATUSES:
+            return error_response(
+                422, "invalid_request", f"status must be one of {', '.join(_LEAD_STATUSES)}."
+            )
+        values.append(status)
+        sets.append(f"status = ${len(values)}")
+    if "notes" in payload:
+        values.append(str(payload["notes"]))
+        sets.append(f"notes = ${len(values)}")
+    if not sets:
+        return error_response(422, "invalid_request", "Supply 'status' and/or 'notes'.")
+    values.extend([lead_id, p.tenant_id])
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        updated = await conn.fetchval(
+            f"UPDATE leads SET {', '.join(sets)}, updated_at = now() "
+            f"WHERE id = ${len(values) - 1} AND tenant_id = ${len(values)} RETURNING id",
+            *values,
+        )
+    if updated is None:
+        return error_response(404, "not_found", "No such lead.")
+    return {"id": lead_id, "status": "updated"}
 
 
 # --------------------------------------------------------------------------- #
@@ -306,7 +403,10 @@ async def update_settings(
     if p.role != Role.STORE_OWNER:
         return _owner_only()
     # Whitelist the keys a tenant may set (platform branding stays visible).
-    allowed = {"logo_url", "primary_color", "store_url", "platform", "widget_greeting"}
+    allowed = {
+        "logo_url", "primary_color", "store_url", "platform", "widget_greeting",
+        "position", "chat_enabled", "search_enabled", "title", "placeholder",
+    }
     patch = {k: v for k, v in payload.items() if k in allowed}
     pool = await get_pg_pool()
     async with pool.acquire() as conn:
@@ -567,6 +667,54 @@ async def kb_create(
         pool, actor=p.email, action="kb.create", tenant_id=p.tenant_id, detail={"title": title}
     )
     return {"id": str(new_id), "status": "created"}
+
+
+@router.patch("/kb/{article_id}")
+async def kb_update(
+    article_id: str,
+    payload: dict[str, Any],
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    """Edit an article's title, body, or published state (tenant-scoped)."""
+    p = await _require_tenant(authorization, vitrin_access)
+    if p is None:
+        return _unauth()
+    assert p.tenant_id is not None
+    sets: list[str] = []
+    values: list[Any] = []
+    if "title" in payload:
+        title = str(payload["title"]).strip()
+        if not title:
+            return error_response(422, "invalid_request", "title cannot be empty.")
+        values.append(title)
+        sets.append(f"title = ${len(values)}")
+    if "body" in payload:
+        body = str(payload["body"]).strip()
+        if not body:
+            return error_response(422, "invalid_request", "body cannot be empty.")
+        values.append(body)
+        sets.append(f"body = ${len(values)}")
+    if "published" in payload:
+        values.append(bool(payload["published"]))
+        sets.append(f"published = ${len(values)}")
+    if not sets:
+        return error_response(422, "invalid_request", "No editable fields supplied.")
+    values.extend([article_id, p.tenant_id])
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        updated = await conn.fetchval(
+            f"UPDATE kb_articles SET {', '.join(sets)}, updated_at = now() "
+            f"WHERE id = ${len(values) - 1} AND tenant_id = ${len(values)} RETURNING id",
+            *values,
+        )
+    if updated is None:
+        return error_response(404, "not_found", "No such article.")
+    await audit(
+        pool, actor=p.email, action="kb.update", tenant_id=p.tenant_id,
+        detail={"id": article_id, "fields": list(payload.keys())},
+    )
+    return {"id": article_id, "status": "updated"}
 
 
 @router.delete("/kb/{article_id}")

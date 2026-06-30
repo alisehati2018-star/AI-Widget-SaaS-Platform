@@ -43,6 +43,38 @@ class CanonicalProduct:
             doc["popularity"] = max(self.popularity, 1e-6)
         return {k: v for k, v in doc.items() if v is not None}
 
+    def embedding_text(self) -> str:
+        """Build the text that gets embedded into the dense vector.
+
+        Brand and categories MUST be embedded with the product (not only stored
+        as BM25 keyword fields) so the semantic leg can match a shopper who
+        searches by brand, category, or a key attribute — even with a synonym or
+        a different spelling. Order: title → brand → categories → salient
+        attributes → description.
+        """
+        parts: list[str] = []
+        if self.title:
+            parts.append(self.title.strip())
+        if self.brand:
+            parts.append(f"برند: {self.brand}")
+        if self.categories:
+            cats = "، ".join(str(c).strip() for c in self.categories if str(c).strip())
+            if cats:
+                parts.append(f"دسته‌بندی: {cats}")
+        if self.attributes:
+            attr_bits: list[str] = []
+            for name, value in self.attributes.items():
+                if value is None or value == "" or value == []:
+                    continue
+                if isinstance(value, (list, tuple)):
+                    value = "، ".join(str(v) for v in value if str(v).strip())
+                attr_bits.append(f"{name}: {value}")
+            if attr_bits:
+                parts.append("ویژگی‌ها: " + " | ".join(attr_bits))
+        if self.description:
+            parts.append(self.description.strip())
+        return "\n".join(p for p in parts if p)
+
 
 def _coerce_categories(raw: Any) -> list[str]:
     if raw is None:

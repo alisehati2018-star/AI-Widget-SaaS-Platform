@@ -26,7 +26,9 @@
   "actions": {
     "save": "ذخیره",
     "delete": "حذف",
-    "signOut": "خروج"
+    "signOut": "خروج",
+    "edit": "ویرایش",
+    "cancel": "انصراف"
   },
   "states": {
     "loading": "در حال بارگذاری…"

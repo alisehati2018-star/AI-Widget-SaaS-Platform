@@ -21,7 +21,7 @@ from acip_core.obs import setup_telemetry
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routers import admin, auth, billing, health, public, tenant, v1
+from .routers import admin, auth, billing, health, public, tenant, v1, widget
 
 
 def create_app() -> FastAPI:
@@ -67,6 +67,7 @@ def create_app() -> FastAPI:
     app.include_router(tenant.router)
     app.include_router(billing.router)
     app.include_router(v1.router)
+    app.include_router(widget.router)
     app.include_router(admin.router)
 
     return app
