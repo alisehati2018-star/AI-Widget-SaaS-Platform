@@ -7,6 +7,7 @@ import { formatNumber } from "@/lib/datetime";
 import type { Locale } from "@/i18n/routing";
 import { Link } from "@/i18n/navigation";
 import { MarketingFooter, MarketingNav } from "@/components/marketing";
+import { Icon, type IconName } from "@/components/icons";
 import { Spinner } from "@/components/ui";
 
 export default function PricingPage() {
@@ -80,6 +81,18 @@ export default function PricingPage() {
               })}
             </div>
           )}
+
+          <div className="included-strip">
+            <h2 className="center" style={{ fontSize: "1.2rem" }}>{t("pricing.includedTitle")}</h2>
+            <div className="included-grid">
+              {(t.raw("pricing.included") as { icon: string; text: string }[]).map((it) => (
+                <div className="included-item" key={it.text}>
+                  <Icon name={it.icon as IconName} size={18} />
+                  <span>{it.text}</span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </section>
       <MarketingFooter />

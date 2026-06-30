@@ -79,10 +79,10 @@
     "useCases": {
       "title": "For any store that wants to sell more",
       "items": [
-        { "icon": "📱", "title": "Digital & electronics", "body": "Large catalogues with technical specs; shoppers search in their own words and land on the right product." },
-        { "icon": "👗", "title": "Fashion & apparel", "body": "Style, colour and size search with smart recommendations lifts conversion." },
-        { "icon": "🏬", "title": "Multi-vendor marketplace", "body": "Hard isolation per seller with dedicated search and analytics, on one platform." },
-        { "icon": "🏠", "title": "Home & appliances", "body": "Guide shoppers across models and brands with an assistant that only answers from your stock." }
+        { "icon": "smartphone", "title": "Digital & electronics", "body": "Large catalogues with technical specs; shoppers search in their own words and land on the right product." },
+        { "icon": "fashion", "title": "Fashion & apparel", "body": "Style, colour and size search with smart recommendations lifts conversion." },
+        { "icon": "tenants", "title": "Multi-vendor marketplace", "body": "Hard isolation per seller with dedicated search and analytics, on one platform." },
+        { "icon": "home", "title": "Home & appliances", "body": "Guide shoppers across models and brands with an assistant that only answers from your stock." }
       ]
     },
     "how": {
@@ -142,6 +142,13 @@
     "perMonth": "/mo",
     "getStarted": "Get started",
     "contactSales": "Contact sales",
+    "includedTitle": "In every plan",
+    "included": [
+      { "icon": "search", "text": "Persian hybrid search" },
+      { "icon": "lock", "text": "Tenant isolation & security" },
+      { "icon": "activity", "text": "Audit logging" },
+      { "icon": "integrations", "text": "WooCommerce & OpenCart plugins" }
+    ],
     "fallback": {
       "free": { "name": "Free", "description": "Try Persian hybrid search on one store.", "features": ["1 store", "Hybrid Persian search", "5k AI credits/mo", "Community support"] },
       "starter": { "name": "Starter", "description": "For growing stores that want the assistant.", "features": ["1 store", "Search + RAG assistant", "50k AI credits/mo", "Analytics dashboard", "Email support"] },
@@ -152,6 +159,8 @@
   "docs": {
     "title": "Documentation",
     "subtitle": "Everything you need to integrate Vitrin into your store.",
+    "snippetTitle": "Quick widget install",
+    "snippetHint": "Paste this snippet before the closing body tag and drop in your widget key.",
     "ctaTitle": "Ready to build?",
     "ctaSubtitle": "Create your store and grab an API key in minutes.",
     "ctaButton": "Start free",
@@ -169,7 +178,13 @@
     "name": "Name",
     "email": "Email",
     "message": "Message",
-    "send": "Send message"
+    "send": "Send message",
+    "methodsTitle": "Other ways to reach us",
+    "methods": [
+      { "icon": "chat", "title": "Sales", "body": "Talk through enterprise and on-premise deployment." },
+      { "icon": "knowledge", "title": "Support", "body": "Technical and integration help for your team." },
+      { "icon": "security", "title": "Security & compliance", "body": "Privacy, GDPR and hosting questions." }
+    ]
   },
   "legal": {
     "updated": "Last updated: 2026-06-21",

@@ -1,5 +1,6 @@
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
+import { Icon, type IconName } from "../icons";
 
 // Server-rendered marketing sections for the landing page. All copy comes from
 // the `marketing` namespace; each section is a small, reusable building block.
@@ -43,7 +44,7 @@ function HeroVisual() {
       </div>
       <div className="app-mock-body">
         <div className="mock-search">
-          <span className="mock-search-icon">🔎</span>
+          <Icon name="search" size={16} className="mock-search-icon" />
           <span className="mock-search-text">{t("landing.heroVisual.searchQuery")}</span>
         </div>
         <div className="mock-result">{t("landing.heroVisual.result1")}</div>
@@ -79,7 +80,7 @@ export function StatsBand() {
 export function FeatureCards() {
   const t = useTranslations("marketing");
   const items = t.raw("home.features.items") as { title: string; body: string }[];
-  const icons = ["🔎", "🛒", "📊", "🧠", "💸", "🔒"];
+  const icons: IconName[] = ["search", "conversion", "analytics", "insight", "cost", "lock"];
   return (
     <section className="section" id="features">
       <div className="container">
@@ -90,7 +91,7 @@ export function FeatureCards() {
         <div className="feature-grid">
           {items.map((f, i) => (
             <div className="card" key={f.title}>
-              <div className="feature-icon">{icons[i]}</div>
+              <div className="feature-icon"><Icon name={icons[i]} size={22} /></div>
               <h3 style={{ fontSize: "1.1rem" }}>{f.title}</h3>
               <p style={{ marginBottom: 0 }}>{f.body}</p>
             </div>
@@ -130,7 +131,9 @@ export function DeepDives() {
                 </ul>
               </div>
               <div className="deep-visual card">
-                <span className="deep-glyph">{["🔎", "🛒", "📈"][i] ?? "✦"}</span>
+                <span className="deep-glyph">
+                  <Icon name={(["search", "conversion", "analytics"] as IconName[])[i] ?? "overview"} size={52} />
+                </span>
               </div>
             </div>
           ))}
@@ -191,7 +194,7 @@ export function UseCases() {
         <div className="feature-grid">
           {items.map((u) => (
             <div className="card" key={u.title}>
-              <div className="feature-icon">{u.icon}</div>
+              <div className="feature-icon"><Icon name={u.icon as IconName} size={22} /></div>
               <h3 style={{ fontSize: "1.05rem" }}>{u.title}</h3>
               <p style={{ marginBottom: 0 }}>{u.body}</p>
             </div>

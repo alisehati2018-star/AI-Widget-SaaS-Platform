@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<modification>
+    <name>ACIP — Smart Search &amp; Assistant</name>
+    <code>acip_search</code>
+    <version>1.0.0</version>
+    <author>ACIP</author>
+    <link>https://acip.example</link>
+
+    <!--
+      The widget-injection and product-sync events are registered in the admin
+      module's install() via the OC3 event table — no core template edits needed.
+
+      Optional below: redirect the native product search to ACIP results. Stores
+      that prefer a softer integration can disable "Replace native search".
+    -->
+    <file path="catalog/controller/product/search.php">
+        <operation error="skip">
+            <search><![CDATA[$data['products'] = array();]]></search>
+            <add position="before"><![CDATA[
+        // ACIP: prepend hybrid-search product ids when enabled.
+        if ($this->config->get('module_acip_status')
+            && $this->config->get('module_acip_replace_search')
+            && !empty($this->request->get['search'])) {
+            $this->registry->set('acip', new Acip($this->registry));
+            $acip_results = $this->registry->get('acip')->search($this->request->get['search']);
+            $acip_ids = array();
+            foreach ($acip_results as $r) {
+                if (!empty($r['product_id'])) { $acip_ids[] = (int)$r['product_id']; }
+            }
+            if ($acip_ids) { $this->request->get['acip_ids'] = $acip_ids; }
+        }
+            ]]></add>
+        </operation>
+    </file>
+</modification>

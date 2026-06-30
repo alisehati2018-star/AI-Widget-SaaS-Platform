@@ -1,5 +1,6 @@
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
+import { Icon } from "@/components/icons";
 
 export default function LocaleNotFound() {
   const t = useTranslations("errors");
@@ -7,7 +8,7 @@ export default function LocaleNotFound() {
     <div className="auth-wrap">
       <div className="state">
         <div className="state-icon" aria-hidden>
-          🔍
+          <Icon name="search" size={32} />
         </div>
         <h1 style={{ fontSize: "1.6rem" }}>{t("page.notFoundTitle")}</h1>
         <p>{t("page.notFoundBody")}</p>

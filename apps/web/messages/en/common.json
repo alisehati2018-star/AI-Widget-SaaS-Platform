@@ -26,11 +26,12 @@
   "actions": {
     "save": "Save",
     "delete": "Delete",
-    "signOut": "Sign out"
+    "signOut": "Sign out",
+    "edit": "Edit",
+    "cancel": "Cancel"
   },
   "states": {
-    "loading": "Loading…",
-    "errorTitle": "Something went wrong"
+    "loading": "Loading…"
   },
   "a11y": {
     "skipToContent": "Skip to content",

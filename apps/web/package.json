@@ -11,8 +11,14 @@
     "i18n:check": "node scripts/fe-qa/i18n-check.mjs",
     "check:hardcoded": "node scripts/fe-qa/check-hardcoded.mjs",
     "check:size": "node scripts/fe-qa/check-size.mjs",
+    "check:routes": "node scripts/fe-qa/check-routes.mjs",
+    "check:assets": "node scripts/fe-qa/check-assets.mjs",
+    "check:dead": "node scripts/fe-qa/check-dead.mjs",
     "check:responsive": "node scripts/fe-qa/responsive-check.cjs",
-    "lint": "npm run i18n:check && npm run check:hardcoded && npm run check:size",
+    "check:functional": "node scripts/fe-qa/functional-check.cjs",
+    "check:a11y": "node scripts/fe-qa/a11y-check.cjs",
+    "lint": "npm run i18n:check && npm run check:hardcoded && npm run check:size && npm run check:routes && npm run check:assets",
+    "check:all": "npm run lint && npm run check:dead",
     "prebuild": "npm run lint"
   },
   "dependencies": {
@@ -25,6 +31,7 @@
     "@types/node": "26.0.0",
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
+    "axe-core": "^4.12.1",
     "typescript": "6.0.3"
   }
 }

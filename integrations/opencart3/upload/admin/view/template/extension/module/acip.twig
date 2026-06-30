@@ -1,0 +1,106 @@
+{{ header }}{{ column_left }}
+<div id="content">
+  <div class="page-header">
+    <div class="container-fluid">
+      <div class="pull-right">
+        <button type="submit" form="form-acip" data-toggle="tooltip" title="{{ button_save }}"
+                class="btn btn-primary"><i class="fa fa-save"></i></button>
+        <a href="{{ cancel }}" data-toggle="tooltip" title="{{ button_cancel }}"
+           class="btn btn-default"><i class="fa fa-reply"></i></a>
+      </div>
+      <h1>{{ heading_title }}</h1>
+      <ul class="breadcrumb">
+        {% for breadcrumb in breadcrumbs %}
+          <li><a href="{{ breadcrumb.href }}">{{ breadcrumb.text }}</a></li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+  <div class="container-fluid">
+    {% if error_warning %}
+    <div class="alert alert-danger"><i class="fa fa-exclamation-circle"></i> {{ error_warning }}
+      <button type="button" class="close" data-dismiss="alert">&times;</button></div>
+    {% endif %}
+    <div class="panel panel-default">
+      <div class="panel-heading"><h3 class="panel-title"><i class="fa fa-pencil"></i> {{ text_edit }}</h3></div>
+      <div class="panel-body">
+        <form action="{{ action }}" method="post" enctype="multipart/form-data" id="form-acip" class="form-horizontal">
+
+          <div class="form-group">
+            <label class="col-sm-2 control-label">{{ entry_status }}</label>
+            <div class="col-sm-10"><select name="module_acip_status" class="form-control">
+              {% if module_acip_status %}
+                <option value="1" selected>{{ text_enabled }}</option><option value="0">{{ text_disabled }}</option>
+              {% else %}
+                <option value="1">{{ text_enabled }}</option><option value="0" selected>{{ text_disabled }}</option>
+              {% endif %}
+            </select></div>
+          </div>
+
+          <div class="form-group">
+            <label class="col-sm-2 control-label">{{ entry_api_url }}</label>
+            <div class="col-sm-10"><input type="text" name="module_acip_api_url"
+              value="{{ module_acip_api_url }}" placeholder="https://api.acip.example" class="form-control"/></div>
+          </div>
+
+          <div class="form-group">
+            <label class="col-sm-2 control-label">{{ entry_widget_key }}</label>
+            <div class="col-sm-10"><input type="text" name="module_acip_widget_key"
+              value="{{ module_acip_widget_key }}" class="form-control"/></div>
+          </div>
+
+          <div class="form-group">
+            <label class="col-sm-2 control-label">{{ entry_sync_key }}</label>
+            <div class="col-sm-10"><input type="text" name="module_acip_sync_key"
+              value="{{ module_acip_sync_key }}" class="form-control"/></div>
+          </div>
+
+          <div class="form-group">
+            <label class="col-sm-2 control-label">{{ entry_replace_search }}</label>
+            <div class="col-sm-10"><select name="module_acip_replace_search" class="form-control">
+              {% if module_acip_replace_search %}
+                <option value="1" selected>{{ text_enabled }}</option><option value="0">{{ text_disabled }}</option>
+              {% else %}
+                <option value="1">{{ text_enabled }}</option><option value="0" selected>{{ text_disabled }}</option>
+              {% endif %}
+            </select></div>
+          </div>
+
+          <div class="form-group">
+            <label class="col-sm-2 control-label">{{ entry_inject_widget }}</label>
+            <div class="col-sm-10"><select name="module_acip_inject_widget" class="form-control">
+              {% if module_acip_inject_widget %}
+                <option value="1" selected>{{ text_enabled }}</option><option value="0">{{ text_disabled }}</option>
+              {% else %}
+                <option value="1">{{ text_enabled }}</option><option value="0" selected>{{ text_disabled }}</option>
+              {% endif %}
+            </select></div>
+          </div>
+
+          <div class="form-group">
+            <label class="col-sm-2 control-label">{{ button_bulk_import }}</label>
+            <div class="col-sm-10">
+              <button type="button" id="acip-bulk" class="btn btn-info">
+                <i class="fa fa-cloud-upload"></i> {{ button_bulk_import }}</button>
+              <span class="help-block">{{ help_bulk_import }}</span>
+              <div id="acip-bulk-result"></div>
+            </div>
+          </div>
+
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+<script type="text/javascript">
+document.getElementById('acip-bulk').addEventListener('click', function () {
+  var out = document.getElementById('acip-bulk-result');
+  out.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
+  fetch('{{ bulk_import }}').then(function (r) { return r.json(); }).then(function (j) {
+    out.innerHTML = j.success
+      ? '<div class="alert alert-success">Imported ' + j.count + ' products.</div>'
+      : '<div class="alert alert-danger">' + (j.error || 'Failed') + '</div>';
+  });
+});
+</script>
+{{ footer }}

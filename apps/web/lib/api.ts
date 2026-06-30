@@ -116,10 +116,13 @@ export interface ApiKey {
   last_used_at: string | null;
 }
 export interface Lead {
+  id?: number;
   email: string | null;
   phone: string | null;
   has_intent: boolean;
   source: string;
+  status?: string;
+  notes?: string | null;
   created_at: string | null;
 }
 export interface TeamMember {

@@ -123,7 +123,11 @@
     "empty": "No articles yet — add FAQ or policy articles so the assistant can ground its answers on them.",
     "colTitle": "Title",
     "colUpdated": "Updated",
-    "published": "published"
+    "published": "published",
+    "editTitle": "Edit article",
+    "publish": "Publish",
+    "unpublish": "Unpublish",
+    "updated": "Article updated."
   },
   "analytics": {
     "intro": "Relevance · latency · cost · reliability for your store.",
@@ -172,19 +176,39 @@
     "colEmail": "Email",
     "colPhone": "Phone",
     "colIntent": "Intent",
-    "colSource": "Source"
+    "colSource": "Source",
+    "colStatus": "Status",
+    "statusNew": "New",
+    "statusContacted": "Contacted",
+    "statusQualified": "Qualified",
+    "statusWon": "Won",
+    "statusLost": "Lost"
   },
   "widget": {
     "intro": "Embed the search + chat widget and match it to your brand.",
-    "snippetTitle": "Install snippet",
-    "snippetHint": "Paste before the closing body tag. Use a widget-scoped API key.",
     "copySnippet": "Copy snippet",
     "whiteLabelTitle": "White-label",
     "whiteLabelHint": "Custom logo & accent colour. Platform branding remains visible.",
     "saved": "Branding saved.",
     "logoUrl": "Logo URL",
     "primaryColor": "Primary colour",
-    "saveBranding": "Save branding"
+    "saveBranding": "Save branding",
+    "embedTitle": "Install on your site",
+    "embedReady": "Your store is approved — paste this single line just before </body> on your site.",
+    "embedNotReady": "The embed unlocks once your store is active and you've created a widget-scoped API key.",
+    "embedKeyHint": "Replace YOUR_WIDGET_KEY with a widget-scoped key from the API keys page.",
+    "createKeyCta": "Create a widget key",
+    "statusPending": "Pending approval",
+    "configTitle": "Widget behaviour",
+    "configHint": "These settings apply to your storefront widget.",
+    "greeting": "Assistant greeting",
+    "position": "Launcher position",
+    "positionBottomRight": "Bottom right",
+    "positionBottomLeft": "Bottom left",
+    "chatEnabled": "Enable AI chat",
+    "searchEnabled": "Enable search",
+    "saveConfig": "Save widget settings",
+    "configSaved": "Widget settings saved."
   },
   "keys": {
     "intro": "Scoped, least-privilege keys connect your store and widget to Vitrin.",
@@ -266,7 +290,19 @@
     "erasePrompt": "This erases ALL shopper data (leads, chat memory, events, index). Type your store slug \"{slug}\" to confirm.",
     "erased": "Your store data has been erased.",
     "eraseFailed": "Erase failed — confirmation did not match.",
+    "changePwTitle": "Change password",
+    "changePwHint": "For better security, choose a strong, unique password.",
+    "currentPw": "Current password",
+    "newPw": "New password",
+    "confirmPw": "Confirm new password",
+    "changePwSubmit": "Update password",
+    "pwUpdated": "Password changed successfully.",
     "roleOwner": "owner",
-    "roleStaff": "staff"
+    "roleStaff": "staff",
+    "changeEmailTitle": "Change email",
+    "changeEmailHint": "Enter your password and a new email. We will send a verification link to the new address.",
+    "newEmail": "New email",
+    "changeEmailSubmit": "Change email",
+    "emailChanged": "Email changed. Check your new inbox to verify it."
   }
 }

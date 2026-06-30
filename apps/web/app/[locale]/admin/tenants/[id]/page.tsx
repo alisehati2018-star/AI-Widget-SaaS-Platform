@@ -31,6 +31,17 @@ export default function TenantDetail() {
     setNote(enabled ? t("tenantDetail.noteTrackingOn") : t("tenantDetail.noteTrackingOff"));
   }
 
+  async function exportData() {
+    const out = await authFetch<unknown>(`/admin/tenants/${id}/export`).catch(() => null);
+    if (!out) return;
+    const blob = new Blob([JSON.stringify(out, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `tenant-${id}-export.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
   async function erase() {
     if (!window.confirm(t("tenantDetail.eraseConfirm"))) return;
     await authFetch(`/admin/tenants/${id}/erase`, { method: "POST" }).catch(() => {});
@@ -72,6 +83,7 @@ export default function TenantDetail() {
         <div className="row" style={{ flexWrap: "wrap" }}>
           <button className="btn btn-soft" onClick={() => void setTracking(true)}>{t("tenantDetail.enableTracking")}</button>
           <button className="btn btn-soft" onClick={() => void setTracking(false)}>{t("tenantDetail.disableTracking")}</button>
+          <button className="btn btn-ghost" onClick={() => void exportData()}>{t("tenantDetail.exportData")}</button>
           <button className="btn btn-danger" onClick={() => void erase()}>{t("tenantDetail.eraseData")}</button>
         </div>
       </div>

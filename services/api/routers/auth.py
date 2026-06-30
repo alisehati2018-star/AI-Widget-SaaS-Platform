@@ -45,6 +45,7 @@ _ADMIN = Header(default=None, alias="x-admin-token")
 _AUTHZ = Header(default=None, alias="authorization")
 _ACCESS_COOKIE = Cookie(default=None, alias="vitrin_access")
 _REFRESH_COOKIE = Cookie(default=None, alias="vitrin_refresh")
+_LOCALE_COOKIE = Cookie(default=None, alias="NEXT_LOCALE")  # recipient's UI locale
 
 
 def _set_auth_cookies(response: Response, access: str, refresh: str) -> None:
@@ -186,7 +187,12 @@ def _token_response(user: dict, tokens: dict[str, Any]) -> dict[str, Any]:
 # Signup (self-serve store owner)                                             #
 # --------------------------------------------------------------------------- #
 @router.post("/signup")
-async def signup(payload: dict[str, Any], request: Request, response: Response):
+async def signup(
+    payload: dict[str, Any],
+    request: Request,
+    response: Response,
+    next_locale: str | None = _LOCALE_COOKIE,
+):
     s = get_settings()
     if not s.signup_enabled:
         return error_response(403, "signup_disabled", "Self-serve signup is disabled.")
@@ -255,7 +261,9 @@ async def signup(payload: dict[str, Any], request: Request, response: Response):
             detail={"store_name": store_name},
         )
     # Send the verification email (best-effort, outside the txn).
-    subject, text, html = verification_email(f"{s.app_base_url}/verify-email?token={verify_token}")
+    subject, text, html = verification_email(
+        f"{s.app_base_url}/verify-email?token={verify_token}", next_locale
+    )
     await send_email(email, subject, text, html)
     _set_auth_cookies(response, tokens["access"], tokens["refresh"])
     resp = _token_response(dict(user), tokens)
@@ -489,7 +497,9 @@ async def me(authorization: str | None = _AUTHZ, vitrin_access: str | None = _AC
 # Password reset (request + confirm) — no account enumeration                #
 # --------------------------------------------------------------------------- #
 @router.post("/password/reset-request")
-async def reset_request(payload: dict[str, Any], request: Request):
+async def reset_request(
+    payload: dict[str, Any], request: Request, next_locale: str | None = _LOCALE_COOKIE
+):
     if not await _ip_rate_ok(request):
         return error_response(429, *_RATE_LIMITED)
     email = str(payload.get("email", "")).strip().lower()
@@ -508,7 +518,9 @@ async def reset_request(payload: dict[str, Any], request: Request):
                 _hash_token(token),
                 _now() + timedelta(hours=1),
             )
-            subject, text, html = reset_email(f"{s.app_base_url}/reset-password?token={token}")
+            subject, text, html = reset_email(
+                f"{s.app_base_url}/reset-password?token={token}", next_locale
+            )
             await send_email(email, subject, text, html)
             if s.env != "production":  # dev convenience for testing
                 accepted["reset_token"] = token
@@ -516,7 +528,9 @@ async def reset_request(payload: dict[str, Any], request: Request):
 
 
 @router.post("/verify-request")
-async def verify_request(payload: dict[str, Any], request: Request):
+async def verify_request(
+    payload: dict[str, Any], request: Request, next_locale: str | None = _LOCALE_COOKIE
+):
     """(Re)send an email-verification link. Generic response (no enumeration)."""
     if not await _ip_rate_ok(request):
         return error_response(429, *_RATE_LIMITED)
@@ -532,7 +546,9 @@ async def verify_request(payload: dict[str, Any], request: Request):
         )
         if user is not None and not user["email_verified"]:
             token = await _create_verification(conn, user["id"])
-            subject, text, html = verification_email(f"{s.app_base_url}/verify-email?token={token}")
+            subject, text, html = verification_email(
+                f"{s.app_base_url}/verify-email?token={token}", next_locale
+            )
             await send_email(email, subject, text, html)
             if s.env != "production":
                 accepted["verify_token"] = token
@@ -593,6 +609,90 @@ async def reset_confirm(payload: dict[str, Any]):
                 "UPDATE auth_sessions SET revoked = TRUE WHERE user_id = $1", row["user_id"]
             )
     return {"status": "password_updated"}
+
+
+# --------------------------------------------------------------------------- #
+# Change password (authenticated; verifies the current password)             #
+# --------------------------------------------------------------------------- #
+@router.post("/change-password")
+async def change_password(
+    payload: dict[str, Any],
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _ACCESS_COOKIE,
+):
+    principal = await current_principal(authorization, vitrin_access)
+    if principal is None:
+        return error_response(401, "unauthenticated", "A valid access token is required.")
+    current = str(payload.get("current_password", ""))
+    new_password = str(payload.get("new_password", ""))
+    pw_problems = validate_password_strength(new_password)
+    if pw_problems:
+        return error_response(422, "weak_password", " ".join(pw_problems))
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT password_hash FROM users WHERE id = $1::uuid", principal.user_id
+        )
+        if row is None or not verify_password(current, row["password_hash"]):
+            return error_response(403, "invalid_password", "Your current password is incorrect.")
+        await conn.execute(
+            "UPDATE users SET password_hash = $1 WHERE id = $2::uuid",
+            hash_password(new_password),
+            principal.user_id,
+        )
+    return {"status": "password_updated"}
+
+
+@router.post("/change-email")
+async def change_email(
+    payload: dict[str, Any],
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _ACCESS_COOKIE,
+    next_locale: str | None = _LOCALE_COOKIE,
+):
+    """Change the signed-in user's email. Re-auth with the current password,
+    then set the new address as unverified and send a verification email."""
+    principal = await current_principal(authorization, vitrin_access)
+    if principal is None:
+        return error_response(401, "unauthenticated", "A valid access token is required.")
+    current = str(payload.get("current_password", ""))
+    new_email = str(payload.get("new_email", "")).strip().lower()
+    if not _EMAIL_RE.match(new_email):
+        return error_response(422, "invalid_email", "A valid email is required.")
+    s = get_settings()
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT email, password_hash FROM users WHERE id = $1::uuid", principal.user_id
+        )
+        if row is None or not verify_password(current, row["password_hash"]):
+            return error_response(403, "invalid_password", "Your current password is incorrect.")
+        if new_email == row["email"]:
+            return error_response(422, "invalid_email", "This is already your email address.")
+        if await conn.fetchval(
+            "SELECT 1 FROM users WHERE lower(email) = $1 AND id <> $2::uuid",
+            new_email,
+            principal.user_id,
+        ):
+            return error_response(409, "email_taken", "An account with this email already exists.")
+        async with conn.transaction():
+            await conn.execute(
+                "UPDATE users SET email = $1, email_verified = FALSE WHERE id = $2::uuid",
+                new_email,
+                principal.user_id,
+            )
+            verify_token = await _create_verification(conn, principal.user_id)
+        await audit(
+            pool, actor=row["email"], action="auth.change_email", detail={"new_email": new_email}
+        )
+    subject, text, html = verification_email(
+        f"{s.app_base_url}/verify-email?token={verify_token}", next_locale
+    )
+    await send_email(new_email, subject, text, html)
+    resp = {"status": "email_changed", "email": new_email}
+    if s.env != "production":
+        resp["verify_token"] = verify_token
+    return resp
 
 
 # --------------------------------------------------------------------------- #

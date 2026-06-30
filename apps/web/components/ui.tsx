@@ -21,12 +21,14 @@ export function Field({
   hint?: string;
   children: ReactNode;
 }) {
+  // The <label> wraps the control so it's programmatically associated (no id
+  // wiring needed) — gives every form field a proper accessible name.
   return (
-    <div className="field">
-      <label className="label">{label}</label>
+    <label className="field">
+      <span className="label">{label}</span>
       {children}
       {hint ? <span className="hint">{hint}</span> : null}
-    </div>
+    </label>
   );
 }
 
@@ -51,12 +53,6 @@ export function Badge({
   tone?: "success" | "warning" | "brand";
 }) {
   return <span className={`badge${tone ? ` badge-${tone}` : ""}`}>{children}</span>;
-}
-
-/** Wraps a table so it scrolls within its own box instead of overflowing the
- *  page. Use for wide tables that may exceed the viewport on small screens. */
-export function TableWrap({ children }: { children: ReactNode }) {
-  return <div className="table-wrap">{children}</div>;
 }
 
 export function Stat({ label, value }: { label: string; value: ReactNode }) {

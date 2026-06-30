@@ -1,8 +1,9 @@
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { MarketingFooter, MarketingNav } from "@/components/marketing";
+import { Icon, type IconName } from "@/components/icons";
 
-const ICONS = ["🔎", "🛒", "📊", "🔒", "💸", "🔌"];
+const ICONS: IconName[] = ["search", "conversion", "analytics", "lock", "cost", "integrations"];
 
 export default function FeaturesPage() {
   const t = useTranslations("marketing");
@@ -20,7 +21,7 @@ export default function FeaturesPage() {
           <div className="feature-grid">
             {sections.map((s, i) => (
               <div className="card" key={s.title}>
-                <div className="feature-icon">{ICONS[i]}</div>
+                <div className="feature-icon"><Icon name={ICONS[i]} size={22} /></div>
                 <h3 style={{ fontSize: "1.15rem" }}>{s.title}</h3>
                 <ul className="feature-list">
                   {s.points.map((p) => (
