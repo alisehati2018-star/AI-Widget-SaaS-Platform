@@ -44,6 +44,34 @@ class Acip {
         ));
     }
 
+    /**
+     * Connectivity check for the admin "Test connection" button. Hits the
+     * public, unauthenticated /healthz probe (no api key required) so it only
+     * verifies the API URL is reachable, then reports whether the widget/sync
+     * keys are at least present.
+     */
+    public function ping() {
+        if (!$this->api_url) {
+            return array('ok' => false, 'error' => 'missing_api_url');
+        }
+        $ch = curl_init(rtrim($this->api_url, '/') . '/healthz');
+        curl_setopt_array($ch, array(
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 5,
+        ));
+        $body = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $err  = curl_error($ch);
+        curl_close($ch);
+        return array(
+            'ok'          => ($code === 200),
+            'http_status' => $code,
+            'error'       => $err ?: null,
+            'has_widget_key' => (bool) $this->widget_key,
+            'has_sync_key'   => (bool) $this->sync_key,
+        );
+    }
+
     private function call($path, $key, $payload) {
         if (!$this->api_url || !$key) {
             return array();

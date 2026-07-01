@@ -109,6 +109,54 @@ Full-stack expansion driven by `reports/backend/gap-analysis.md`:
 - Gates: backend 103 passed/10 ES-skipped, ruff clean, mypy clean (87 files);
   web typecheck + i18n 0/0 + hardcoded 0 + size 0 + routes 0 + dead 0.
 
+## Phase 15 — Full-page layout + admin/dashboard completeness pass
+Layout audit found `.main` capped at 1080px (huge dead space on wide screens)
+and several pages were a single narrow floating card. Full page-by-page audit
+(two Explore agents, admin + owner dashboard) then fixed every finding:
+- **Layout system**: `.main` widened to 1760px; new `.dash-2col` /
+  `.dash-2col-even` / `.dash-3col` / `.card-stack` grid utilities so related
+  panels sit side-by-side instead of stacking in one column.
+- **admin/plans**: rebuilt as a list+detail layout (table + sticky edit panel).
+- **admin/analytics**: tenant selector moved into the header; added
+  most-wanted + zero-results + an **Insight** narrative + **funnel** panel +
+  an **"Ask the analyst"** NL question box — wiring the previously-unused
+  `GET /admin/insight` and `POST /admin/analyst` endpoints.
+- **admin/synonyms**, **admin/agent**: tenant selector moved into the header;
+  agent console gained a "Store context" panel (tenant id + live indexed-doc
+  count via the previously-unused `GET /admin/es/tenant-count`).
+- **admin/elasticsearch**: added a per-store document-count widget.
+- **admin/users**: added `POST /admin/users/{email}/role` (promote/demote
+  platform_admin ↔ store roles) with an inline role editor — closes the only
+  admin capability gap found (no way to grant a second platform admin without
+  the raw operator token).
+- **admin/settings**: was pure display; now has working change-password +
+  change-email forms (same endpoints as the owner dashboard) alongside the
+  security/platform info panels.
+- **admin/health**: added a "related diagnostics" quick-link panel.
+- **admin/widget**, **dashboard/widget**: added a live preview panel (launcher
+  + greeting bubble reflecting the actual color/position/greeting settings).
+- **dashboard/knowledge**: rebuilt as a list+detail layout (matches admin/plans).
+- **dashboard/settings**: split into store/tracking/privacy (left) and
+  password/email security (right).
+- Verified live in-browser (Playwright, real PG+Redis+API, fresh admin +
+  store-owner accounts): screenshotted every redesigned page, and ran a full
+  create→edit→publish→save round trip on the knowledge-base feature against
+  the real backend. Elasticsearch was intentionally left down for this pass
+  (per instruction, ES testing is the user's own responsibility) — pages
+  degrade to honest "unavailable" states rather than crashing.
+- Gates: web typecheck + i18n 0/0 + hardcoded/size/routes/dead 0, `next build`
+  99 pages; backend 103 passed/10 ES-skipped, ruff + mypy clean (87 files).
+- **integrations/opencart3**: added a "Test connection" check (admin
+  controller + `Acip::ping()`), a Persian (`fa`) admin language pack alongside
+  `en-gb`, and fixed the OCMOD to register the widget-injection event through
+  the OC3 event table (not an OC4-style startup patch).
+- **integrations/wordpress**: rebuilt to full plugin conventions — enqueued
+  `assets/js/admin.js` + `assets/css/admin.css` (no more inline `<script>`),
+  `uninstall.php` (clean option removal, multisite-aware), a "Test connection"
+  AJAX check, a Settings link on the Plugins list, `languages/` with a
+  `.pot` template plus a compiled `fa_IR` translation (`.po` + `.mo`), and
+  `index.php` directory-listing guards in every subfolder.
+
 ## QA system (enforced: CI `check:all` + `prebuild`)
 Static gates (fail build): i18n parity+missing+unused · hardcoded strings ·
 component size ≤300 · broken routes · missing assets. Reported: dead components.

@@ -30,12 +30,23 @@ export default function AdminAgent() {
   const [turn, setTurn] = useState<ChatTurn | null>(null);
   const [results, setResults] = useState<Citation[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [docCount, setDocCount] = useState<number | null>(null);
 
   useEffect(() => {
     authFetch<{ tenants: TenantRow[] }>("/admin/tenants")
       .then((r) => { setTenants(r.tenants); if (r.tenants[0]) setSelected(r.tenants[0].id); })
       .catch(() => setTenants([]));
   }, []);
+
+  useEffect(() => {
+    if (!selected) return;
+    setDocCount(null);
+    setTurn(null);
+    setResults(null);
+    authFetch<{ docs: number }>(`/admin/es/tenant-count?tenant=${encodeURIComponent(selected)}`)
+      .then((r) => setDocCount(r.docs))
+      .catch(() => setDocCount(null));
+  }, [selected]);
 
   async function send() {
     if (!selected || !message.trim()) return;
@@ -82,60 +93,80 @@ export default function AdminAgent() {
 
   return (
     <DashboardShell title={t("agent.title")} nav={nav} requireAdmin loginHref="/admin/login">
-      <p style={{ marginTop: "-1rem" }}>{t("agent.intro")}</p>
+      <div className="row-between" style={{ marginTop: "-1rem", marginBottom: "1.5rem", flexWrap: "wrap", gap: ".75rem" }}>
+        <p style={{ margin: 0 }}>{t("agent.intro")}</p>
+        <select className="input" style={{ maxWidth: 260 }} value={selected} onChange={(e) => setSelected(e.target.value)}>
+          {tenants.length === 0 ? <option value="">{t("common.noTenants")}</option> : null}
+          {tenants.map((tn) => <option key={tn.id} value={tn.id}>{tn.name}</option>)}
+        </select>
+      </div>
       {err ? <Alert kind="error">{err}</Alert> : null}
 
-      <div className="card" style={{ maxWidth: 480, marginBottom: "1.5rem" }}>
-        <Field label={t("agent.selectTenant")}>
-          <select className="input" value={selected} onChange={(e) => setSelected(e.target.value)}>
-            {tenants.length === 0 ? <option value="">{t("common.noTenants")}</option> : null}
-            {tenants.map((tn) => <option key={tn.id} value={tn.id}>{tn.name}</option>)}
-          </select>
-        </Field>
-      </div>
+      <div className="dash-2col">
+        <div className="card-stack">
+          <div className="row" style={{ gap: ".5rem" }}>
+            <button className={`btn ${tab === "chat" ? "btn-primary" : "btn-soft"}`} onClick={() => setTab("chat")}>{t("agent.tabChat")}</button>
+            <button className={`btn ${tab === "search" ? "btn-primary" : "btn-soft"}`} onClick={() => setTab("search")}>{t("agent.tabSearch")}</button>
+          </div>
 
-      <div className="row" style={{ gap: ".5rem", marginBottom: "1rem" }}>
-        <button className={`btn ${tab === "chat" ? "btn-primary" : "btn-soft"}`} onClick={() => setTab("chat")}>{t("agent.tabChat")}</button>
-        <button className={`btn ${tab === "search" ? "btn-primary" : "btn-soft"}`} onClick={() => setTab("search")}>{t("agent.tabSearch")}</button>
-      </div>
-
-      {tab === "chat" ? (
-        <div className="card">
-          <Field label={t("agent.messageLabel")}>
-            <Input value={message} onChange={(e) => setMessage(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") void send(); }}
-              placeholder={t("agent.messagePlaceholder")} />
-          </Field>
-          <button className="btn btn-primary" disabled={busy || !selected} onClick={() => void send()}>
-            {busy ? <Spinner /> : t("agent.send")}
-          </button>
-          {turn ? (
-            <div style={{ marginTop: "1.25rem" }}>
-              <div className="row" style={{ gap: ".5rem", flexWrap: "wrap", marginBottom: ".75rem" }}>
-                <Badge tone="brand">{t("agent.rung")}: {turn.rung}</Badge>
-                {turn.latency_ms != null ? <Badge>{t("agent.latency")}: {turn.latency_ms} ms</Badge> : null}
-                {turn.cached ? <Badge tone="success">{t("agent.cached")}</Badge> : null}
-              </div>
-              <h4>{t("agent.answer")}</h4>
-              <p style={{ whiteSpace: "pre-wrap" }}>{turn.answer}</p>
-              <h4>{t("agent.citations")}</h4>
-              {citationList(turn.citations ?? [])}
+          {tab === "chat" ? (
+            <div className="card">
+              <Field label={t("agent.messageLabel")}>
+                <Input value={message} onChange={(e) => setMessage(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") void send(); }}
+                  placeholder={t("agent.messagePlaceholder")} />
+              </Field>
+              <button className="btn btn-primary" disabled={busy || !selected} onClick={() => void send()}>
+                {busy ? <Spinner /> : t("agent.send")}
+              </button>
+              {turn ? (
+                <div style={{ marginTop: "1.25rem" }}>
+                  <div className="row" style={{ gap: ".5rem", flexWrap: "wrap", marginBottom: ".75rem" }}>
+                    <Badge tone="brand">{t("agent.rung")}: {turn.rung}</Badge>
+                    {turn.latency_ms != null ? <Badge>{t("agent.latency")}: {turn.latency_ms} ms</Badge> : null}
+                    {turn.cached ? <Badge tone="success">{t("agent.cached")}</Badge> : null}
+                  </div>
+                  <h4>{t("agent.answer")}</h4>
+                  <p style={{ whiteSpace: "pre-wrap" }}>{turn.answer}</p>
+                  <h4>{t("agent.citations")}</h4>
+                  {citationList(turn.citations ?? [])}
+                </div>
+              ) : <p className="muted" style={{ marginTop: "1rem" }}>{t("agent.empty")}</p>}
             </div>
-          ) : <p className="muted" style={{ marginTop: "1rem" }}>{t("agent.empty")}</p>}
+          ) : (
+            <div className="card">
+              <Field label={t("agent.tabSearch")}>
+                <Input value={query} onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") void runSearch(); }}
+                  placeholder={t("agent.queryPlaceholder")} />
+              </Field>
+              <button className="btn btn-primary" disabled={busy || !selected} onClick={() => void runSearch()}>
+                {busy ? <Spinner /> : t("agent.runSearch")}
+              </button>
+              {results ? <div style={{ marginTop: "1.25rem" }}><h4>{t("agent.results")}</h4>{citationList(results)}</div> : null}
+            </div>
+          )}
         </div>
-      ) : (
-        <div className="card">
-          <Field label={t("agent.tabSearch")}>
-            <Input value={query} onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") void runSearch(); }}
-              placeholder={t("agent.queryPlaceholder")} />
-          </Field>
-          <button className="btn btn-primary" disabled={busy || !selected} onClick={() => void runSearch()}>
-            {busy ? <Spinner /> : t("agent.runSearch")}
-          </button>
-          {results ? <div style={{ marginTop: "1.25rem" }}><h4>{t("agent.results")}</h4>{citationList(results)}</div> : null}
+
+        <div className="card-stack">
+          <div className="card">
+            <h3>{t("agent.contextTitle")}</h3>
+            <table className="table">
+              <tbody>
+                <tr><td className="muted">{t("common.tenant")}</td><td><code>{selected || "—"}</code></td></tr>
+                <tr>
+                  <td className="muted">{t("agent.indexedDocs")}</td>
+                  <td>{docCount == null ? t("agent.docsLoading") : docCount}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div className="card">
+            <h3>{t("agent.sessionTitle")}</h3>
+            <p className="hint">{t("agent.sessionHint")}</p>
+          </div>
         </div>
-      )}
+      </div>
     </DashboardShell>
   );
 }

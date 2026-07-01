@@ -1,0 +1,10 @@
+/* ACIP admin settings page styling (WooCommerce > ACIP Search). */
+.acip-settings-page .form-table td p.description {
+  max-width: 480px;
+}
+#acip-bulk-result {
+  display: inline-block;
+  margin-inline-start: 0.6em;
+  font-style: italic;
+  color: #50575e;
+}

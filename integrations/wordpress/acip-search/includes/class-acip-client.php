@@ -21,6 +21,27 @@ class ACIP_Client {
         $this->sync_key   = isset($options['sync_key']) ? $options['sync_key'] : '';
     }
 
+    /**
+     * Connectivity check for the admin "Test connection" button. Hits the
+     * public, unauthenticated /healthz probe so it only verifies the API URL
+     * is reachable, independent of whether the keys are valid yet.
+     */
+    public function ping() {
+        if (!$this->api_url) {
+            return array('ok' => false, 'error' => 'missing_api_url');
+        }
+        $resp = wp_remote_get($this->api_url . '/healthz', array('timeout' => 5));
+        if (is_wp_error($resp)) {
+            return array('ok' => false, 'error' => $resp->get_error_message());
+        }
+        return array(
+            'ok'             => (wp_remote_retrieve_response_code($resp) === 200),
+            'http_status'    => wp_remote_retrieve_response_code($resp),
+            'has_widget_key' => (bool) $this->widget_key,
+            'has_sync_key'   => (bool) $this->sync_key,
+        );
+    }
+
     /** Hybrid search; returns the result rows (empty on any failure). */
     public function search($query, $size = 24, $filters = array()) {
         $resp = $this->post('/v1/search', $this->widget_key, array(

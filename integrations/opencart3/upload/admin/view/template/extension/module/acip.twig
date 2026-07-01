@@ -39,8 +39,17 @@
 
           <div class="form-group">
             <label class="col-sm-2 control-label">{{ entry_api_url }}</label>
-            <div class="col-sm-10"><input type="text" name="module_acip_api_url"
-              value="{{ module_acip_api_url }}" placeholder="https://api.acip.example" class="form-control"/></div>
+            <div class="col-sm-10">
+              <div class="input-group">
+                <input type="text" id="input-api-url" name="module_acip_api_url"
+                  value="{{ module_acip_api_url }}" placeholder="https://api.acip.example" class="form-control"/>
+                <span class="input-group-btn">
+                  <button type="button" id="acip-test" class="btn btn-default">
+                    <i class="fa fa-plug"></i> {{ button_test_connection }}</button>
+                </span>
+              </div>
+              <div id="acip-test-result" style="margin-top: 8px;"></div>
+            </div>
           </div>
 
           <div class="form-group">
@@ -101,6 +110,21 @@ document.getElementById('acip-bulk').addEventListener('click', function () {
       ? '<div class="alert alert-success">Imported ' + j.count + ' products.</div>'
       : '<div class="alert alert-danger">' + (j.error || 'Failed') + '</div>';
   });
+});
+
+document.getElementById('acip-test').addEventListener('click', function () {
+  var out = document.getElementById('acip-test-result');
+  out.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
+  var body = new URLSearchParams({
+    module_acip_api_url: document.getElementById('input-api-url').value,
+    module_acip_widget_key: document.querySelector('[name="module_acip_widget_key"]').value,
+    module_acip_sync_key: document.querySelector('[name="module_acip_sync_key"]').value
+  });
+  fetch('{{ test_connection }}', { method: 'POST', body: body })
+    .then(function (r) { return r.json(); })
+    .then(function (j) {
+      out.innerHTML = '<div class="alert alert-' + (j.ok ? 'success' : 'danger') + '">' + j.message + '</div>';
+    });
 });
 </script>
 {{ footer }}

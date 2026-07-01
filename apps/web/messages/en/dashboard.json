@@ -208,7 +208,10 @@
     "chatEnabled": "Enable AI chat",
     "searchEnabled": "Enable search",
     "saveConfig": "Save widget settings",
-    "configSaved": "Widget settings saved."
+    "configSaved": "Widget settings saved.",
+    "previewTitle": "Live preview",
+    "previewHint": "How your launcher looks on your storefront with these settings.",
+    "previewGreetingFallback": "Hi! How can I help you find a product?"
   },
   "keys": {
     "intro": "Scoped, least-privilege keys connect your store and widget to Vitrin.",

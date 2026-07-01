@@ -28,7 +28,7 @@ class ControllerExtensionModuleAcip extends Controller {
             'heading_title', 'text_edit', 'text_enabled', 'text_disabled',
             'entry_status', 'entry_api_url', 'entry_widget_key', 'entry_sync_key',
             'entry_replace_search', 'entry_inject_widget', 'button_save', 'button_cancel',
-            'button_bulk_import', 'help_bulk_import',
+            'button_bulk_import', 'help_bulk_import', 'button_test_connection',
         );
         foreach ($fields as $f) {
             $data[$f] = $this->language->get($f);
@@ -52,6 +52,8 @@ class ControllerExtensionModuleAcip extends Controller {
         $data['cancel'] = $this->url->link('marketplace/extension',
             'user_token=' . $this->session->data['user_token'] . '&type=module', true);
         $data['bulk_import'] = $this->url->link('extension/module/acip.bulkImport',
+            'user_token=' . $this->session->data['user_token'], true);
+        $data['test_connection'] = $this->url->link('extension/module/acip.testConnection',
             'user_token=' . $this->session->data['user_token'], true);
 
         // Bind each setting, defaulting where unset.
@@ -92,6 +94,28 @@ class ControllerExtensionModuleAcip extends Controller {
         } catch (Exception $e) {
             $json['error'] = $e->getMessage();
         }
+        $this->response->addHeader('Content-Type: application/json');
+        $this->response->setOutput(json_encode($json));
+    }
+
+    /** AJAX: verify the configured API URL is reachable (uses live posted
+     *  values, not just the saved config, so the button works before saving). */
+    public function testConnection() {
+        $this->load->language('extension/module/acip');
+        $registry = clone $this->registry;
+        $config = clone $this->config;
+        $config->set('module_acip_api_url', $this->request->post['module_acip_api_url'] ?? '');
+        $config->set('module_acip_widget_key', $this->request->post['module_acip_widget_key'] ?? '');
+        $config->set('module_acip_sync_key', $this->request->post['module_acip_sync_key'] ?? '');
+        $registry->set('config', $config);
+
+        $acip = new Acip($registry);
+        $result = $acip->ping();
+        $json = $result + array(
+            'message' => $result['ok']
+                ? $this->language->get('text_test_success')
+                : $this->language->get('text_test_failed'),
+        );
         $this->response->addHeader('Content-Type: application/json');
         $this->response->setOutput(json_encode($json));
     }

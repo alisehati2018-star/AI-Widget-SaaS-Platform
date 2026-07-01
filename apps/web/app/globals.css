@@ -176,8 +176,20 @@ small { color: var(--faint); }
 .side-link svg { flex-shrink: 0; }
 .side-link:hover { background: var(--panel-2); color: var(--text); }
 .side-link.active { background: rgba(124,92,255,0.12); color: var(--text); border: 1px solid rgba(124,92,255,0.3); }
-.main { padding: 2rem 2.4rem; max-width: 1080px; min-width: 0; }
+.main { padding: 2rem 2.4rem; max-width: 1760px; min-width: 0; width: 100%; }
 .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
+
+/* ---------- Dashboard content grids (fill the page; collapse on narrow) ----
+   Use these to lay related cards side-by-side instead of stacking every card
+   in one narrow column. `-even` splits 50/50; the default gives the primary
+   panel more room; `-3` is for three same-weight panels (e.g. settings groups). */
+.dash-2col { display: grid; grid-template-columns: 1.4fr 1fr; gap: 1.5rem; align-items: start; }
+.dash-2col-even { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; align-items: start; }
+.dash-3col { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; align-items: start; }
+.card-stack { display: flex; flex-direction: column; gap: 1.5rem; }
+@media (max-width: 1100px) {
+  .dash-2col, .dash-2col-even, .dash-3col { grid-template-columns: 1fr; }
+}
 
 /* mobile drawer chrome (hidden on desktop) */
 .mobile-topbar { display: none; }
@@ -197,6 +209,7 @@ small { color: var(--faint); }
 .table th { text-align: left; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--faint); padding: 0.7rem 0.8rem; border-bottom: 1px solid var(--border); }
 .table td { padding: 0.8rem; border-bottom: 1px solid var(--border-soft); font-size: 0.9rem; }
 .table tr:hover td { background: var(--panel); }
+.table tr.row-selected td { background: rgba(124,92,255,0.1); border-color: rgba(124,92,255,0.3); }
 /* Responsive tables: a table never forces page-level horizontal scroll. The
    wrapper (or any card directly containing a table) scrolls within itself while
    columns keep a sensible minimum width. */

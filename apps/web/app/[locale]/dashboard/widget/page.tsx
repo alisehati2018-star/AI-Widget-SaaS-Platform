@@ -5,6 +5,7 @@ import { Link } from "@/i18n/navigation";
 import { useEffect, useState } from "react";
 import { authFetch } from "@/lib/auth";
 import { DashboardShell, useOwnerNav } from "@/components/shell";
+import { Icon } from "@/components/icons";
 import { Alert, Badge, Field, Input, Spinner } from "@/components/ui";
 
 interface WidgetInfo {
@@ -120,48 +121,93 @@ export default function WidgetPage() {
         )}
       </div>
 
-      <div className="card" style={{ marginBottom: "1.5rem" }}>
-        <h3>{t("widget.configTitle")}</h3>
-        <p className="hint">{t("widget.configHint")}</p>
-        {savedConfig ? <Alert kind="success">{t("widget.configSaved")}</Alert> : null}
-        <form onSubmit={saveConfig} style={{ maxWidth: 480 }}>
-          <Field label={t("widget.greeting")}>
-            <Input value={cfg.widget_greeting} onChange={(e) => setCfg({ ...cfg, widget_greeting: e.target.value })} />
-          </Field>
-          <Field label={t("widget.position")}>
-            <select className="input" value={cfg.position} onChange={(e) => setCfg({ ...cfg, position: e.target.value })}>
-              <option value="bottom-right">{t("widget.positionBottomRight")}</option>
-              <option value="bottom-left">{t("widget.positionBottomLeft")}</option>
-            </select>
-          </Field>
-          <label className="row" style={{ gap: ".5rem", marginBottom: ".5rem" }}>
-            <input type="checkbox" checked={cfg.chat_enabled} onChange={(e) => setCfg({ ...cfg, chat_enabled: e.target.checked })} />
-            {t("widget.chatEnabled")}
-          </label>
-          <label className="row" style={{ gap: ".5rem", marginBottom: "1rem" }}>
-            <input type="checkbox" checked={cfg.search_enabled} onChange={(e) => setCfg({ ...cfg, search_enabled: e.target.checked })} />
-            {t("widget.searchEnabled")}
-          </label>
-          <button className="btn btn-primary" disabled={busy}>{busy ? <Spinner /> : t("widget.saveConfig")}</button>
-        </form>
-      </div>
+      <div className="dash-2col">
+        <div className="card-stack">
+          <div className="card">
+            <h3>{t("widget.configTitle")}</h3>
+            <p className="hint">{t("widget.configHint")}</p>
+            {savedConfig ? <Alert kind="success">{t("widget.configSaved")}</Alert> : null}
+            <form onSubmit={saveConfig}>
+              <Field label={t("widget.greeting")}>
+                <Input value={cfg.widget_greeting} onChange={(e) => setCfg({ ...cfg, widget_greeting: e.target.value })} />
+              </Field>
+              <Field label={t("widget.position")}>
+                <select className="input" value={cfg.position} onChange={(e) => setCfg({ ...cfg, position: e.target.value })}>
+                  <option value="bottom-right">{t("widget.positionBottomRight")}</option>
+                  <option value="bottom-left">{t("widget.positionBottomLeft")}</option>
+                </select>
+              </Field>
+              <label className="row" style={{ gap: ".5rem", marginBottom: ".5rem" }}>
+                <input type="checkbox" checked={cfg.chat_enabled} onChange={(e) => setCfg({ ...cfg, chat_enabled: e.target.checked })} />
+                {t("widget.chatEnabled")}
+              </label>
+              <label className="row" style={{ gap: ".5rem", marginBottom: "1rem" }}>
+                <input type="checkbox" checked={cfg.search_enabled} onChange={(e) => setCfg({ ...cfg, search_enabled: e.target.checked })} />
+                {t("widget.searchEnabled")}
+              </label>
+              <button className="btn btn-primary" disabled={busy}>{busy ? <Spinner /> : t("widget.saveConfig")}</button>
+            </form>
+          </div>
 
-      <div className="card">
-        <h3>{t("widget.whiteLabelTitle")}</h3>
-        <p className="hint">{t("widget.whiteLabelHint")}</p>
-        {savedBranding ? <Alert kind="success">{t("widget.saved")}</Alert> : null}
-        <form onSubmit={saveBranding} style={{ maxWidth: 480 }}>
-          <Field label={t("widget.logoUrl")}>
-            <Input value={cfg.logo_url} onChange={(e) => setCfg({ ...cfg, logo_url: e.target.value })} placeholder="https://.../logo.svg" />
-          </Field>
-          <Field label={t("widget.primaryColor")}>
-            <div className="row">
-              <input type="color" value={cfg.primary_color} onChange={(e) => setCfg({ ...cfg, primary_color: e.target.value })} style={{ width: 48, height: 38, border: "none", background: "none" }} />
-              <Input value={cfg.primary_color} onChange={(e) => setCfg({ ...cfg, primary_color: e.target.value })} style={{ maxWidth: 160 }} />
+          <div className="card">
+            <h3>{t("widget.whiteLabelTitle")}</h3>
+            <p className="hint">{t("widget.whiteLabelHint")}</p>
+            {savedBranding ? <Alert kind="success">{t("widget.saved")}</Alert> : null}
+            <form onSubmit={saveBranding}>
+              <Field label={t("widget.logoUrl")}>
+                <Input value={cfg.logo_url} onChange={(e) => setCfg({ ...cfg, logo_url: e.target.value })} placeholder="https://.../logo.svg" />
+              </Field>
+              <Field label={t("widget.primaryColor")}>
+                <div className="row">
+                  <input type="color" value={cfg.primary_color} onChange={(e) => setCfg({ ...cfg, primary_color: e.target.value })} style={{ width: 48, height: 38, border: "none", background: "none" }} />
+                  <Input value={cfg.primary_color} onChange={(e) => setCfg({ ...cfg, primary_color: e.target.value })} style={{ maxWidth: 160 }} />
+                </div>
+              </Field>
+              <button className="btn btn-primary" disabled={busy}>{busy ? <Spinner /> : t("widget.saveBranding")}</button>
+            </form>
+          </div>
+        </div>
+
+        <div className="card">
+          <h3>{t("widget.previewTitle")}</h3>
+          <p className="hint">{t("widget.previewHint")}</p>
+          <div
+            style={{
+              position: "relative",
+              minHeight: 260,
+              border: "1px dashed var(--border)",
+              borderRadius: "var(--radius)",
+              background: "var(--bg-soft)",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                position: "absolute",
+                bottom: 16,
+                [cfg.position === "bottom-left" ? "left" : "right"]: 16,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: cfg.position === "bottom-left" ? "flex-start" : "flex-end",
+                gap: "0.6rem",
+              }}
+            >
+              {cfg.chat_enabled ? (
+                <div className="mock-bubble bot" style={{ maxWidth: 220 }}>{cfg.widget_greeting || t("widget.previewGreetingFallback")}</div>
+              ) : null}
+              <div
+                style={{
+                  width: 52, height: 52, borderRadius: "50%",
+                  background: cfg.primary_color, color: "#fff",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  boxShadow: "var(--shadow)",
+                }}
+              >
+                <Icon name="chat" size={24} />
+              </div>
             </div>
-          </Field>
-          <button className="btn btn-primary" disabled={busy}>{busy ? <Spinner /> : t("widget.saveBranding")}</button>
-        </form>
+          </div>
+        </div>
       </div>
     </DashboardShell>
   );

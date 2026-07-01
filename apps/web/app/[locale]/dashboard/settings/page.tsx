@@ -108,81 +108,87 @@ export default function SettingsPage() {
     <DashboardShell title={t("nav.settings")} nav={nav}>
       {note ? <Alert kind="success">{note}</Alert> : null}
 
-      <div className="card" style={{ marginBottom: "1.5rem" }}>
-        <h3>{t("settings.storeTitle")}</h3>
-        {profile ? (
-          <table className="table">
-            <tbody>
-              <tr><td className="muted">{t("settings.storeName")}</td><td>{profile.name}</td></tr>
-              <tr><td className="muted">{t("settings.slug")}</td><td>{profile.slug}</td></tr>
-              <tr><td className="muted">{t("settings.status")}</td><td><Badge tone="success">{profile.status}</Badge></td></tr>
-              <tr><td className="muted">{t("settings.plan")}</td><td>{profile.plan} ({profile.sub_status})</td></tr>
-              <tr><td className="muted">{t("settings.yourRole")}</td><td>{roleLabel}</td></tr>
-              <tr><td className="muted">{t("settings.account")}</td><td>{user?.email}</td></tr>
-            </tbody>
-          </table>
-        ) : (
-          <Spinner />
-        )}
-      </div>
-
-      <div className="card" style={{ marginBottom: "1.5rem" }}>
-        <div className="row-between">
-          <div>
-            <h3 style={{ margin: 0 }}>{t("settings.trackingTitle")}</h3>
-            <p style={{ margin: "0.3rem 0 0" }} className="hint">{t("settings.trackingHint")}</p>
+      <div className="dash-2col">
+        <div className="card-stack">
+          <div className="card">
+            <h3>{t("settings.storeTitle")}</h3>
+            {profile ? (
+              <table className="table">
+                <tbody>
+                  <tr><td className="muted">{t("settings.storeName")}</td><td>{profile.name}</td></tr>
+                  <tr><td className="muted">{t("settings.slug")}</td><td>{profile.slug}</td></tr>
+                  <tr><td className="muted">{t("settings.status")}</td><td><Badge tone="success">{profile.status}</Badge></td></tr>
+                  <tr><td className="muted">{t("settings.plan")}</td><td>{profile.plan} ({profile.sub_status})</td></tr>
+                  <tr><td className="muted">{t("settings.yourRole")}</td><td>{roleLabel}</td></tr>
+                  <tr><td className="muted">{t("settings.account")}</td><td>{user?.email}</td></tr>
+                </tbody>
+              </table>
+            ) : (
+              <Spinner />
+            )}
           </div>
-          <button className={`btn ${tracking ? "btn-soft" : "btn-primary"}`} onClick={() => void toggleTracking()}>
-            {tracking ? t("settings.trackingDisable") : t("settings.trackingEnable")}
-          </button>
+
+          <div className="card">
+            <div className="row-between">
+              <div>
+                <h3 style={{ margin: 0 }}>{t("settings.trackingTitle")}</h3>
+                <p style={{ margin: "0.3rem 0 0" }} className="hint">{t("settings.trackingHint")}</p>
+              </div>
+              <button className={`btn ${tracking ? "btn-soft" : "btn-primary"}`} onClick={() => void toggleTracking()}>
+                {tracking ? t("settings.trackingDisable") : t("settings.trackingEnable")}
+              </button>
+            </div>
+          </div>
+
+          <div className="card">
+            <h3>{t("settings.privacyTitle")}</h3>
+            <p className="hint">{t("settings.privacyHint")}</p>
+            <div className="row" style={{ flexWrap: "wrap" }}>
+              <button className="btn btn-ghost" onClick={() => void exportData()}>{t("settings.exportData")}</button>
+              <button className="btn btn-danger" onClick={() => void eraseData()}>{t("settings.eraseData")}</button>
+            </div>
+          </div>
         </div>
-      </div>
 
-      <div className="card" style={{ marginBottom: "1.5rem" }}>
-        <h3>{t("settings.changePwTitle")}</h3>
-        <p className="hint">{t("settings.changePwHint")}</p>
-        {pwNote ? <Alert kind="success">{pwNote}</Alert> : null}
-        {pwError ? <Alert kind="error">{pwError}</Alert> : null}
-        <form onSubmit={changePassword} style={{ maxWidth: 420 }}>
-          <Field label={t("settings.currentPw")}>
-            <Input type="password" value={pw.current} onChange={(e) => setPw({ ...pw, current: e.target.value })} required />
-          </Field>
-          <Field label={t("settings.newPw")}>
-            <Input type="password" value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })} required />
-          </Field>
-          <Field label={t("settings.confirmPw")}>
-            <Input type="password" value={pw.confirm} onChange={(e) => setPw({ ...pw, confirm: e.target.value })} required />
-          </Field>
-          <button className="btn btn-primary" disabled={pwBusy}>
-            {pwBusy ? <Spinner /> : t("settings.changePwSubmit")}
-          </button>
-        </form>
-      </div>
+        <div className="card-stack">
+          <div className="card">
+            <h3>{t("settings.changePwTitle")}</h3>
+            <p className="hint">{t("settings.changePwHint")}</p>
+            {pwNote ? <Alert kind="success">{pwNote}</Alert> : null}
+            {pwError ? <Alert kind="error">{pwError}</Alert> : null}
+            <form onSubmit={changePassword}>
+              <Field label={t("settings.currentPw")}>
+                <Input type="password" value={pw.current} onChange={(e) => setPw({ ...pw, current: e.target.value })} required />
+              </Field>
+              <Field label={t("settings.newPw")}>
+                <Input type="password" value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })} required />
+              </Field>
+              <Field label={t("settings.confirmPw")}>
+                <Input type="password" value={pw.confirm} onChange={(e) => setPw({ ...pw, confirm: e.target.value })} required />
+              </Field>
+              <button className="btn btn-primary" disabled={pwBusy}>
+                {pwBusy ? <Spinner /> : t("settings.changePwSubmit")}
+              </button>
+            </form>
+          </div>
 
-      <div className="card" style={{ marginBottom: "1.5rem" }}>
-        <h3>{t("settings.changeEmailTitle")}</h3>
-        <p className="hint">{t("settings.changeEmailHint")}</p>
-        {emNote ? <Alert kind="success">{emNote}</Alert> : null}
-        {emError ? <Alert kind="error">{emError}</Alert> : null}
-        <form onSubmit={changeEmail} style={{ maxWidth: 420 }}>
-          <Field label={t("settings.newEmail")}>
-            <Input type="email" value={em.email} onChange={(e) => setEm({ ...em, email: e.target.value })} required />
-          </Field>
-          <Field label={t("settings.currentPw")}>
-            <Input type="password" value={em.password} onChange={(e) => setEm({ ...em, password: e.target.value })} required />
-          </Field>
-          <button className="btn btn-primary" disabled={emBusy}>
-            {emBusy ? <Spinner /> : t("settings.changeEmailSubmit")}
-          </button>
-        </form>
-      </div>
-
-      <div className="card">
-        <h3>{t("settings.privacyTitle")}</h3>
-        <p className="hint">{t("settings.privacyHint")}</p>
-        <div className="row" style={{ flexWrap: "wrap" }}>
-          <button className="btn btn-ghost" onClick={() => void exportData()}>{t("settings.exportData")}</button>
-          <button className="btn btn-danger" onClick={() => void eraseData()}>{t("settings.eraseData")}</button>
+          <div className="card">
+            <h3>{t("settings.changeEmailTitle")}</h3>
+            <p className="hint">{t("settings.changeEmailHint")}</p>
+            {emNote ? <Alert kind="success">{emNote}</Alert> : null}
+            {emError ? <Alert kind="error">{emError}</Alert> : null}
+            <form onSubmit={changeEmail}>
+              <Field label={t("settings.newEmail")}>
+                <Input type="email" value={em.email} onChange={(e) => setEm({ ...em, email: e.target.value })} required />
+              </Field>
+              <Field label={t("settings.currentPw")}>
+                <Input type="password" value={em.password} onChange={(e) => setEm({ ...em, password: e.target.value })} required />
+              </Field>
+              <button className="btn btn-primary" disabled={emBusy}>
+                {emBusy ? <Spinner /> : t("settings.changeEmailSubmit")}
+              </button>
+            </form>
+          </div>
         </div>
       </div>
     </DashboardShell>

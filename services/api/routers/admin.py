@@ -173,7 +173,7 @@ async def list_users(
     pool = await get_pg_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            "SELECT u.email, u.full_name, u.role, u.status, u.last_login_at, "
+            "SELECT u.email, u.full_name, u.role, u.status, u.last_login_at, u.tenant_id, "
             "COALESCE(t.name, '—') AS tenant FROM users u "
             "LEFT JOIN tenants t ON t.id = u.tenant_id ORDER BY u.created_at DESC LIMIT 500"
         )
@@ -185,6 +185,7 @@ async def list_users(
                 "role": r["role"],
                 "status": r["status"],
                 "tenant": r["tenant"],
+                "has_tenant": r["tenant_id"] is not None,
                 "last_login_at": r["last_login_at"].isoformat() if r["last_login_at"] else None,
             }
             for r in rows
@@ -845,6 +846,45 @@ async def set_user_status(
         pool, actor="operator", action="user.status", detail={"email": email, "status": status}
     )
     return {"email": email, "status": status}
+
+
+@router.post("/users/{email}/role")
+async def set_user_role(
+    email: str,
+    payload: dict[str, Any],
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    """Change a user's platform role. Promoting to platform_admin clears their
+    tenant (a platform admin owns no single tenant); demoting a platform_admin
+    to a store role requires them to already have a tenant on record."""
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    role = str(payload.get("role", ""))
+    if role not in ("platform_admin", "store_owner", "store_staff"):
+        return error_response(
+            422, "invalid_request", "role must be platform_admin, store_owner, or store_staff."
+        )
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT id, tenant_id FROM users WHERE lower(email) = $1", email.lower()
+        )
+        if row is None:
+            return error_response(404, "not_found", "No such user.")
+        if role == "platform_admin":
+            await conn.execute(
+                "UPDATE users SET role = $1, tenant_id = NULL WHERE id = $2", role, row["id"]
+            )
+        else:
+            if row["tenant_id"] is None:
+                return error_response(
+                    422, "no_tenant", "This user has no tenant to assign a store role to."
+                )
+            await conn.execute("UPDATE users SET role = $1 WHERE id = $2", role, row["id"])
+    await audit(pool, actor="operator", action="user.role", detail={"email": email, "role": role})
+    return {"email": email, "role": role}
 
 
 # --------------------------------------------------------------------------- #

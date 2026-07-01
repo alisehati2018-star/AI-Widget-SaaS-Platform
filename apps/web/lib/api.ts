@@ -151,6 +151,7 @@ export interface AdminUser {
   role: string;
   status: string;
   tenant: string;
+  has_tenant: boolean;
   last_login_at: string | null;
 }
 export interface AuditEntry {

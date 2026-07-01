@@ -29,6 +29,7 @@ interface IndexRow {
   created: string | null;
 }
 interface AliasRow { alias: string; index: string }
+interface TenantRow { id: string; name: string }
 
 type EsAction = () => unknown;
 
@@ -53,6 +54,30 @@ export default function AdminElasticsearch() {
   const [err, setErr] = useState<string | null>(null);
   const [source, setSource] = useState("");
   const [mapping, setMapping] = useState<{ index: string; body: string } | null>(null);
+  const [tenants, setTenants] = useState<TenantRow[]>([]);
+  const [tenantSel, setTenantSel] = useState("");
+  const [tenantDocs, setTenantDocs] = useState<number | null>(null);
+  const [countBusy, setCountBusy] = useState(false);
+
+  useEffect(() => {
+    authFetch<{ tenants: TenantRow[] }>("/admin/tenants")
+      .then((r) => { setTenants(r.tenants); if (r.tenants[0]) setTenantSel(r.tenants[0].id); })
+      .catch(() => setTenants([]));
+  }, []);
+
+  async function countDocs() {
+    if (!tenantSel) return;
+    setCountBusy(true);
+    setTenantDocs(null);
+    try {
+      const r = await authFetch<{ docs: number }>(`/admin/es/tenant-count?tenant=${encodeURIComponent(tenantSel)}`);
+      setTenantDocs(r.docs);
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : t("elasticsearch.actionFailed"));
+    } finally {
+      setCountBusy(false);
+    }
+  }
 
   async function reload() {
     setLoading(true);
@@ -164,17 +189,37 @@ export default function AdminElasticsearch() {
         )}
       </div>
 
-      <div className="card" style={{ marginBottom: "1.5rem" }}>
-        <h3>{t("elasticsearch.reindexTitle")}</h3>
-        <p className="hint">{t("elasticsearch.reindexHint")}</p>
-        <div className="row" style={{ flexWrap: "wrap", alignItems: "flex-end", gap: ".75rem" }}>
-          <Field label={t("elasticsearch.sourceIndex")}>
-            <Input value={source} onChange={(e) => setSource(e.target.value)} placeholder={aliases[0]?.index ?? ""} />
-          </Field>
-          <button className="btn btn-primary" disabled={!source.trim()}
-            onClick={() => void act(() => authFetch("/admin/es/reindex", { body: { source_index: source.trim() } }), t("elasticsearch.reindexed"))}>
-            {t("elasticsearch.reindexBtn")}
-          </button>
+      <div className="dash-2col-even" style={{ marginBottom: "1.5rem" }}>
+        <div className="card">
+          <h3>{t("elasticsearch.reindexTitle")}</h3>
+          <p className="hint">{t("elasticsearch.reindexHint")}</p>
+          <div className="row" style={{ flexWrap: "wrap", alignItems: "flex-end", gap: ".75rem" }}>
+            <Field label={t("elasticsearch.sourceIndex")}>
+              <Input value={source} onChange={(e) => setSource(e.target.value)} placeholder={aliases[0]?.index ?? ""} />
+            </Field>
+            <button className="btn btn-primary" disabled={!source.trim()}
+              onClick={() => void act(() => authFetch("/admin/es/reindex", { body: { source_index: source.trim() } }), t("elasticsearch.reindexed"))}>
+              {t("elasticsearch.reindexBtn")}
+            </button>
+          </div>
+        </div>
+
+        <div className="card">
+          <h3>{t("elasticsearch.tenantCountTitle")}</h3>
+          <div className="row" style={{ flexWrap: "wrap", alignItems: "flex-end", gap: ".75rem" }}>
+            <Field label={t("common.tenant")}>
+              <select className="input" value={tenantSel} onChange={(e) => { setTenantSel(e.target.value); setTenantDocs(null); }}>
+                {tenants.length === 0 ? <option value="">{t("common.noTenants")}</option> : null}
+                {tenants.map((tn) => <option key={tn.id} value={tn.id}>{tn.name}</option>)}
+              </select>
+            </Field>
+            <button className="btn btn-soft" disabled={!tenantSel || countBusy} onClick={() => void countDocs()}>
+              {countBusy ? <Spinner /> : t("elasticsearch.tenantCountBtn")}
+            </button>
+          </div>
+          {tenantDocs != null ? (
+            <p style={{ marginTop: "1rem" }}>{t("elasticsearch.docsForTenant")}: <strong>{tenantDocs}</strong></p>
+          ) : null}
         </div>
       </div>
 
