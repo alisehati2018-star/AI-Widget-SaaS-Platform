@@ -60,9 +60,15 @@ export default function AdminContact() {
   const counts = data?.counts;
 
   function open(m: ContactMessage) {
-    setFlash(null); setError(null); setSelected(m); setNote(m.admin_note ?? "");
-    // Opening a fresh message marks it read — the inbox convention.
-    if (m.status === "new") void patch(m.id, { status: "read" }, false);
+    setFlash(null); setError(null); setNote(m.admin_note ?? "");
+    // Opening a fresh message marks it read — the inbox convention. Reflect
+    // the new status in the detail pane immediately, not after the refetch.
+    if (m.status === "new") {
+      setSelected({ ...m, status: "read" });
+      void patch(m.id, { status: "read" }, false);
+    } else {
+      setSelected(m);
+    }
   }
 
   async function patch(id: number, body: Record<string, unknown>, showFlash = true) {
