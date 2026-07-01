@@ -170,7 +170,8 @@ def test_overview_trends_shape(live_client):
     assert d["trends"]["signups"][-1]["signups"] >= 1
     assert d["totals"]["signups"] >= 1
     # The days param is honoured and clamped.
-    assert len(live_client.get("/admin/overview?days=7", headers=_HDR).json()["trends"]["signups"]) == 7
+    week = live_client.get("/admin/overview?days=7", headers=_HDR).json()
+    assert len(week["trends"]["signups"]) == 7
     assert live_client.get("/admin/overview?days=500", headers=_HDR).json()["days"] == 90
 
 

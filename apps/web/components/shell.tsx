@@ -77,6 +77,7 @@ export function useAdminNav(): NavSection[] {
       items: [
         { href: "/admin/tenants", label: t("nav.tenants"), icon: "tenants" },
         { href: "/admin/users", label: t("nav.users"), icon: "users" },
+        { href: "/admin/contact", label: t("nav.contact"), icon: "activity" },
       ],
     },
     {
@@ -101,6 +102,7 @@ export function useAdminNav(): NavSection[] {
         { href: "/admin/synonyms", label: t("nav.synonyms"), icon: "synonyms" },
         { href: "/admin/flags", label: t("nav.flags"), icon: "flags" },
         { href: "/admin/audit", label: t("nav.audit"), icon: "activity" },
+        { href: "/admin/operators", label: t("nav.operators"), icon: "users" },
         { href: "/admin/settings", label: t("nav.settings"), icon: "settings" },
       ],
     },

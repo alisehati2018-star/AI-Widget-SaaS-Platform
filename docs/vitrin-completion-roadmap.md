@@ -7,9 +7,9 @@
 
 | فاز | عنوان | وضعیت |
 |-----|-------|--------|
-| ۱ | Admin Tenant Management | ✅ **تحویل‌شده — منتظر تأیید شما** ([گزارش](../reports/phases/phase-01-admin-tenant.md)) |
-| ۲ | Admin Revenue, Plans, Users, Inbox | ⬜ منتظر تأیید فاز ۱ |
-| ۳ | Admin Observability و امنیت | ⬜ |
+| ۱ | Admin Tenant Management | ✅ تأییدشده ([گزارش](../reports/phases/phase-01-admin-tenant.md)) |
+| ۲ | Admin Revenue, Plans, Users, Inbox | ✅ **تحویل‌شده — منتظر تأیید شما** ([گزارش](../reports/phases/phase-02-admin-revenue.md)) |
+| ۳ | Admin Observability و امنیت | ⬜ منتظر تأیید فاز ۲ |
 | ۴ | Admin ES Console, Agent, Widget, QA | ⬜ |
 | ۵ | Owner Dashboard (۱۷ صفحه) | ⬜ |
 | ۶ | موتور هوشمند: ES + Sync + Inference | ⬜ |
@@ -48,33 +48,34 @@
 ### پذیرش
 - [x] ایجاد tenant → پروفایل کامل → suspend → activate → export (تأیید زنده با Playwright + PG در محیط توسعه؛ دستورات ویندوز در گزارش فاز)
 - [x] Overview نمودار با دادهٔ PG پر شد
-- [ ] **تأیید شما برای فاز ۲** ⏸️
+- [x] **تأیید شما برای فاز ۲** ✅ (پس از بازبینی مجدد کامل: اصلاح bucketing منطقهٔ زمانی روندها + رفع ۳ سرریز responsive)
 
 ---
 
-## فاز ۲ — ادمین: Revenue, Plans, Users و Inbox ⬜
+## فاز ۲ — ادمین: Revenue, Plans, Users و Inbox ✅
 
 ### Backend
-- [ ] `POST /admin/plans` + `DELETE /admin/plans/{id}` — CRUD کامل پلن
-- [ ] `GET /admin/invoices` — فاکتورهای کل پلتفرم
-- [ ] `GET /admin/contact` + `PATCH /admin/contact/{id}` — inbox پیام‌های تماس
-- [ ] `GET/POST/PATCH/DELETE /admin/operators` + `POST /admin/operators/{id}/status` — CRUD ادمین‌ها (جدول `admin_users` از قبل جداست)
+- [x] `POST /admin/plans` + `DELETE /admin/plans/{id}` — CRUD کامل پلن (حذفِ پلنِ در حال استفاده → 409 با شمارش مراجع)
+- [x] `GET /admin/invoices` — فاکتورهای کل پلتفرم + فیلتر + خلاصهٔ درآمد روی همان فیلتر
+- [x] `GET /admin/contact` + `PATCH /admin/contact/{id}` — inbox پیام‌های تماس (migration `0013`: status/admin_note/updated_at)
+- [x] `GET/POST/PATCH/DELETE /admin/operators` + `POST /admin/operators/{id}/status` — CRUD ادمین‌ها با قوانین ایمنی (بدون self-suspend/delete؛ حفاظت از آخرین ادمین فعال؛ تعلیق = ابطال نشست‌ها)
+- [x] گسترش `GET /admin/users` — جست‌وجو + فیلتر role/status + صفحه‌بندی (و حذف مسیر شکستهٔ ارتقا به platform_admin)
 
 ### Frontend
-- [ ] Plans: دکمهٔ «پلن جدید» + confirm حذف + validation
-- [ ] Billing: تب Invoices + فیلتر status/tenant + خلاصهٔ درآمد
-- [ ] Users: فیلتر role/status/tenant + جست‌وجوی ایمیل
-- [ ] صفحهٔ جدید `/admin/contact` — inbox با mark-read/reply-note
-- [ ] صفحهٔ جدید `/admin/operators` — مدیریت ادمین‌ها
-- [ ] Settings: لینک به Operators + نمایش نشست فعال
-- [ ] i18n + افزودن به nav
+- [x] Plans: دکمهٔ «پلن جدید» + confirm حذف + validation
+- [x] Billing: تب Invoices + فیلتر status/tenant + خلاصهٔ درآمد
+- [x] Users: فیلتر role/status + جست‌وجوی ایمیل/نام/فروشگاه + صفحه‌بندی
+- [x] صفحهٔ جدید `/admin/contact` — inbox با mark-read خودکار + یادداشت پیگیری + resolve/بازگشایی
+- [x] صفحهٔ جدید `/admin/operators` — مدیریت ادمین‌ها (افزودن/نام/تعلیق/حذف + نشان «شما»)
+- [x] Settings: لینک به Operators + نمایش نشست فعال
+- [x] i18n (fa+en) + افزودن به nav
 
 ### پذیرش
-- [ ] ساخت پلن جدید → نمایش در `/plans` عمومی
-- [ ] inbox contact کار کند
-- [ ] ادمین دوم بدون bootstrap token
-- [ ] گزارش: `reports/phases/phase-02-admin-revenue.md`
-- [ ] **تأیید شما برای فاز ۳**
+- [x] ساخت پلن جدید → نمایش در صفحهٔ عمومی قیمت‌گذاری (`/pricing`)
+- [x] inbox contact کار می‌کند (تأیید زنده + تست خودکار)
+- [x] ادمین دوم بدون bootstrap token (از UI ساخته و وارد شد)
+- [x] گزارش: `reports/phases/phase-02-admin-revenue.md`
+- [ ] **تأیید شما برای فاز ۳** ⏸️
 
 ---
 

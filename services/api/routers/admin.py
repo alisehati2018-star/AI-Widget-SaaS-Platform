@@ -9,6 +9,7 @@ management. Full least-privilege RBAC + audit hardening is Phase 3 (M11).
 
 from __future__ import annotations
 
+import re
 import secrets
 from typing import Any
 
@@ -170,8 +171,8 @@ async def overview(
             days,
         )
         failed_rows = await conn.fetch(
-            "SELECT (created_at AT TIME ZONE 'UTC')::date AS d, count(*)::float AS failed FROM orders "
-            "WHERE status = 'failed' "
+            "SELECT (created_at AT TIME ZONE 'UTC')::date AS d, count(*)::float AS failed "
+            "FROM orders WHERE status = 'failed' "
             "AND created_at >= now() - make_interval(days => $1) GROUP BY 1",
             days,
         )
@@ -614,19 +615,44 @@ async def change_tenant_plan(
 
 @router.get("/users")
 async def list_users(
+    q: str | None = None,
+    role: str | None = None,
+    status: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
     x_admin_token: str | None = _ADMIN,
     authorization: str | None = _AUTHZ,
     vitrin_access: str | None = _COOKIE,
 ):
-    """List all platform users (Phase 6)."""
+    """Store users (customer plane) with email search + role/status filters."""
     if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
+    limit = max(1, min(int(limit), 200))
+    offset = max(0, int(offset))
+    where: list[str] = []
+    params: list[Any] = []
+    if q:
+        params.append(f"%{q.strip()}%")
+        where.append(
+            f"(u.email ILIKE ${len(params)} OR u.full_name ILIKE ${len(params)} "
+            f"OR t.slug ILIKE ${len(params)} OR t.name ILIKE ${len(params)})"
+        )
+    if role:
+        params.append(role)
+        where.append(f"u.role = ${len(params)}")
+    if status:
+        params.append(status)
+        where.append(f"u.status = ${len(params)}")
+    clause = ("WHERE " + " AND ".join(where)) if where else ""
+    base = f"FROM users u LEFT JOIN tenants t ON t.id = u.tenant_id {clause}"
     pool = await get_pg_pool()
     async with pool.acquire() as conn:
+        total = await conn.fetchval(f"SELECT count(*) {base}", *params)
         rows = await conn.fetch(
-            "SELECT u.email, u.full_name, u.role, u.status, u.last_login_at, u.tenant_id, "
-            "COALESCE(t.name, '—') AS tenant FROM users u "
-            "LEFT JOIN tenants t ON t.id = u.tenant_id ORDER BY u.created_at DESC LIMIT 500"
+            f"SELECT u.email, u.full_name, u.role, u.status, u.last_login_at, u.tenant_id, "
+            f"COALESCE(t.name, '—') AS tenant {base} "
+            f"ORDER BY u.created_at DESC LIMIT ${len(params) + 1} OFFSET ${len(params) + 2}",
+            *params, limit, offset,
         )
     return {
         "users": [
@@ -640,7 +666,10 @@ async def list_users(
                 "last_login_at": r["last_login_at"].isoformat() if r["last_login_at"] else None,
             }
             for r in rows
-        ]
+        ],
+        "total": int(total),
+        "limit": limit,
+        "offset": offset,
     }
 
 
@@ -1307,15 +1336,15 @@ async def set_user_role(
     authorization: str | None = _AUTHZ,
     vitrin_access: str | None = _COOKIE,
 ):
-    """Change a user's platform role. Promoting to platform_admin clears their
-    tenant (a platform admin owns no single tenant); demoting a platform_admin
-    to a store role requires them to already have a tenant on record."""
+    """Change a store user's role within their tenant. Platform admins are a
+    separate identity plane (``admin_users``) managed on /admin/operators —
+    store users can never be promoted into it from here."""
     if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
     role = str(payload.get("role", ""))
-    if role not in ("platform_admin", "store_owner", "store_staff"):
+    if role not in ("store_owner", "store_staff"):
         return error_response(
-            422, "invalid_request", "role must be platform_admin, store_owner, or store_staff."
+            422, "invalid_request", "role must be store_owner or store_staff."
         )
     pool = await get_pg_pool()
     async with pool.acquire() as conn:
@@ -1324,16 +1353,7 @@ async def set_user_role(
         )
         if row is None:
             return error_response(404, "not_found", "No such user.")
-        if role == "platform_admin":
-            await conn.execute(
-                "UPDATE users SET role = $1, tenant_id = NULL WHERE id = $2", role, row["id"]
-            )
-        else:
-            if row["tenant_id"] is None:
-                return error_response(
-                    422, "no_tenant", "This user has no tenant to assign a store role to."
-                )
-            await conn.execute("UPDATE users SET role = $1 WHERE id = $2", role, row["id"])
+        await conn.execute("UPDATE users SET role = $1 WHERE id = $2", role, row["id"])
     await audit(pool, actor="operator", action="user.role", detail={"email": email, "role": role})
     return {"email": email, "role": role}
 
@@ -1661,6 +1681,280 @@ async def update_plan(
     await audit(pool, actor="operator", action="plan.update",
                 detail={"plan_id": plan_id, "fields": list(payload.keys())})
     return {"plan_id": plan_id, "status": "updated"}
+
+
+_PLAN_CODE_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{1,30}$")
+
+
+@router.post("/plans")
+async def create_plan(
+    payload: dict[str, Any],
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    """Create a new pricing plan. `code` is the stable identifier used by
+    checkout and the public /plans page; it cannot be changed later."""
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    code = str(payload.get("code", "")).strip().lower()
+    name = str(payload.get("name", "")).strip()
+    if not _PLAN_CODE_RE.match(code):
+        return error_response(
+            422, "invalid_request",
+            "Field 'code' must be 2-31 chars of a-z, 0-9, '-' or '_'.",
+        )
+    if not name:
+        return error_response(422, "invalid_request", "Field 'name' is required.")
+    optional = {
+        "description": (str, None),
+        "price_monthly": (float, 0.0),
+        "currency": (str, "USD"),
+        "credits_per_month": (float, 0.0),
+        "monthly_credit_cap": (float, 100000.0),
+        "rate_limit_per_min": (int, 120),
+        "is_public": (bool, True),
+        "sort_order": (int, 100),
+    }
+    values: dict[str, Any] = {}
+    for col, (caster, default) in optional.items():
+        if col in payload and payload[col] is not None:
+            try:
+                values[col] = caster(payload[col])
+            except (TypeError, ValueError):
+                return error_response(422, "invalid_request", f"Invalid value for '{col}'.")
+        else:
+            values[col] = default
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        if await conn.fetchval("SELECT 1 FROM plans WHERE code = $1", code):
+            return error_response(409, "code_taken", "A plan with this code already exists.")
+        plan_id = await conn.fetchval(
+            "INSERT INTO plans (code, name, description, price_monthly, currency, "
+            "credits_per_month, monthly_credit_cap, rate_limit_per_min, is_public, sort_order) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id",
+            code, name, values["description"], values["price_monthly"], values["currency"],
+            values["credits_per_month"], values["monthly_credit_cap"],
+            values["rate_limit_per_min"], values["is_public"], values["sort_order"],
+        )
+    await audit(pool, actor="operator", action="plan.create",
+                detail={"plan_id": str(plan_id), "code": code})
+    return {"plan_id": str(plan_id), "code": code, "status": "created"}
+
+
+@router.delete("/plans/{plan_id}")
+async def delete_plan(
+    plan_id: str,
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    """Delete a plan that is not referenced by any tenant, subscription or
+    order. Plans in use must be hidden (`is_public = false`) instead."""
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    if not _valid_uuid(plan_id):
+        return error_response(404, "not_found", "No such plan.")
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        refs = await conn.fetchrow(
+            "SELECT (SELECT count(*) FROM tenants WHERE plan_id = $1::uuid) AS tenants, "
+            "(SELECT count(*) FROM subscriptions WHERE plan_id = $1::uuid) AS subs, "
+            "(SELECT count(*) FROM orders WHERE plan_id = $1::uuid) AS orders",
+            plan_id,
+        )
+        in_use = int(refs["tenants"]) + int(refs["subs"]) + int(refs["orders"])
+        if in_use:
+            return error_response(
+                409, "plan_in_use",
+                f"Plan is referenced by {refs['tenants']} tenant(s), {refs['subs']} "
+                f"subscription(s) and {refs['orders']} order(s); hide it instead.",
+            )
+        deleted = await conn.fetchval(
+            "DELETE FROM plans WHERE id = $1::uuid RETURNING code", plan_id
+        )
+    if deleted is None:
+        return error_response(404, "not_found", "No such plan.")
+    await audit(pool, actor="operator", action="plan.delete",
+                detail={"plan_id": plan_id, "code": deleted})
+    return {"plan_id": plan_id, "status": "deleted"}
+
+
+# --------------------------------------------------------------------------- #
+# Platform invoices — every issued invoice across all tenants, with a revenue  #
+# summary over the same filter, for the admin billing screen.                  #
+# --------------------------------------------------------------------------- #
+@router.get("/invoices")
+async def list_invoices(
+    q: str | None = None,
+    status: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    limit = max(1, min(int(limit), 100))
+    offset = max(0, int(offset))
+    where: list[str] = []
+    params: list[Any] = []
+    if q:
+        params.append(f"%{q.strip()}%")
+        where.append(f"(t.slug ILIKE ${len(params)} OR t.name ILIKE ${len(params)})")
+    if status in ("paid", "void"):
+        params.append(status)
+        where.append(f"i.status = ${len(params)}")
+    clause = ("WHERE " + " AND ".join(where)) if where else ""
+    base = f"FROM invoices i JOIN tenants t ON t.id = i.tenant_id {clause}"
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        summary = await conn.fetchrow(
+            f"SELECT count(*) AS total, "
+            f"COALESCE(sum(i.amount) FILTER (WHERE i.status = 'paid'), 0) AS paid_amount, "
+            f"count(*) FILTER (WHERE i.status = 'paid') AS paid_count {base}",
+            *params,
+        )
+        rows = await conn.fetch(
+            f"SELECT i.id, i.number, i.description, i.amount, i.currency, i.status, "
+            f"i.created_at, t.slug, t.name {base} "
+            f"ORDER BY i.created_at DESC LIMIT ${len(params) + 1} OFFSET ${len(params) + 2}",
+            *params, limit, offset,
+        )
+    return {
+        "invoices": [
+            {
+                "id": str(r["id"]),
+                "number": int(r["number"]),
+                "tenant_slug": r["slug"],
+                "tenant_name": r["name"],
+                "description": r["description"],
+                "amount": float(r["amount"]),
+                "currency": r["currency"],
+                "status": r["status"],
+                "created_at": _iso(r["created_at"]),
+            }
+            for r in rows
+        ],
+        "total": int(summary["total"]),
+        "paid_amount": float(summary["paid_amount"]),
+        "paid_count": int(summary["paid_count"]),
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Contact inbox — public contact-form submissions, triaged by the operator     #
+# (new → read → resolved) with an internal follow-up note.                     #
+# --------------------------------------------------------------------------- #
+@router.get("/contact")
+async def list_contact_messages(
+    status: str | None = None,
+    q: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    limit = max(1, min(int(limit), 100))
+    offset = max(0, int(offset))
+    where: list[str] = []
+    params: list[Any] = []
+    if status in ("new", "read", "resolved"):
+        params.append(status)
+        where.append(f"status = ${len(params)}")
+    if q:
+        params.append(f"%{q.strip()}%")
+        where.append(f"(email ILIKE ${len(params)} OR name ILIKE ${len(params)})")
+    clause = ("WHERE " + " AND ".join(where)) if where else ""
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        counts = await conn.fetchrow(
+            "SELECT count(*) AS all_count, "
+            "count(*) FILTER (WHERE status = 'new') AS new_count, "
+            "count(*) FILTER (WHERE status = 'read') AS read_count, "
+            "count(*) FILTER (WHERE status = 'resolved') AS resolved_count "
+            "FROM contact_messages"
+        )
+        total = await conn.fetchval(
+            f"SELECT count(*) FROM contact_messages {clause}", *params
+        )
+        rows = await conn.fetch(
+            f"SELECT id, name, email, message, status, admin_note, created_at, updated_at "
+            f"FROM contact_messages {clause} "
+            f"ORDER BY created_at DESC LIMIT ${len(params) + 1} OFFSET ${len(params) + 2}",
+            *params, limit, offset,
+        )
+    return {
+        "messages": [
+            {
+                "id": int(r["id"]),
+                "name": r["name"],
+                "email": r["email"],
+                "message": r["message"],
+                "status": r["status"],
+                "admin_note": r["admin_note"],
+                "created_at": _iso(r["created_at"]),
+                "updated_at": _iso(r["updated_at"]),
+            }
+            for r in rows
+        ],
+        "total": int(total),
+        "counts": {
+            "all": int(counts["all_count"]),
+            "new": int(counts["new_count"]),
+            "read": int(counts["read_count"]),
+            "resolved": int(counts["resolved_count"]),
+        },
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+@router.patch("/contact/{message_id}")
+async def update_contact_message(
+    message_id: int,
+    payload: dict[str, Any],
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    sets: list[str] = []
+    values: list[Any] = []
+    if "status" in payload:
+        status = str(payload["status"])
+        if status not in ("new", "read", "resolved"):
+            return error_response(
+                422, "invalid_request", "Status must be new, read or resolved."
+            )
+        values.append(status)
+        sets.append(f"status = ${len(values)}")
+    if "admin_note" in payload:
+        note = str(payload.get("admin_note") or "").strip()[:4000] or None
+        values.append(note)
+        sets.append(f"admin_note = ${len(values)}")
+    if not sets:
+        return error_response(422, "invalid_request", "No editable fields supplied.")
+    values.append(message_id)
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        updated = await conn.fetchval(
+            f"UPDATE contact_messages SET {', '.join(sets)}, updated_at = now() "
+            f"WHERE id = ${len(values)} RETURNING id",
+            *values,
+        )
+    if updated is None:
+        return error_response(404, "not_found", "No such message.")
+    await audit(await get_pg_pool(), actor="operator", action="contact.update",
+                detail={"message_id": message_id, "fields": list(payload.keys())})
+    return {"id": message_id, "status": "updated"}
 
 
 # --------------------------------------------------------------------------- #
