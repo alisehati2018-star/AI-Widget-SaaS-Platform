@@ -16,6 +16,8 @@ from acip_analytics import aggregations as _agg
 from acip_analytics import analyze as _analyze
 from acip_analytics import attribution as _attr
 from acip_analytics import why_summary as _why
+from acip_billing import plan_status as _plan_status
+from acip_billing import usage_summary as _usage_summary
 from acip_core.audit import audit
 from acip_core.clients import get_es_client, get_pg_pool, get_redis
 from acip_core.config import get_settings
@@ -100,15 +102,40 @@ async def create_tenant(
     return {"tenant_id": str(tenant_id), "slug": slug, "api_key": raw_key, "scope": scope}
 
 
+def _daily_series(rows, days: int, *fields: str) -> list[dict[str, Any]]:
+    """Fill grouped-by-day query rows into a dense series of the last N days
+    (oldest → newest), zeroing days with no data so charts render evenly."""
+    from datetime import UTC, date, timedelta
+    from datetime import datetime as _dt
+
+    by_day: dict[date, Any] = {r["d"]: r for r in rows}
+    today = _dt.now(UTC).date()
+    series: list[dict[str, Any]] = []
+    for i in range(days - 1, -1, -1):
+        day = today - timedelta(days=i)
+        row = by_day.get(day)
+        point: dict[str, Any] = {"date": day.isoformat()}
+        for f in fields:
+            point[f] = float(row[f]) if row is not None and row[f] is not None else 0.0
+        series.append(point)
+    return series
+
+
 @router.get("/overview")
 async def overview(
+    days: int = 30,
     x_admin_token: str | None = _ADMIN,
     authorization: str | None = _AUTHZ,
     vitrin_access: str | None = _COOKIE,
 ):
-    """Platform-wide counts for the admin dashboard (Phase 6)."""
+    """Platform-wide KPIs + daily trends for the admin dashboard.
+
+    Trends cover the last ``days`` (7–90) days: tenant signups, usage events,
+    paid revenue, and failed payments. MRR is a point-in-time figure (no
+    historical snapshots exist), so its trend proxy is daily paid revenue."""
     if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
+    days = max(7, min(int(days), 90))
     pool = await get_pg_pool()
     async with pool.acquire() as conn:
         tenants = await conn.fetchval("SELECT count(*) FROM tenants")
@@ -116,38 +143,116 @@ async def overview(
         active_subs = await conn.fetchval(
             "SELECT count(*) FROM subscriptions WHERE status IN ('active', 'trialing')"
         )
+        past_due = await conn.fetchval(
+            "SELECT count(*) FROM subscriptions WHERE status = 'past_due'"
+        )
         mrr = await conn.fetchval(
             "SELECT COALESCE(sum(p.price_monthly), 0) FROM subscriptions s "
             "JOIN plans p ON p.id = s.plan_id WHERE s.status = 'active'"
         )
+        signup_rows = await conn.fetch(
+            "SELECT created_at::date AS d, count(*)::float AS signups FROM tenants "
+            "WHERE created_at >= now() - make_interval(days => $1) GROUP BY 1",
+            days,
+        )
+        usage_rows = await conn.fetch(
+            "SELECT occurred_at::date AS d, count(*)::float AS calls, "
+            "COALESCE(sum(cost), 0)::float AS credits FROM usage_events "
+            "WHERE occurred_at >= now() - make_interval(days => $1) GROUP BY 1",
+            days,
+        )
+        revenue_rows = await conn.fetch(
+            "SELECT COALESCE(paid_at, created_at)::date AS d, "
+            "COALESCE(sum(amount), 0)::float AS revenue FROM orders "
+            "WHERE status = 'paid' "
+            "AND COALESCE(paid_at, created_at) >= now() - make_interval(days => $1) GROUP BY 1",
+            days,
+        )
+        failed_rows = await conn.fetch(
+            "SELECT created_at::date AS d, count(*)::float AS failed FROM orders "
+            "WHERE status = 'failed' "
+            "AND created_at >= now() - make_interval(days => $1) GROUP BY 1",
+            days,
+        )
+    signups = _daily_series(signup_rows, days, "signups")
+    usage = _daily_series(usage_rows, days, "calls", "credits")
+    revenue = _daily_series(revenue_rows, days, "revenue")
+    failed = _daily_series(failed_rows, days, "failed")
     return {
         "tenants": int(tenants or 0),
         "users": int(users or 0),
         "active_subscriptions": int(active_subs or 0),
+        "past_due_subscriptions": int(past_due or 0),
         "mrr": float(mrr or 0),
+        "days": days,
+        "trends": {
+            "signups": signups,
+            "usage": usage,
+            "revenue": revenue,
+            "failed_payments": failed,
+        },
+        "totals": {
+            "signups": sum(p["signups"] for p in signups),
+            "calls": sum(p["calls"] for p in usage),
+            "revenue": sum(p["revenue"] for p in revenue),
+            "failed_payments": sum(p["failed"] for p in failed),
+        },
     }
 
 
 @router.get("/tenants")
 async def list_tenants(
+    q: str = "",
+    status: str = "",
+    plan: str = "",
+    limit: int = 50,
+    offset: int = 0,
     x_admin_token: str | None = _ADMIN,
     authorization: str | None = _AUTHZ,
     vitrin_access: str | None = _COOKIE,
 ):
-    """List tenants with their plan + subscription status (Phase 6)."""
+    """List tenants with plan + subscription status, filterable and paginated.
+
+    ``q`` matches slug or name (case-insensitive substring); ``status`` filters
+    the tenant lifecycle state; ``plan`` filters by plan code."""
     if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
+    limit = max(1, min(int(limit), 200))
+    offset = max(0, int(offset))
+    where: list[str] = []
+    args: list[Any] = []
+    if q.strip():
+        args.append(f"%{q.strip().lower()}%")
+        where.append(f"(lower(t.slug) LIKE ${len(args)} OR lower(t.name) LIKE ${len(args)})")
+    if status.strip():
+        args.append(status.strip())
+        where.append(f"t.status = ${len(args)}")
+    if plan.strip():
+        args.append(plan.strip())
+        where.append(f"p.code = ${len(args)}")
+    where_sql = ("WHERE " + " AND ".join(where)) if where else ""
+    base = (
+        "FROM tenants t "
+        "LEFT JOIN subscriptions s ON s.tenant_id = t.id "
+        "LEFT JOIN plans p ON p.id = s.plan_id "
+        f"{where_sql}"
+    )
     pool = await get_pg_pool()
     async with pool.acquire() as conn:
+        total = await conn.fetchval(f"SELECT count(*) {base}", *args)
         rows = await conn.fetch(
             "SELECT t.id, t.slug, t.name, t.status, t.created_at, "
-            "COALESCE(p.name, '—') AS plan, COALESCE(s.status, 'none') AS sub_status "
-            "FROM tenants t "
-            "LEFT JOIN subscriptions s ON s.tenant_id = t.id "
-            "LEFT JOIN plans p ON p.id = s.plan_id "
-            "ORDER BY t.created_at DESC LIMIT 200"
+            "COALESCE(p.name, '—') AS plan, COALESCE(p.code, '') AS plan_code, "
+            f"COALESCE(s.status, 'none') AS sub_status {base} "
+            f"ORDER BY t.created_at DESC LIMIT ${len(args) + 1} OFFSET ${len(args) + 2}",
+            *args,
+            limit,
+            offset,
         )
     return {
+        "total": int(total or 0),
+        "limit": limit,
+        "offset": offset,
         "tenants": [
             {
                 "id": str(r["id"]),
@@ -155,11 +260,354 @@ async def list_tenants(
                 "name": r["name"],
                 "status": r["status"],
                 "plan": r["plan"],
+                "plan_code": r["plan_code"],
                 "sub_status": r["sub_status"],
                 "created_at": r["created_at"].isoformat() if r["created_at"] else None,
             }
             for r in rows
-        ]
+        ],
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Tenant management (Phase 1 roadmap): full profile, keys, credits, plan.      #
+# --------------------------------------------------------------------------- #
+def _iso(v) -> str | None:
+    return v.isoformat() if v is not None else None
+
+
+def _valid_uuid(value: str) -> bool:
+    import uuid as _uuid
+
+    try:
+        _uuid.UUID(value)
+    except (ValueError, AttributeError, TypeError):
+        return False
+    return True
+
+
+def _not_found():
+    return error_response(404, "not_found", "No such tenant.")
+
+
+async def _key_rows(conn, tenant_id: str) -> list[dict[str, Any]]:
+    rows = await conn.fetch(
+        "SELECT id, scope, label, revoked, created_at, last_used_at "
+        "FROM api_keys WHERE tenant_id = $1 ORDER BY created_at DESC",
+        tenant_id,
+    )
+    return [
+        {
+            "id": str(r["id"]),
+            "scope": r["scope"],
+            "label": r["label"],
+            "revoked": r["revoked"],
+            "created_at": _iso(r["created_at"]),
+            "last_used_at": _iso(r["last_used_at"]),
+        }
+        for r in rows
+    ]
+
+
+@router.get("/tenants/{tenant_id}")
+async def tenant_detail(
+    tenant_id: str,
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    """The complete operator view of one store: profile, subscription, credits,
+    masked API keys, sync state, and team size — one call for the detail page."""
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    if not _valid_uuid(tenant_id):
+        return _not_found()
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        t = await conn.fetchrow(
+            "SELECT t.id, t.slug, t.name, t.status, t.tracking_enabled, t.settings, "
+            "t.admin_notes, t.created_at, t.updated_at, "
+            "s.status AS sub_status, s.current_period_end, s.cancel_at_period_end, "
+            "p.code AS plan_code, p.name AS plan_name, p.price_monthly, p.currency "
+            "FROM tenants t "
+            "LEFT JOIN subscriptions s ON s.tenant_id = t.id "
+            "LEFT JOIN plans p ON p.id = s.plan_id WHERE t.id = $1",
+            tenant_id,
+        )
+        if t is None:
+            return _not_found()
+        keys = await _key_rows(conn, tenant_id)
+        sync_rows = await conn.fetch(
+            "SELECT source, high_watermark, last_run_at, last_status "
+            "FROM sync_state WHERE tenant_id = $1 ORDER BY source",
+            tenant_id,
+        )
+        team = await conn.fetchval("SELECT count(*) FROM users WHERE tenant_id = $1", tenant_id)
+    usage = await _usage_summary(pool, tenant_id)
+    status = await _plan_status(pool, tenant_id)
+    return {
+        "id": str(t["id"]),
+        "slug": t["slug"],
+        "name": t["name"],
+        "status": t["status"],
+        "tracking_enabled": t["tracking_enabled"],
+        "settings": t["settings"],
+        "admin_notes": t["admin_notes"],
+        "created_at": _iso(t["created_at"]),
+        "updated_at": _iso(t["updated_at"]),
+        "team_size": int(team or 0),
+        "subscription": {
+            "plan_code": t["plan_code"],
+            "plan_name": t["plan_name"],
+            "price_monthly": float(t["price_monthly"]) if t["price_monthly"] is not None else None,
+            "currency": t["currency"],
+            "status": t["sub_status"] or "none",
+            "current_period_end": _iso(t["current_period_end"]),
+            "cancel_at_period_end": bool(t["cancel_at_period_end"] or False),
+        },
+        "credits": {
+            "used": usage["used"],
+            "granted": usage["granted"],
+            "cap": status.get("cap"),
+            "within_plan": status.get("within_plan", True),
+        },
+        "api_keys": keys,
+        "sync_state": [
+            {
+                "source": r["source"],
+                "high_watermark": _iso(r["high_watermark"]),
+                "last_run_at": _iso(r["last_run_at"]),
+                "last_status": r["last_status"],
+            }
+            for r in sync_rows
+        ],
+    }
+
+
+@router.patch("/tenants/{tenant_id}/notes")
+async def set_tenant_notes(
+    tenant_id: str,
+    payload: dict[str, Any],
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    """Save the operator's free-text notes for a store (never shown to the tenant)."""
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    if not _valid_uuid(tenant_id):
+        return _not_found()
+    notes = str(payload.get("notes", ""))
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        updated = await conn.fetchval(
+            "UPDATE tenants SET admin_notes = $1, updated_at = now() WHERE id = $2 RETURNING id",
+            notes or None,
+            tenant_id,
+        )
+    if updated is None:
+        return _not_found()
+    await audit(pool, actor="operator", action="tenant.notes", tenant_id=tenant_id, detail={})
+    return {"tenant_id": tenant_id, "status": "saved"}
+
+
+@router.get("/tenants/{tenant_id}/keys")
+async def tenant_keys(
+    tenant_id: str,
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    """List a store's API keys (hashes only exist server-side; nothing secret here)."""
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    if not _valid_uuid(tenant_id):
+        return _not_found()
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        if not await conn.fetchval("SELECT 1 FROM tenants WHERE id = $1", tenant_id):
+            return _not_found()
+        keys = await _key_rows(conn, tenant_id)
+    return {"tenant_id": tenant_id, "keys": keys}
+
+
+@router.post("/tenants/{tenant_id}/keys")
+async def create_tenant_key(
+    tenant_id: str,
+    payload: dict[str, Any],
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    """Issue a new scoped key for a store. The raw key is returned exactly once."""
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    if not _valid_uuid(tenant_id):
+        return _not_found()
+    scope = str(payload.get("scope", "widget"))
+    if scope not in ("widget", "sync"):
+        return error_response(422, "invalid_request", "scope must be widget or sync.")
+    label = str(payload.get("label", "")).strip() or "issued by operator"
+    raw_key = "acip_" + secrets.token_urlsafe(24)
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        if not await conn.fetchval("SELECT 1 FROM tenants WHERE id = $1", tenant_id):
+            return _not_found()
+        key_id = await conn.fetchval(
+            "INSERT INTO api_keys (tenant_id, key_hash, scope, label) "
+            "VALUES ($1, $2, $3, $4) RETURNING id",
+            tenant_id,
+            hash_key(raw_key),
+            scope,
+            label,
+        )
+    await audit(
+        pool,
+        actor="operator",
+        action="tenant.key_issue",
+        tenant_id=tenant_id,
+        detail={"scope": scope, "label": label},
+    )
+    return {"id": str(key_id), "api_key": raw_key, "scope": scope, "label": label}
+
+
+@router.post("/tenants/{tenant_id}/keys/{key_id}/revoke")
+async def revoke_tenant_key(
+    tenant_id: str,
+    key_id: str,
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    if not (_valid_uuid(tenant_id) and _valid_uuid(key_id)):
+        return _not_found()
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        updated = await conn.fetchval(
+            "UPDATE api_keys SET revoked = TRUE WHERE id = $1 AND tenant_id = $2 RETURNING id",
+            key_id,
+            tenant_id,
+        )
+    if updated is None:
+        return error_response(404, "not_found", "No such key for this tenant.")
+    await audit(
+        pool,
+        actor="operator",
+        action="tenant.key_revoke",
+        tenant_id=tenant_id,
+        detail={"key_id": key_id},
+    )
+    return {"id": key_id, "status": "revoked"}
+
+
+@router.post("/tenants/{tenant_id}/credits")
+async def adjust_tenant_credits(
+    tenant_id: str,
+    payload: dict[str, Any],
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    """Manual credit adjustment: positive delta grants, negative deducts.
+    Writes an append-only ledger entry + audit; returns the fresh summary."""
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    if not _valid_uuid(tenant_id):
+        return _not_found()
+    try:
+        delta = float(payload.get("delta", 0))
+    except (TypeError, ValueError):
+        delta = 0.0
+    if delta == 0:
+        return error_response(422, "invalid_request", "Field 'delta' must be non-zero.")
+    reason = str(payload.get("reason", "")).strip() or "manual adjustment"
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        if not await conn.fetchval("SELECT 1 FROM tenants WHERE id = $1", tenant_id):
+            return _not_found()
+        await conn.execute(
+            "INSERT INTO credit_ledger (tenant_id, delta, rung, reason) VALUES ($1, $2, $3, $4)",
+            tenant_id,
+            delta,
+            "manual",
+            reason,
+        )
+    await audit(
+        pool,
+        actor="operator",
+        action="tenant.credit_adjust",
+        tenant_id=tenant_id,
+        detail={"delta": delta, "reason": reason},
+    )
+    usage = await _usage_summary(pool, tenant_id)
+    return {"tenant_id": tenant_id, "status": "adjusted", "credits": usage}
+
+
+@router.patch("/tenants/{tenant_id}/plan")
+async def change_tenant_plan(
+    tenant_id: str,
+    payload: dict[str, Any],
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    """Manually move a store onto a plan: updates the tenant's plan pointer and
+    upserts its subscription (status + a fresh period window)."""
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    if not _valid_uuid(tenant_id):
+        return _not_found()
+    plan_code = str(payload.get("plan_code", "")).strip()
+    if not plan_code:
+        return error_response(422, "invalid_request", "Field 'plan_code' is required.")
+    sub_status = str(payload.get("status", "active"))
+    if sub_status not in ("trialing", "active", "past_due", "canceled"):
+        return error_response(
+            422, "invalid_request", "status must be trialing, active, past_due, or canceled."
+        )
+    try:
+        period_days = int(payload.get("period_days", 30))
+    except (TypeError, ValueError):
+        period_days = 30
+    period_days = max(1, min(period_days, 366))
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        plan_id = await conn.fetchval("SELECT id FROM plans WHERE code = $1", plan_code)
+        if plan_id is None:
+            return error_response(404, "not_found", "No such plan.")
+        if not await conn.fetchval("SELECT 1 FROM tenants WHERE id = $1", tenant_id):
+            return _not_found()
+        async with conn.transaction():
+            await conn.execute(
+                "UPDATE tenants SET plan_id = $1, updated_at = now() WHERE id = $2",
+                plan_id,
+                tenant_id,
+            )
+            await conn.execute(
+                "INSERT INTO subscriptions (tenant_id, plan_id, status, current_period_end) "
+                "VALUES ($1, $2, $3, now() + make_interval(days => $4)) "
+                "ON CONFLICT (tenant_id) DO UPDATE SET plan_id = EXCLUDED.plan_id, "
+                "status = EXCLUDED.status, current_period_end = EXCLUDED.current_period_end, "
+                "cancel_at_period_end = FALSE, updated_at = now()",
+                tenant_id,
+                plan_id,
+                sub_status,
+                period_days,
+            )
+    await audit(
+        pool,
+        actor="operator",
+        action="tenant.plan_change",
+        tenant_id=tenant_id,
+        detail={"plan_code": plan_code, "status": sub_status, "period_days": period_days},
+    )
+    return {
+        "tenant_id": tenant_id,
+        "plan_code": plan_code,
+        "status": sub_status,
+        "period_days": period_days,
     }
 
 
@@ -902,7 +1350,7 @@ async def es_health(
 ):
     if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
-    from acip_search import index_admin as ia
+    import acip_search.index_admin as ia
 
     es = get_es_client()
     try:
@@ -920,7 +1368,7 @@ async def es_indices(
 ):
     if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
-    from acip_search import index_admin as ia
+    import acip_search.index_admin as ia
 
     es = get_es_client()
     s = get_settings()
@@ -940,7 +1388,7 @@ async def es_mapping(
 ):
     if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
-    from acip_search import index_admin as ia
+    import acip_search.index_admin as ia
 
     try:
         return {"index": index, **await ia.get_mapping_and_settings(get_es_client(), index)}
@@ -958,7 +1406,7 @@ async def es_tenant_count(
     """How many catalogue docs a given store has indexed (sync verification)."""
     if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
-    from acip_search import index_admin as ia
+    import acip_search.index_admin as ia
 
     return {"tenant_id": tenant, "docs": await ia.tenant_doc_count(get_es_client(), tenant)}
 
@@ -972,7 +1420,7 @@ async def es_ensure_index(
     """Idempotently create the catalogue index behind the read alias."""
     if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
-    from acip_search import index_admin as ia
+    import acip_search.index_admin as ia
 
     try:
         result = await ia.ensure_catalogue_index(get_es_client())
@@ -996,7 +1444,7 @@ async def es_reindex(
     source = str(payload.get("source_index", "")).strip()
     if not source:
         return error_response(422, "invalid_request", "Field 'source_index' is required.")
-    from acip_search import index_admin as ia
+    import acip_search.index_admin as ia
 
     try:
         new_index = await ia.reindex_and_swap(get_es_client(), source)
@@ -1025,7 +1473,7 @@ async def es_alias(
     if not to_index:
         return error_response(422, "invalid_request", "Field 'index' is required.")
     alias = str(payload.get("alias") or get_settings().catalogue_alias)
-    from acip_search import index_admin as ia
+    import acip_search.index_admin as ia
 
     try:
         await ia.point_alias(get_es_client(), alias, to_index)
@@ -1055,7 +1503,7 @@ async def es_delete_index(
     index = str(payload.get("index", "")).strip()
     if not index:
         return error_response(422, "invalid_request", "Field 'index' is required.")
-    from acip_search import index_admin as ia
+    import acip_search.index_admin as ia
 
     es = get_es_client()
     live = {a["index"] for a in await ia.list_aliases(es)}
