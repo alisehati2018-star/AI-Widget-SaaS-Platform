@@ -151,25 +151,26 @@ async def overview(
             "JOIN plans p ON p.id = s.plan_id WHERE s.status = 'active'"
         )
         signup_rows = await conn.fetch(
-            "SELECT created_at::date AS d, count(*)::float AS signups FROM tenants "
+            "SELECT (created_at AT TIME ZONE 'UTC')::date AS d, count(*)::float AS signups "
+            "FROM tenants "
             "WHERE created_at >= now() - make_interval(days => $1) GROUP BY 1",
             days,
         )
         usage_rows = await conn.fetch(
-            "SELECT occurred_at::date AS d, count(*)::float AS calls, "
+            "SELECT (occurred_at AT TIME ZONE 'UTC')::date AS d, count(*)::float AS calls, "
             "COALESCE(sum(cost), 0)::float AS credits FROM usage_events "
             "WHERE occurred_at >= now() - make_interval(days => $1) GROUP BY 1",
             days,
         )
         revenue_rows = await conn.fetch(
-            "SELECT COALESCE(paid_at, created_at)::date AS d, "
+            "SELECT (COALESCE(paid_at, created_at) AT TIME ZONE 'UTC')::date AS d, "
             "COALESCE(sum(amount), 0)::float AS revenue FROM orders "
             "WHERE status = 'paid' "
             "AND COALESCE(paid_at, created_at) >= now() - make_interval(days => $1) GROUP BY 1",
             days,
         )
         failed_rows = await conn.fetch(
-            "SELECT created_at::date AS d, count(*)::float AS failed FROM orders "
+            "SELECT (created_at AT TIME ZONE 'UTC')::date AS d, count(*)::float AS failed FROM orders "
             "WHERE status = 'failed' "
             "AND created_at >= now() - make_interval(days => $1) GROUP BY 1",
             days,
