@@ -16,11 +16,11 @@ const ok = (c, m) => { if (!c) { console.error(`✗ ${m}`); failures++; } else c
   const stamp = Date.now();
   const adminEmail = `admin.fc.${stamp}@vitrin.ai`;
   const adminPass = "Adm1n!Str0ng#2026";
-  await ctx.request.post(`${BASE}/api/auth/bootstrap-admin`, {
+  await ctx.request.post(`${BASE}/api/admin/auth/bootstrap`, {
     headers: { "x-admin-token": ADMIN_TOKEN, "content-type": "application/json" },
     data: { email: adminEmail, password: adminPass, full_name: "FC Admin" },
   });
-  const login = await ctx.request.post(`${BASE}/api/auth/login`, {
+  const login = await ctx.request.post(`${BASE}/api/admin/auth/login`, {
     headers: { "content-type": "application/json" },
     data: { email: adminEmail, password: adminPass },
   });

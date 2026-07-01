@@ -7,8 +7,13 @@ product).
 
 | Folder | Platform | Type |
 |---|---|---|
-| [`opencart3/`](opencart3/) | OpenCart 3.x | Module + OCMOD (admin settings, events, bulk import, widget injection, search override) |
-| [`wordpress/acip-search/`](wordpress/acip-search/) | WordPress / WooCommerce (latest) | Plugin (settings page, real-time + bulk sync, widget injection, search replacement) |
+| [`opencart3/`](opencart3/) | OpenCart 3.x | Module + OCMOD (admin settings, test-connection, event-registered sync + widget injection, bulk import, optional search override, `en-gb` + `fa` admin languages) |
+| [`wordpress/acip-search/`](wordpress/acip-search/) | WordPress / WooCommerce (latest) | Plugin (settings page with test-connection, enqueued assets, real-time + bulk sync, widget injection, search replacement, clean uninstall, `fa_IR` translation) |
+
+Both follow their platform's real packaging conventions end to end — OpenCart's
+`admin/`, `catalog/`, `system/` tree and language files; WordPress's
+`includes/`, `assets/`, `languages/`, `uninstall.php`, and directory-listing
+guards — so each can be installed as-is on a fresh store.
 
 Both talk only to the ACIP public API with tenant-scoped keys:
 

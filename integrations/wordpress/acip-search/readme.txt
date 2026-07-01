@@ -22,14 +22,18 @@ catalogue. The plugin:
 * Syncs product create / update / delete to ACIP in real time — including brand,
   categories, and attributes, which are indexed *with* each product.
 * Offers a one-click bulk import to build the initial index.
+* Includes a **Test connection** check before you save your API URL/keys.
+* Ships fully translated into Persian (`fa_IR`) out of the box.
 
 == Installation ==
 
 1. Upload the `acip-search` folder to `/wp-content/plugins/`, or install the zip
    via **Plugins → Add New → Upload Plugin**.
-2. Activate the plugin.
-3. Go to **WooCommerce → ACIP Search** and enter:
-   * **ACIP API URL** (e.g. `https://api.acip.example`)
+2. Activate the plugin (requires WooCommerce to be active).
+3. Go to **WooCommerce → ACIP Search** (or the **Settings** link right on the
+   Plugins page) and enter:
+   * **ACIP API URL** (e.g. `https://api.acip.example`) — click **Test
+     connection** to confirm it's reachable.
    * **Widget API Key** — a *widget*-scoped key from your ACIP dashboard.
    * **Sync API Key** — a *sync*-scoped key from your ACIP dashboard.
 4. Enable the plugin, choose whether to replace native search, and **Save**.
@@ -44,7 +48,12 @@ The sync key ingests the catalogue and is only ever used server-side.
 = Does it require Elasticsearch on my server? =
 No. ACIP runs the search/AI stack; the plugin only talks to the ACIP API.
 
+= What happens to my settings if I deactivate the plugin? =
+Nothing — deactivating keeps your settings so reactivating needs no
+reconfiguration. Settings are only removed if you **delete** the plugin.
+
 == Changelog ==
 
 = 1.0.0 =
-* Initial release: hybrid search, assistant widget, real-time + bulk sync.
+* Initial release: hybrid search, assistant widget, real-time + bulk sync,
+  test-connection check, Persian (`fa_IR`) translation, clean uninstall.

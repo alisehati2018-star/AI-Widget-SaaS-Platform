@@ -54,12 +54,12 @@ export interface SessionUser {
 
 export async function apiFetch<T = unknown>(
   path: string,
-  opts: { method?: string; body?: unknown } = {},
+  opts: { method?: string; body?: unknown; csrfCookie?: string } = {},
 ): Promise<T> {
   const method = opts.method ?? (opts.body ? "POST" : "GET");
   const headers: Record<string, string> = { "content-type": "application/json" };
   if (!SAFE_METHODS.has(method)) {
-    const csrf = readCookie(CSRF_COOKIE);
+    const csrf = readCookie(opts.csrfCookie ?? CSRF_COOKIE);
     if (csrf) headers[CSRF_HEADER] = csrf;
   }
   const resp = await fetch(`${BASE}${path}`, {
@@ -151,6 +151,7 @@ export interface AdminUser {
   role: string;
   status: string;
   tenant: string;
+  has_tenant: boolean;
   last_login_at: string | null;
 }
 export interface AuditEntry {

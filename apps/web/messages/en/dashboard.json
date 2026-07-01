@@ -140,7 +140,13 @@
     "mostWantedEmpty": "No search data yet",
     "zeroTitle": "Zero-result searches",
     "zeroHint": "Demand your catalogue isn't meeting — add products or synonyms.",
-    "zeroEmpty": "No zero-result data yet."
+    "zeroEmpty": "No zero-result data yet.",
+    "insightTitle": "Insight",
+    "insightEmpty": "Not enough data for an insight yet.",
+    "dropoffTitle": "Biggest drop-off",
+    "funnelTitle": "Funnel breakdown",
+    "funnelEmpty": "No funnel events yet.",
+    "colStage": "Stage"
   },
   "chat": {
     "intro": "How shoppers engage with the AI assistant.",
@@ -208,7 +214,10 @@
     "chatEnabled": "Enable AI chat",
     "searchEnabled": "Enable search",
     "saveConfig": "Save widget settings",
-    "configSaved": "Widget settings saved."
+    "configSaved": "Widget settings saved.",
+    "previewTitle": "Live preview",
+    "previewHint": "How your launcher looks on your storefront with these settings.",
+    "previewGreetingFallback": "Hi! How can I help you find a product?"
   },
   "keys": {
     "intro": "Scoped, least-privilege keys connect your store and widget to Vitrin.",

@@ -3,9 +3,9 @@
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { ApiError } from "@/lib/api";
-import { authFetch } from "@/lib/auth";
+import { adminFetch as authFetch } from "@/lib/auth";
 import { Link } from "@/i18n/navigation";
-import { useResource } from "@/lib/hooks/useResource";
+import { useAdminResource as useResource } from "@/lib/hooks/useResource";
 import { DashboardShell, useAdminNav } from "@/components/shell";
 import { Alert, Badge, Field, Input, Spinner } from "@/components/ui";
 

@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { ApiError } from "@/lib/api";
-import { login, logout } from "@/lib/auth";
+import { adminLogin } from "@/lib/auth";
 import { useRouter } from "@/i18n/navigation";
 import { Alert, Brand, Field, Input, Spinner } from "@/components/ui";
 
@@ -21,13 +21,7 @@ export default function AdminLoginPage() {
     setError(null);
     setBusy(true);
     try {
-      const user = await login(email, password);
-      if (user.role !== "platform_admin") {
-        await logout();
-        setError(t("adminLogin.notAdmin"));
-        setBusy(false);
-        return;
-      }
+      await adminLogin(email, password);
       router.replace("/admin");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : tErrors("generic"));

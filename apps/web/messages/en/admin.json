@@ -106,7 +106,12 @@
     "activate": "Activate",
     "rolePlatformAdmin": "platform admin",
     "roleStoreOwner": "store owner",
-    "roleStoreStaff": "store staff"
+    "roleStoreStaff": "store staff",
+    "colActions": "Actions",
+    "roleChanged": "Role updated.",
+    "roleChangeFailed": "Could not change role — this user has no tenant on record.",
+    "confirmPromote": "Make {email} a platform admin? They will lose access to any single store and gain full platform access.",
+    "confirmDemote": "Change {email} back to a store role?"
   },
   "plans": {
     "title": "Plans",
@@ -126,7 +131,8 @@
     "cap": "Monthly credit cap",
     "rateLimit": "Rate limit / min",
     "public": "Public",
-    "colCap": "Cap"
+    "colCap": "Cap",
+    "selectHint": "Select a plan from the list to edit its pricing, credits, and limits."
   },
   "billing": {
     "title": "Billing",
@@ -164,7 +170,22 @@
   "analytics": {
     "title": "Analytics",
     "intro": "Drill into any tenant's search & assistant metrics.",
-    "zeroEmpty": "No data for this tenant yet."
+    "zeroEmpty": "No data for this tenant yet.",
+    "mostWanted": "Most-wanted searches",
+    "mostWantedEmpty": "No search data yet.",
+    "funnelTitle": "Funnel breakdown",
+    "funnelEmpty": "No funnel events yet.",
+    "colStage": "Stage",
+    "insightTitle": "Insight",
+    "insightEmpty": "Not enough data for an insight yet.",
+    "dropoffTitle": "Biggest drop-off",
+    "analystTitle": "Ask the analyst",
+    "analystHint": "Ask a plain-language question; the answer is grounded in this store's own metrics.",
+    "analystPlaceholder": "e.g. Why did conversion drop last week?",
+    "analystAsk": "Ask",
+    "analystEmpty": "Ask a question to get a grounded answer.",
+    "analystNarratedTemplate": "template answer (no LLM configured)",
+    "analystNarratedLlm": "AI-narrated answer"
   },
   "models": {
     "title": "Models & gateway",
@@ -190,7 +211,12 @@
   "health": {
     "title": "System health",
     "intro": "Live dependency status (auto-refreshes every 10s).",
-    "overall": "Overall"
+    "overall": "Overall",
+    "quickLinksTitle": "Related diagnostics",
+    "linkQueue": "Queue & workers",
+    "linkElasticsearch": "Elasticsearch cluster",
+    "linkModels": "AI models & routing",
+    "linkSecurity": "Security monitoring"
   },
   "security": {
     "title": "Security monitoring",
@@ -211,7 +237,11 @@
     "intro": "Curate the per-tenant synonym set used by Persian search.",
     "synonyms": "Synonyms",
     "saved": "Saved.",
-    "save": "Save synonyms"
+    "save": "Save synonyms",
+    "count": "{n} rules",
+    "helpTitle": "How synonym rules work",
+    "helpBody": "One rule per line. Comma-separated terms in a rule are treated as equivalent during search — e.g. a shopper searching \"laptop\" also matches products tagged \"notebook\" or \"لپ‌تاپ\".",
+    "helpExampleTitle": "Examples"
   },
   "flags": {
     "title": "Feature flags",
@@ -239,7 +269,18 @@
     "sec4": "Passwords are PBKDF2-hashed; failed logins trigger temporary lockout.",
     "securityHint": "2FA (TOTP) and IP allowlisting are on the security roadmap.",
     "platformTitle": "Platform",
-    "platformBody": "Vitrin — on-premise, multi-tenant AI Commerce Intelligence Platform. Plans, credit limits and AI-gateway budgets are configured via the control plane and the .env secret store."
+    "platformBody": "Vitrin — on-premise, multi-tenant AI Commerce Intelligence Platform. Plans, credit limits and AI-gateway budgets are configured via the control plane and the .env secret store.",
+    "changePwTitle": "Change password",
+    "currentPw": "Current password",
+    "newPw": "New password",
+    "confirmPw": "Confirm new password",
+    "changePwSubmit": "Update password",
+    "pwUpdated": "Password changed successfully.",
+    "changeEmailTitle": "Change email",
+    "newEmail": "New email",
+    "changeEmailSubmit": "Change email",
+    "emailChanged": "Email changed. Check your new inbox to verify it.",
+    "genericError": "Something went wrong."
   },
   "elasticsearch": {
     "title": "Elasticsearch control",
@@ -277,12 +318,14 @@
     "swapped": "Alias swapped.",
     "noIndices": "No catalogue indices yet — create one.",
     "actionFailed": "Action failed.",
-    "live": "live"
+    "live": "live",
+    "tenantCountTitle": "Per-store document count",
+    "tenantCountBtn": "Count documents",
+    "docsForTenant": "Indexed documents for this store"
   },
   "agent": {
     "title": "Agent console",
     "intro": "Pick a store and test the grounded assistant against that store's own indexed data.",
-    "selectTenant": "Store",
     "tabChat": "Assistant chat",
     "tabSearch": "Raw search",
     "messageLabel": "Message",
@@ -298,7 +341,12 @@
     "results": "Results",
     "noResults": "No results.",
     "empty": "Send a message to test the assistant.",
-    "failed": "Request failed."
+    "failed": "Request failed.",
+    "contextTitle": "Store context",
+    "indexedDocs": "Indexed documents",
+    "docsLoading": "Checking…",
+    "sessionTitle": "Session",
+    "sessionHint": "Each test uses a fresh session so it never mixes with a real shopper's conversation."
   },
   "widget": {
     "title": "Widget defaults",
@@ -313,6 +361,8 @@
     "platformBrand": "Show platform branding",
     "maxResults": "Max results",
     "save": "Save defaults",
-    "saved": "Widget defaults saved."
+    "saved": "Widget defaults saved.",
+    "previewTitle": "Live preview",
+    "previewHint": "How the launcher looks with these defaults (a store can still override branding)."
   }
 }

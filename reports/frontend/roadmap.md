@@ -109,6 +109,100 @@ Full-stack expansion driven by `reports/backend/gap-analysis.md`:
 - Gates: backend 103 passed/10 ES-skipped, ruff clean, mypy clean (87 files);
   web typecheck + i18n 0/0 + hardcoded 0 + size 0 + routes 0 + dead 0.
 
+## Phase 15 — Full-page layout + admin/dashboard completeness pass
+Layout audit found `.main` capped at 1080px (huge dead space on wide screens)
+and several pages were a single narrow floating card. Full page-by-page audit
+(two Explore agents, admin + owner dashboard) then fixed every finding:
+- **Layout system**: `.main` widened to 1760px; new `.dash-2col` /
+  `.dash-2col-even` / `.dash-3col` / `.card-stack` grid utilities so related
+  panels sit side-by-side instead of stacking in one column.
+- **admin/plans**: rebuilt as a list+detail layout (table + sticky edit panel).
+- **admin/analytics**: tenant selector moved into the header; added
+  most-wanted + zero-results + an **Insight** narrative + **funnel** panel +
+  an **"Ask the analyst"** NL question box — wiring the previously-unused
+  `GET /admin/insight` and `POST /admin/analyst` endpoints.
+- **admin/synonyms**, **admin/agent**: tenant selector moved into the header;
+  agent console gained a "Store context" panel (tenant id + live indexed-doc
+  count via the previously-unused `GET /admin/es/tenant-count`).
+- **admin/elasticsearch**: added a per-store document-count widget.
+- **admin/users**: added `POST /admin/users/{email}/role` (promote/demote
+  platform_admin ↔ store roles) with an inline role editor — closes the only
+  admin capability gap found (no way to grant a second platform admin without
+  the raw operator token).
+- **admin/settings**: was pure display; now has working change-password +
+  change-email forms (same endpoints as the owner dashboard) alongside the
+  security/platform info panels.
+- **admin/health**: added a "related diagnostics" quick-link panel.
+- **admin/widget**, **dashboard/widget**: added a live preview panel (launcher
+  + greeting bubble reflecting the actual color/position/greeting settings).
+- **dashboard/knowledge**: rebuilt as a list+detail layout (matches admin/plans).
+- **dashboard/settings**: split into store/tracking/privacy (left) and
+  password/email security (right).
+- Verified live in-browser (Playwright, real PG+Redis+API, fresh admin +
+  store-owner accounts): screenshotted every redesigned page, and ran a full
+  create→edit→publish→save round trip on the knowledge-base feature against
+  the real backend. Elasticsearch was intentionally left down for this pass
+  (per instruction, ES testing is the user's own responsibility) — pages
+  degrade to honest "unavailable" states rather than crashing.
+- Gates: web typecheck + i18n 0/0 + hardcoded/size/routes/dead 0, `next build`
+  99 pages; backend 103 passed/10 ES-skipped, ruff + mypy clean (87 files).
+- **integrations/opencart3**: added a "Test connection" check (admin
+  controller + `Acip::ping()`), a Persian (`fa`) admin language pack alongside
+  `en-gb`, and fixed the OCMOD to register the widget-injection event through
+  the OC3 event table (not an OC4-style startup patch).
+- **integrations/wordpress**: rebuilt to full plugin conventions — enqueued
+  `assets/js/admin.js` + `assets/css/admin.css` (no more inline `<script>`),
+  `uninstall.php` (clean option removal, multisite-aware), a "Test connection"
+  AJAX check, a Settings link on the Plugins list, `languages/` with a
+  `.pot` template plus a compiled `fa_IR` translation (`.po` + `.mo`), and
+  `index.php` directory-listing guards in every subfolder.
+
+## Phase 16 — Second-pass audit + full admin/customer identity separation
+Second, thorough page-by-page re-audit (two fresh Explore agents) of every
+admin and every owner-dashboard page confirmed Phase 15's layout/completeness
+fixes held and found no further layout bugs; the one small gap (`GET
+/tenant/insight` unused) was closed by adding an Insight + funnel panel to
+`dashboard/analytics`, mirroring `admin/analytics`.
+
+The main deliverable: **platform admins are now a fully separate identity
+plane from store customers — separate database table and separate API
+routes**, not just a role flag in a shared table:
+- **Database**: new `admin_users` + `admin_sessions` tables (migration
+  `0011_admin_users.sql`). Existing `platform_admin` rows are moved out of
+  `users` (idempotent — the migration is safe to re-run), and `users.tenant_id`
+  becomes `NOT NULL` — every remaining row is a real store owner/staff member
+  belonging to a tenant.
+- **API routes**: new `services/api/routers/admin_auth.py` — `/admin/auth/
+  {login,refresh,logout,me,change-password,change-email,bootstrap}` — talks
+  only to `admin_users`/`admin_sessions`. `services/api/routers/auth.py` (the
+  customer surface) had its `bootstrap-admin` endpoint removed entirely; it
+  now only ever reads/writes `users`. Neither router imports from the other.
+- **Cookies**: the admin plane gets its own httpOnly cookie pair
+  (`vitrin_admin_access` / `vitrin_admin_refresh` / `vitrin_admin_csrf`),
+  distinct from the customer's (`vitrin_access` / `vitrin_refresh` /
+  `vitrin_csrf`). `CsrfMiddleware` was updated to scope its double-submit check
+  by path (`/admin/*` → the admin cookie pair, everything else → the customer
+  pair) so a stale cookie from one plane can never block or leak into the
+  other — verified with new unit tests (`test_csrf_protects_the_admin_cookie_
+  pair_on_admin_paths`, `test_csrf_admin_and_customer_cookies_do_not_cross_
+  contaminate`).
+- **Frontend**: `lib/auth.tsx` gained `adminLogin`/`adminLogout`/`adminFetch`/
+  `useAdminSession`, all admin pages' `authFetch`/`useResource` imports were
+  repointed to the admin-scoped equivalents (`adminFetch as authFetch` /
+  `useAdminResource as useResource`), `DashboardShell` picks the matching
+  session hook based on `requireAdmin`, and `admin/login` calls `adminLogin`
+  directly (no more login-then-check-role-then-logout dance).
+- Verified live end-to-end (Playwright, real Postgres+Redis+API): admin login
+  sets only the admin cookies (never the customer ones); a customer signup +
+  login in the *same browser* coexists with an active admin session without
+  either affecting the other; a real customer's correct credentials are
+  rejected by `/admin/auth/login` and vice versa; admin change-password
+  persisted to `admin_users` and a subsequent login with the new password
+  succeeded.
+- Gates: backend 105 passed/10 ES-skipped (+2 new CSRF isolation tests), ruff
+  + mypy clean (88 files); web typecheck + i18n 0/0 + hardcoded/size/routes/
+  dead 0, `next build` 99 pages.
+
 ## QA system (enforced: CI `check:all` + `prebuild`)
 Static gates (fail build): i18n parity+missing+unused · hardcoded strings ·
 component size ≤300 · broken routes · missing assets. Reported: dead components.

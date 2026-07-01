@@ -14,6 +14,10 @@ from .logging import trace_id_var
 TRACE_HEADER = "x-request-id"
 ACCESS_COOKIE = "vitrin_access"
 CSRF_COOKIE = "vitrin_csrf"
+# The admin identity plane uses its own cookie pair (services/api/routers/
+# admin_auth.py) — fully separate from the customer cookies above.
+ADMIN_ACCESS_COOKIE = "vitrin_admin_access"
+ADMIN_CSRF_COOKIE = "vitrin_admin_csrf"
 CSRF_HEADER = "x-csrf-token"
 _SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS", "TRACE"})
 
@@ -96,26 +100,40 @@ class CsrfMiddleware(BaseHTTPMiddleware):
     """
 
     # Path prefixes whose action is authenticated by body/credentials/signature,
-    # not by the session cookie. The cookie-protected surfaces are /tenant/* and
-    # /admin/* (still enforced below).
-    _EXEMPT = ("/auth/", "/billing/webhook", "/contact")
+    # not by the session cookie. The cookie-protected surfaces are /tenant/*
+    # and /admin/* (still enforced below). /admin/auth/ mirrors /auth/ — its
+    # own login/refresh/logout/bootstrap run before any session cookie exists.
+    _EXEMPT = ("/auth/", "/admin/auth/", "/billing/webhook", "/contact")
+
+    def _blocked(self, request: Request, access_cookie_name: str, csrf_cookie_name: str) -> bool:
+        cookie = request.cookies.get(access_cookie_name)
+        if not cookie:
+            return False
+        header = request.headers.get(CSRF_HEADER, "")
+        csrf_cookie = request.cookies.get(csrf_cookie_name, "")
+        return not header or not csrf_cookie or not hmac.compare_digest(header, csrf_cookie)
 
     async def dispatch(self, request: Request, call_next):
-        if request.method not in _SAFE_METHODS and not request.url.path.startswith(self._EXEMPT):
+        path = request.url.path
+        if request.method not in _SAFE_METHODS and not path.startswith(self._EXEMPT):
             has_bearer = "authorization" in request.headers
-            access_cookie = request.cookies.get(ACCESS_COOKIE)
-            if access_cookie and not has_bearer:
-                header = request.headers.get(CSRF_HEADER, "")
-                cookie = request.cookies.get(CSRF_COOKIE, "")
-                if not header or not cookie or not hmac.compare_digest(header, cookie):
-                    return JSONResponse(
-                        status_code=403,
-                        content={
-                            "error": {
-                                "code": "csrf_failed",
-                                "message": "Missing or invalid CSRF token.",
-                                "request_id": trace_id_var.get(),
-                            }
-                        },
-                    )
+            # Scope the check to the plane the path actually belongs to (admin
+            # vs customer) so an unrelated, stale cookie from the *other* plane
+            # in the same browser can never block a valid request.
+            access_name, csrf_name = (
+                (ADMIN_ACCESS_COOKIE, ADMIN_CSRF_COOKIE)
+                if path.startswith("/admin/")
+                else (ACCESS_COOKIE, CSRF_COOKIE)
+            )
+            if not has_bearer and self._blocked(request, access_name, csrf_name):
+                return JSONResponse(
+                    status_code=403,
+                    content={
+                        "error": {
+                            "code": "csrf_failed",
+                            "message": "Missing or invalid CSRF token.",
+                            "request_id": trace_id_var.get(),
+                        }
+                    },
+                )
         return await call_next(request)

@@ -5,6 +5,13 @@
 // (`vitrin_access` / `vitrin_refresh`) — no token ever touches localStorage or
 // JS, so an XSS cannot steal the session. On a 401 the hook transparently
 // rotates the refresh cookie once (the backend reads it from the cookie).
+//
+// The platform-admin plane is a fully separate identity (its own
+// `admin_users`/`admin_sessions` tables, its own `/admin/auth/*` endpoints,
+// its own cookie pair `vitrin_admin_access`/`vitrin_admin_refresh`/
+// `vitrin_admin_csrf`) — see `adminLogin`/`adminFetch`/`useAdminSession` below.
+// A customer session and an admin session can coexist in the same browser
+// without either one reading or affecting the other.
 
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch, ApiError, type SessionUser } from "./api";
@@ -12,6 +19,8 @@ import { apiFetch, ApiError, type SessionUser } from "./api";
 interface TokenResponse {
   user: SessionUser;
 }
+
+const ADMIN_CSRF_COOKIE = "vitrin_admin_csrf";
 
 export async function login(email: string, password: string): Promise<SessionUser> {
   // Backend sets the auth cookies on the response; we only need the user.
@@ -76,6 +85,69 @@ export function useSession(): SessionState & { reload: () => void } {
   const reload = useCallback(() => {
     setState({ user: null, loading: true });
     authFetch<SessionUser & { is_admin: boolean }>("/auth/me")
+      .then((u) => setState({ user: u, loading: false }))
+      .catch(() => setState({ user: null, loading: false }));
+  }, []);
+  useEffect(() => reload(), [reload]);
+  return { ...state, reload };
+}
+
+// --------------------------------------------------------------------------- #
+// Platform-admin plane — separate identity, separate cookies, separate API.   #
+// --------------------------------------------------------------------------- #
+export async function adminLogin(email: string, password: string): Promise<SessionUser> {
+  const r = await apiFetch<TokenResponse>("/admin/auth/login", {
+    body: { email, password },
+    csrfCookie: ADMIN_CSRF_COOKIE,
+  });
+  return r.user;
+}
+
+export async function adminLogout(): Promise<void> {
+  try {
+    await apiFetch("/admin/auth/logout", { method: "POST", body: {}, csrfCookie: ADMIN_CSRF_COOKIE });
+  } catch {
+    // Best-effort, same rationale as logout() above.
+  }
+}
+
+async function tryAdminRefresh(): Promise<boolean> {
+  try {
+    await apiFetch<TokenResponse>("/admin/auth/refresh", {
+      method: "POST",
+      body: {},
+      csrfCookie: ADMIN_CSRF_COOKIE,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Admin-authenticated fetch with one transparent refresh-and-retry on 401.
+ * Use this (not `authFetch`) for every call the admin panel makes, so an
+ * expired access token rotates via the admin refresh cookie, not the
+ * customer one. */
+export async function adminFetch<T = unknown>(
+  path: string,
+  opts: { method?: string; body?: unknown } = {},
+): Promise<T> {
+  try {
+    return await apiFetch<T>(path, { ...opts, csrfCookie: ADMIN_CSRF_COOKIE });
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 401 && (await tryAdminRefresh())) {
+      return apiFetch<T>(path, { ...opts, csrfCookie: ADMIN_CSRF_COOKIE });
+    }
+    throw e;
+  }
+}
+
+/** Loads /admin/auth/me (via the admin-only cookie). */
+export function useAdminSession(): SessionState & { reload: () => void } {
+  const [state, setState] = useState<SessionState>({ user: null, loading: true });
+  const reload = useCallback(() => {
+    setState({ user: null, loading: true });
+    adminFetch<SessionUser & { is_admin: boolean }>("/admin/auth/me")
       .then((u) => setState({ user: u, loading: false }))
       .catch(() => setState({ user: null, loading: false }));
   }, []);
