@@ -2,63 +2,75 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { AnalyticsBundle } from "@/lib/api";
 import { adminFetch as authFetch } from "@/lib/auth";
 import { formatNumber } from "@/lib/datetime";
 import type { Locale } from "@/i18n/routing";
 import { DashboardShell, useAdminNav } from "@/components/shell";
-import { Alert, Spinner, Stat } from "@/components/ui";
+import { Alert, Badge, Spinner, Stat } from "@/components/ui";
+import { CreditsCard, LifecycleCard, PlanCard } from "./actions";
+import { KeysCard, NotesCard, ProfileCard, type TenantDetail } from "./sections";
 
-export default function TenantDetail() {
+export default function TenantDetailPage() {
   const t = useTranslations("admin");
   const locale = useLocale() as Locale;
   const nav = useAdminNav();
   const params = useParams<{ id: string }>();
   const id = params.id;
-  const [data, setData] = useState<AnalyticsBundle | null>(null);
+
+  const [detail, setDetail] = useState<TenantDetail | null>(null);
+  const [analytics, setAnalytics] = useState<AnalyticsBundle | null>(null);
+  const [loadError, setLoadError] = useState(false);
   const [note, setNote] = useState<string | null>(null);
 
-  useEffect(() => {
+  const reload = useCallback(() => {
     if (!id) return;
-    authFetch<AnalyticsBundle>(`/admin/analytics?tenant=${encodeURIComponent(id)}`)
-      .then(setData)
-      .catch(() => setData(null));
+    authFetch<TenantDetail>(`/admin/tenants/${id}`)
+      .then((d) => { setDetail(d); setLoadError(false); })
+      .catch(() => setLoadError(true));
   }, [id]);
 
-  async function setTracking(enabled: boolean) {
-    await authFetch(`/admin/tenants/${id}/tracking`, { body: { enabled } }).catch(() => {});
-    setNote(enabled ? t("tenantDetail.noteTrackingOn") : t("tenantDetail.noteTrackingOff"));
+  useEffect(() => {
+    reload();
+    if (!id) return;
+    authFetch<AnalyticsBundle>(`/admin/analytics?tenant=${encodeURIComponent(id)}`)
+      .then(setAnalytics)
+      .catch(() => setAnalytics(null));
+  }, [id, reload]);
+
+  // Every mutation surfaces its confirmation AND refetches the profile so the
+  // page always reflects the database, never a stale optimistic guess.
+  function onDone(message: string) {
+    setNote(message);
+    reload();
   }
 
-  async function exportData() {
-    const out = await authFetch<unknown>(`/admin/tenants/${id}/export`).catch(() => null);
-    if (!out) return;
-    const blob = new Blob([JSON.stringify(out, null, 2)], { type: "application/json" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `tenant-${id}-export.json`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  }
-
-  async function erase() {
-    if (!window.confirm(t("tenantDetail.eraseConfirm"))) return;
-    await authFetch(`/admin/tenants/${id}/erase`, { method: "POST" }).catch(() => {});
-    setNote(t("tenantDetail.noteErased"));
-  }
-
-  async function setStatus(status: string) {
-    await authFetch(`/admin/tenants/${id}/status`, { body: { status } }).catch(() => {});
-    setNote(status === "suspended" ? t("tenantDetail.noteSuspended") : t("tenantDetail.noteActivated"));
-  }
-
-  const fd = data?.four_dimensions;
+  const fd = analytics?.four_dimensions;
   const pct = (v: number) => formatNumber(v, locale, { style: "percent", maximumFractionDigits: 0 });
 
+  if (loadError) {
+    return (
+      <DashboardShell title={t("tenantDetail.title")} nav={nav} requireAdmin loginHref="/admin/login">
+        <Alert kind="error">{t("tenantDetail.loadFailed")}</Alert>
+      </DashboardShell>
+    );
+  }
+  if (!detail) {
+    return (
+      <DashboardShell title={t("tenantDetail.title")} nav={nav} requireAdmin loginHref="/admin/login">
+        <Spinner />
+      </DashboardShell>
+    );
+  }
+
   return (
-    <DashboardShell title={t("tenantDetail.title")} nav={nav} requireAdmin loginHref="/admin/login">
-      <p style={{ marginTop: "-1rem" }} className="muted">{t("tenantDetail.tenantId", { id })}</p>
+    <DashboardShell title={detail.name} nav={nav} requireAdmin loginHref="/admin/login">
+      <div className="row" style={{ marginTop: "-1rem", marginBottom: "1.5rem", flexWrap: "wrap", gap: ".6rem" }}>
+        <code>{detail.slug}</code>
+        <Badge tone={detail.status === "active" ? "success" : "warning"}>{detail.status}</Badge>
+        {detail.subscription.plan_name ? <Badge tone="brand">{detail.subscription.plan_name}</Badge> : null}
+      </div>
       {note ? <Alert kind="success">{note}</Alert> : null}
 
       <div className="stat-grid" style={{ marginBottom: "1.5rem" }}>
@@ -68,23 +80,16 @@ export default function TenantDetail() {
         <Stat label={t("common.assistantTurns")} value={fd?.reliability?.turns != null ? formatNumber(fd.reliability.turns, locale) : "—"} />
       </div>
 
-      <div className="card" style={{ marginBottom: "1.5rem" }}>
-        <h3>{t("tenantDetail.lifecycleTitle")}</h3>
-        <p className="hint">{t("tenantDetail.lifecycleHint")}</p>
-        <div className="row" style={{ flexWrap: "wrap" }}>
-          <button className="btn btn-danger" onClick={() => void setStatus("suspended")}>{t("tenantDetail.suspend")}</button>
-          <button className="btn btn-soft" onClick={() => void setStatus("active")}>{t("tenantDetail.activate")}</button>
+      <div className="dash-2col">
+        <div className="card-stack">
+          <ProfileCard d={detail} />
+          <KeysCard d={detail} onDone={onDone} />
+          <NotesCard key={detail.admin_notes ?? ""} d={detail} onDone={onDone} />
         </div>
-      </div>
-
-      <div className="card">
-        <h3>{t("tenantDetail.governanceTitle")}</h3>
-        <p className="hint">{t("tenantDetail.governanceHint")}</p>
-        <div className="row" style={{ flexWrap: "wrap" }}>
-          <button className="btn btn-soft" onClick={() => void setTracking(true)}>{t("tenantDetail.enableTracking")}</button>
-          <button className="btn btn-soft" onClick={() => void setTracking(false)}>{t("tenantDetail.disableTracking")}</button>
-          <button className="btn btn-ghost" onClick={() => void exportData()}>{t("tenantDetail.exportData")}</button>
-          <button className="btn btn-danger" onClick={() => void erase()}>{t("tenantDetail.eraseData")}</button>
+        <div className="card-stack">
+          <CreditsCard d={detail} onDone={onDone} />
+          <PlanCard d={detail} onDone={onDone} />
+          <LifecycleCard d={detail} onDone={onDone} />
         </div>
       </div>
     </DashboardShell>

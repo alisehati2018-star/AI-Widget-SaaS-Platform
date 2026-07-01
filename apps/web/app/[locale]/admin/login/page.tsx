@@ -1,9 +1,9 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ApiError } from "@/lib/api";
-import { adminLogin } from "@/lib/auth";
+import { adminLogin, useAdminSession } from "@/lib/auth";
 import { useRouter } from "@/i18n/navigation";
 import { Alert, Brand, Field, Input, Spinner } from "@/components/ui";
 
@@ -11,10 +11,16 @@ export default function AdminLoginPage() {
   const t = useTranslations("auth");
   const tErrors = useTranslations("errors");
   const router = useRouter();
+  const { user, loading } = useAdminSession();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // An operator with a live admin session skips the form entirely.
+  useEffect(() => {
+    if (!loading && user) router.replace("/admin");
+  }, [loading, user, router]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
