@@ -140,7 +140,13 @@
     "mostWantedEmpty": "No search data yet",
     "zeroTitle": "Zero-result searches",
     "zeroHint": "Demand your catalogue isn't meeting — add products or synonyms.",
-    "zeroEmpty": "No zero-result data yet."
+    "zeroEmpty": "No zero-result data yet.",
+    "insightTitle": "Insight",
+    "insightEmpty": "Not enough data for an insight yet.",
+    "dropoffTitle": "Biggest drop-off",
+    "funnelTitle": "Funnel breakdown",
+    "funnelEmpty": "No funnel events yet.",
+    "colStage": "Stage"
   },
   "chat": {
     "intro": "How shoppers engage with the AI assistant.",

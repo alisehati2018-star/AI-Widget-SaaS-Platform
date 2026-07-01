@@ -2,7 +2,7 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import { formatDateTime, formatNumber } from "@/lib/datetime";
-import { useResource } from "@/lib/hooks/useResource";
+import { useAdminResource as useResource } from "@/lib/hooks/useResource";
 import type { Locale } from "@/i18n/routing";
 import { DashboardShell, useAdminNav } from "@/components/shell";
 import { Badge, Spinner, Stat } from "@/components/ui";

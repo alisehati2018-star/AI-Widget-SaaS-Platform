@@ -41,7 +41,6 @@ from fastapi import APIRouter, Cookie, Header, Request, Response
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-_ADMIN = Header(default=None, alias="x-admin-token")
 _AUTHZ = Header(default=None, alias="authorization")
 _ACCESS_COOKIE = Cookie(default=None, alias="vitrin_access")
 _REFRESH_COOKIE = Cookie(default=None, alias="vitrin_refresh")
@@ -693,34 +692,3 @@ async def change_email(
     if s.env != "production":
         resp["verify_token"] = verify_token
     return resp
-
-
-# --------------------------------------------------------------------------- #
-# Bootstrap the first platform admin (operator-token gated, one-time)        #
-# --------------------------------------------------------------------------- #
-@router.post("/bootstrap-admin")
-async def bootstrap_admin(payload: dict[str, Any], x_admin_token: str | None = _ADMIN):
-    s = get_settings()
-    if not s.admin_token or x_admin_token != s.admin_token:
-        return error_response(401, "unauthorized", "A valid x-admin-token is required.")
-    email = str(payload.get("email", "")).strip().lower()
-    password = str(payload.get("password", ""))
-    full_name = str(payload.get("full_name", "")).strip() or None
-    if not _EMAIL_RE.match(email):
-        return error_response(422, "invalid_email", "A valid email is required.")
-    pw_problems = validate_password_strength(password)
-    if pw_problems:
-        return error_response(422, "weak_password", " ".join(pw_problems))
-    pool = await get_pg_pool()
-    async with pool.acquire() as conn:
-        if await conn.fetchval("SELECT 1 FROM users WHERE lower(email) = $1", email):
-            return error_response(409, "email_taken", "An account with this email already exists.")
-        user_id = await conn.fetchval(
-            "INSERT INTO users (email, password_hash, full_name, role, email_verified) "
-            "VALUES ($1, $2, $3, 'platform_admin', TRUE) RETURNING id",
-            email,
-            hash_password(password),
-            full_name,
-        )
-    await audit(pool, actor="operator", action="auth.bootstrap_admin", detail={"email": email})
-    return {"id": str(user_id), "email": email, "role": "platform_admin"}

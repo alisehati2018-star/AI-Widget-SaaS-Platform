@@ -3,7 +3,7 @@
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
 import type { Order } from "@/lib/api";
-import { authFetch } from "@/lib/auth";
+import { adminFetch as authFetch } from "@/lib/auth";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/datetime";
 import type { Locale } from "@/i18n/routing";
 import { DashboardShell, useAdminNav } from "@/components/shell";

@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
-import { authFetch } from "@/lib/auth";
+import { adminFetch as authFetch } from "@/lib/auth";
 import { DashboardShell, useAdminNav } from "@/components/shell";
 import { Icon } from "@/components/icons";
 import { Alert, Field, Input, Spinner } from "@/components/ui";

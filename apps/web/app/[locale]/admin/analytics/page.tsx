@@ -3,7 +3,7 @@
 import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { ApiError, type AnalyticsBundle } from "@/lib/api";
-import { authFetch } from "@/lib/auth";
+import { adminFetch as authFetch } from "@/lib/auth";
 import { formatNumber } from "@/lib/datetime";
 import type { Locale } from "@/i18n/routing";
 import { DashboardShell, useAdminNav } from "@/components/shell";

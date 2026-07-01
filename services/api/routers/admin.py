@@ -28,7 +28,7 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 
 _ADMIN = Header(default=None, alias="x-admin-token")
 _AUTHZ = Header(default=None, alias="authorization")
-_COOKIE = Cookie(default=None, alias="vitrin_access")
+_COOKIE = Cookie(default=None, alias="vitrin_admin_access")
 
 
 def _authorized(token: str | None) -> bool:
@@ -42,14 +42,16 @@ def _authorized(token: str | None) -> bool:
 async def _admin_ok(
     token: str | None, authorization: str | None, access_cookie: str | None = None
 ) -> bool:
-    """Authorize the admin plane via EITHER the operator token (automation) OR a
-    platform-admin JWT (bearer or cookie, the admin-panel UI). Phase 6 dual-auth."""
+    """Authorize the admin plane via EITHER the operator token (automation) OR
+    an admin-plane JWT (bearer or the admin-only cookie, from ``admin_auth``).
+    The admin identity plane is fully separate from customer auth — this never
+    touches the tenant `users` table."""
     if _authorized(token):
         return True
-    from .auth import current_principal
+    from .admin_auth import admin_current_principal
 
-    principal = await current_principal(authorization, access_cookie)
-    return principal is not None and principal.is_admin
+    principal = await admin_current_principal(authorization, access_cookie)
+    return principal is not None
 
 
 def _forbidden():

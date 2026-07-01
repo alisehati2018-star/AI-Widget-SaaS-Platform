@@ -55,11 +55,11 @@ async function check(ctx, paths, widths, label) {
   const stamp = Date.now();
   const adminEmail = `admin.rc.${stamp}@vitrin.ai`;
   const adminPass = "Adm1n!Str0ng#2026";
-  const boot = await api.post(`${BASE}/api/auth/bootstrap-admin`, {
+  const boot = await api.post(`${BASE}/api/admin/auth/bootstrap`, {
     headers: { "x-admin-token": ADMIN_TOKEN, "content-type": "application/json" },
     data: { email: adminEmail, password: adminPass, full_name: "Platform Admin" },
   });
-  if (!boot.ok()) console.error(`! bootstrap-admin ${boot.status()}: ${await boot.text()}`);
+  if (!boot.ok()) console.error(`! admin bootstrap ${boot.status()}: ${await boot.text()}`);
   for (let i = 1; i <= 3; i++) {
     await api.post(`${BASE}/api/auth/signup`, {
       headers: { "content-type": "application/json" },
@@ -72,7 +72,7 @@ async function check(ctx, paths, widths, label) {
   await check(ctx, PUBLIC, WIDTHS, "public");
 
   // Admin pages: log in as the bootstrapped admin, then sweep mobile + desktop.
-  const login = await api.post(`${BASE}/api/auth/login`, {
+  const login = await api.post(`${BASE}/api/admin/auth/login`, {
     headers: { "content-type": "application/json" },
     data: { email: adminEmail, password: adminPass },
   });

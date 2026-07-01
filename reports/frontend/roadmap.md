@@ -157,6 +157,52 @@ and several pages were a single narrow floating card. Full page-by-page audit
   `.pot` template plus a compiled `fa_IR` translation (`.po` + `.mo`), and
   `index.php` directory-listing guards in every subfolder.
 
+## Phase 16 — Second-pass audit + full admin/customer identity separation
+Second, thorough page-by-page re-audit (two fresh Explore agents) of every
+admin and every owner-dashboard page confirmed Phase 15's layout/completeness
+fixes held and found no further layout bugs; the one small gap (`GET
+/tenant/insight` unused) was closed by adding an Insight + funnel panel to
+`dashboard/analytics`, mirroring `admin/analytics`.
+
+The main deliverable: **platform admins are now a fully separate identity
+plane from store customers — separate database table and separate API
+routes**, not just a role flag in a shared table:
+- **Database**: new `admin_users` + `admin_sessions` tables (migration
+  `0011_admin_users.sql`). Existing `platform_admin` rows are moved out of
+  `users` (idempotent — the migration is safe to re-run), and `users.tenant_id`
+  becomes `NOT NULL` — every remaining row is a real store owner/staff member
+  belonging to a tenant.
+- **API routes**: new `services/api/routers/admin_auth.py` — `/admin/auth/
+  {login,refresh,logout,me,change-password,change-email,bootstrap}` — talks
+  only to `admin_users`/`admin_sessions`. `services/api/routers/auth.py` (the
+  customer surface) had its `bootstrap-admin` endpoint removed entirely; it
+  now only ever reads/writes `users`. Neither router imports from the other.
+- **Cookies**: the admin plane gets its own httpOnly cookie pair
+  (`vitrin_admin_access` / `vitrin_admin_refresh` / `vitrin_admin_csrf`),
+  distinct from the customer's (`vitrin_access` / `vitrin_refresh` /
+  `vitrin_csrf`). `CsrfMiddleware` was updated to scope its double-submit check
+  by path (`/admin/*` → the admin cookie pair, everything else → the customer
+  pair) so a stale cookie from one plane can never block or leak into the
+  other — verified with new unit tests (`test_csrf_protects_the_admin_cookie_
+  pair_on_admin_paths`, `test_csrf_admin_and_customer_cookies_do_not_cross_
+  contaminate`).
+- **Frontend**: `lib/auth.tsx` gained `adminLogin`/`adminLogout`/`adminFetch`/
+  `useAdminSession`, all admin pages' `authFetch`/`useResource` imports were
+  repointed to the admin-scoped equivalents (`adminFetch as authFetch` /
+  `useAdminResource as useResource`), `DashboardShell` picks the matching
+  session hook based on `requireAdmin`, and `admin/login` calls `adminLogin`
+  directly (no more login-then-check-role-then-logout dance).
+- Verified live end-to-end (Playwright, real Postgres+Redis+API): admin login
+  sets only the admin cookies (never the customer ones); a customer signup +
+  login in the *same browser* coexists with an active admin session without
+  either affecting the other; a real customer's correct credentials are
+  rejected by `/admin/auth/login` and vice versa; admin change-password
+  persisted to `admin_users` and a subsequent login with the new password
+  succeeded.
+- Gates: backend 105 passed/10 ES-skipped (+2 new CSRF isolation tests), ruff
+  + mypy clean (88 files); web typecheck + i18n 0/0 + hardcoded/size/routes/
+  dead 0, `next build` 99 pages.
+
 ## QA system (enforced: CI `check:all` + `prebuild`)
 Static gates (fail build): i18n parity+missing+unused · hardcoded strings ·
 component size ≤300 · broken routes · missing assets. Reported: dead components.

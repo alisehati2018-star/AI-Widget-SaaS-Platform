@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import { type ReactNode, useEffect, useState } from "react";
 import { Link, usePathname, useRouter } from "@/i18n/navigation";
-import { logout, useSession } from "@/lib/auth";
+import { adminLogout, logout, useAdminSession, useSession } from "@/lib/auth";
 import { Icon, type IconName } from "./icons";
 import { LocaleSwitch } from "./locale-switch";
 import { Brand, Spinner } from "./ui";
@@ -126,7 +126,12 @@ export function DashboardShell({
   children: ReactNode;
 }) {
   const t = useTranslations("common");
-  const { user, loading } = useSession();
+  // Two fully separate identity planes (own tables, own cookies, own API).
+  // Both hooks are always called (rules-of-hooks) — the one matching
+  // `requireAdmin` is used, the other is simply ignored.
+  const ownerSession = useSession();
+  const adminSession = useAdminSession();
+  const { user, loading } = requireAdmin ? adminSession : ownerSession;
   const router = useRouter();
   const pathname = usePathname();
   const [navOpen, setNavOpen] = useState(false);
@@ -151,7 +156,7 @@ export function DashboardShell({
   }
 
   async function onLogout() {
-    await logout();
+    await (requireAdmin ? adminLogout() : logout());
     router.replace(loginHref);
   }
 

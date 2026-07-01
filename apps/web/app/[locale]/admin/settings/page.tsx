@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { ApiError } from "@/lib/api";
-import { authFetch, useSession } from "@/lib/auth";
+import { adminFetch, useAdminSession } from "@/lib/auth";
 import { DashboardShell, useAdminNav } from "@/components/shell";
 import { Alert, Badge, Field, Input, Spinner } from "@/components/ui";
 
@@ -11,7 +11,7 @@ export default function AdminSettings() {
   const t = useTranslations("admin");
   const tv = useTranslations("validation");
   const nav = useAdminNav();
-  const { user } = useSession();
+  const { user } = useAdminSession();
   const security = [t("settings.sec1"), t("settings.sec2"), t("settings.sec3"), t("settings.sec4")];
 
   const [pw, setPw] = useState({ current: "", next: "", confirm: "" });
@@ -34,7 +34,7 @@ export default function AdminSettings() {
     }
     setPwBusy(true);
     try {
-      await authFetch("/auth/change-password", {
+      await adminFetch("/admin/auth/change-password", {
         body: { current_password: pw.current, new_password: pw.next },
       });
       setPw({ current: "", next: "", confirm: "" });
@@ -52,7 +52,7 @@ export default function AdminSettings() {
     setEmNote(null);
     setEmBusy(true);
     try {
-      await authFetch("/auth/change-email", {
+      await adminFetch("/admin/auth/change-email", {
         body: { current_password: em.password, new_email: em.email },
       });
       setEm({ password: "", email: "" });

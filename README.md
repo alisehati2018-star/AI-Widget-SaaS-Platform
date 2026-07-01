@@ -68,7 +68,7 @@ Create the first **platform admin** (operator token from `.env`), then sign in
 at `/admin/login`:
 
 ```bash
-curl -X POST http://localhost:8000/auth/bootstrap-admin \
+curl -X POST http://localhost:8000/admin/auth/bootstrap \
   -H "x-admin-token: $ADMIN_TOKEN" -H "content-type: application/json" \
   -d '{"email":"admin@vitrin.ai","password":"ChangeMe-Str0ng!","full_name":"Admin"}'
 ```
