@@ -94,6 +94,20 @@ python -m pytest tests/integration/test_engine.py tests/integration/test_search_
 
 > اگر NDCG کمتر از هدف شد: اول بدون `--no-embeddings` (با TEI) تکرار کنید؛ سپس مترادف‌های فروشگاه را از کنسول ادمین (Synonyms) اضافه کنید و دوباره eval بگیرید — همین چرخه، فرایند رسمی tuning است.
 
+## بازبینی مجدد کامل (به درخواست شما)
+
+مرور خط‌به‌خط هر ۱۲ فایل فاز + اعتبارسنجی عمیق داده‌ها + تست زندهٔ مسیرهای پوشش‌نداده. **۳ نقص واقعی پیدا و رفع شد:**
+
+| # | نقص | رفع |
+|---|---|---|
+| ۱ | **`eval/es_provider.py` (بحرانی):** برای هر کوئری یک `asyncio.run` جدید می‌ساخت؛ کلاینت async ES نشست شبکه‌اش را به loop اول می‌بندد → `run_eval --tenant` از **کوئری دوم به بعد** با «Event loop is closed» می‌شکست (این فایل تا امروز هرگز با ES زنده اجرا نشده بود) | provider حالا یک event loop ثابت برای کل عمرش نگه می‌دارد؛ با شبیه‌ساز loop-bound سه فراخوانی پشت‌سرهم تأیید شد |
+| ۲ | **`eval/groundedness.py` (انصاف KPI):** پاسخ صادقانهٔ «موردی یافت نشد» (بدون citation و **بدون هیچ ادعایی**) ungrounded حساب می‌شد و KPI را ناعادلانه پایین می‌کشید | پاسخ‌های no-result شناخته‌شده حالا refusal حساب می‌شوند (`no_results_honest`)؛ هر ۵ شاخهٔ تصمیم با stub تست شد: verified/unknown-product/no-result/no-citation/refused |
+| ۳ | **`scripts/seed_catalog.py` (سخت‌سازی):** هر بار اجرا کلیدهای تازه صادر می‌کرد ولی کلیدهای seed قبلی **معتبر باقی می‌ماندند** (انباشت کلید فعال) | قبل از صدور، کلیدهای seed قبلی همان tenant باطل می‌شوند؛ روی PG واقعی ۲ بار اجرا و تأیید شد (tenant ایدمپوتنت، ۲ کلید فعال، قدیمی‌ها revoked، hash کلید تازه resolve می‌شود) |
+
+موارد سالم تأییدشده در بازبینی: هر ۴ endpoint (شامل `/v1/chat/stream`) پوشش 503 دارند · citation دستیار واقعاً `product_id` دارد (`_source` کامل) · fixture: ۱۰۰ شناسهٔ یکتا، همهٔ فیلدها، قیمت/popularity مثبت، تاریخ معتبر · golden set: ۵۰ کوئری یکتا، همهٔ ۱۲۹ داوری به محصول موجود اشاره می‌کنند و درجه‌ها ۱–۳ · schema (`api_keys.scope` check + `tenants.slug` unique) با seed سازگار است · bootstrap در shutdown لغو می‌شود.
+
+**گیت‌ها بعد از اصلاح:** pytest ۱۳۹ پاس / ۴ skip · ruff + mypy تمیز (۹۸ فایل) · dry-run seed OK · `run_eval --kpi` سالم.
+
 ## فایل‌های تغییر یافته / جدید
 
 | فایل | نوع |

@@ -47,7 +47,6 @@ async def _issue_widget_key(store: str) -> str:
     """Insert a tenant + widget api_key straight into PG (same path as seed)."""
     import asyncpg
     from acip_core.config import get_settings
-
     from api.deps import hash_key
 
     raw = "acip_itest_" + uuid.uuid4().hex

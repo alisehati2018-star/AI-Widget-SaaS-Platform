@@ -50,6 +50,12 @@ async def _ensure_tenant(slug: str, name: str) -> tuple[str, str, str]:
             slug,
             name,
         )
+        # Re-running the seed must not leave a trail of still-valid old keys.
+        await conn.execute(
+            "UPDATE api_keys SET revoked = true "
+            "WHERE tenant_id = $1 AND label IN ('seed widget', 'seed sync') AND NOT revoked",
+            tenant_id,
+        )
         for key, scope, label in (
             (widget_key, "widget", "seed widget"),
             (sync_key, "sync", "seed sync"),

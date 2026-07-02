@@ -25,6 +25,11 @@ from pathlib import Path
 
 from eval.run_eval import load_golden_set
 
+# The assistant's honest "nothing found" answers (router `_search_answer` and
+# the RAG fallback). No citations AND no claims — a refusal, not a
+# hallucination, so it counts as grounded.
+_NO_RESULT_MARKERS = ("موردی یافت نشد", "پاسخ دقیقی در داده‌های فروشگاه پیدا نکردم")
+
 
 async def _doc_exists(es, tenant_id: str, product_id: str) -> bool:
     from acip_core.config import get_settings
@@ -57,8 +62,13 @@ async def run(tenant_id: str, golden_path: Path, limit: int) -> dict:
             ok = True
             reason = "refused"
         elif not citations:
-            ok = False
-            reason = "no_citations"
+            answer = str(turn.get("answer", ""))
+            if any(marker in answer for marker in _NO_RESULT_MARKERS):
+                ok = True
+                reason = "no_results_honest"
+            else:
+                ok = False
+                reason = "no_citations"
         else:
             checks = [
                 await _doc_exists(es, tenant_id, str(c.get("product_id")))
