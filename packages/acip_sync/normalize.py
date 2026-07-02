@@ -134,6 +134,7 @@ def normalize_product(tenant_id: str, source: str, raw: dict) -> CanonicalProduc
         attributes=raw.get("attributes") or {},
         price=_as_float(raw.get("price")),
         in_stock=bool(raw.get("in_stock", True)),
+        popularity=_as_float(raw.get("popularity")),
         updated_at=raw.get("updated_at"),
     )
 

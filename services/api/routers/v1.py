@@ -14,6 +14,8 @@ from typing import Any
 from acip_core.errors import error_response
 from acip_search.suggest import suggest as run_suggest
 from acip_sync.connectors import get_connector
+from elastic_transport import TransportError as _ESTransportError
+from elasticsearch import ApiError as _ESApiError
 from fastapi import APIRouter, Header, Request
 from fastapi.responses import StreamingResponse
 
@@ -28,6 +30,19 @@ _KEY = Header(default=None, alias=API_KEY_HEADER)
 
 def _unauthorized():
     return error_response(401, "unauthorized", "A valid x-api-key is required.")
+
+
+def _search_unavailable(code: str = "search_unavailable"):
+    """Graceful degradation (§14.1): when the search cluster is unreachable or
+    the catalogue index isn't initialised yet, shoppers get an honest 503 with
+    a stable machine-readable code — never a 500."""
+    return error_response(
+        503, code, "The search engine is temporarily unavailable. Please try again shortly."
+    )
+
+
+def _index_missing(exc: _ESApiError) -> bool:
+    return getattr(getattr(exc, "meta", None), "status", None) == 404
 
 
 async def _guard(x_api_key: str | None, *scopes: KeyScope):
@@ -55,12 +70,19 @@ async def search(payload: dict[str, Any], x_api_key: str | None = _KEY):
     if not query:
         return error_response(422, "invalid_request", "Field 'query' is required.")
     svc = get_search_service()
-    result = await svc.search(
-        principal.tenant_id,
-        query,
-        filters=payload.get("filters"),
-        size=payload.get("size"),
-    )
+    try:
+        result = await svc.search(
+            principal.tenant_id,
+            query,
+            filters=payload.get("filters"),
+            size=payload.get("size"),
+        )
+    except _ESTransportError:
+        return _search_unavailable()
+    except _ESApiError as exc:
+        if _index_missing(exc):
+            return _search_unavailable("index_not_ready")
+        raise
     return result
 
 
@@ -73,7 +95,14 @@ async def suggest(q: str = "", x_api_key: str | None = _KEY):
         return {"suggestions": []}
     from acip_core.clients import get_es_client
 
-    items = await run_suggest(get_es_client(), principal.tenant_id, q.strip())
+    try:
+        items = await run_suggest(get_es_client(), principal.tenant_id, q.strip())
+    except _ESTransportError:
+        return _search_unavailable()
+    except _ESApiError as exc:
+        if _index_missing(exc):
+            return _search_unavailable("index_not_ready")
+        raise
     return {"suggestions": items}
 
 
@@ -126,7 +155,14 @@ async def chat(payload: dict[str, Any], x_api_key: str | None = _KEY):
         return error_response(422, "invalid_request", "Field 'message' is required.")
     session_id = str(payload.get("session_id") or uuid.uuid4().hex)
     assistant = get_assistant()
-    result = await assistant.answer(principal.tenant_id, session_id, message)
+    try:
+        result = await assistant.answer(principal.tenant_id, session_id, message)
+    except _ESTransportError:
+        return _search_unavailable("assistant_unavailable")
+    except _ESApiError as exc:
+        if _index_missing(exc):
+            return _search_unavailable("assistant_unavailable")
+        raise
 
     # Best-effort in-conversation lead capture (M10-004); never breaks the turn.
     from acip_analytics import capture_lead, detect_lead
@@ -156,7 +192,14 @@ async def chat_stream(payload: dict[str, Any], x_api_key: str | None = _KEY):
     if not message:
         return error_response(422, "invalid_request", "Field 'message' is required.")
     session_id = str(payload.get("session_id") or uuid.uuid4().hex)
-    result = await get_assistant().answer(principal.tenant_id, session_id, message)
+    try:
+        result = await get_assistant().answer(principal.tenant_id, session_id, message)
+    except _ESTransportError:
+        return _search_unavailable("assistant_unavailable")
+    except _ESApiError as exc:
+        if _index_missing(exc):
+            return _search_unavailable("assistant_unavailable")
+        raise
 
     async def _events():
         yield f"event: meta\ndata: {json.dumps({'session_id': session_id})}\n\n"

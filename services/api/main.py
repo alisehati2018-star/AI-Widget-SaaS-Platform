@@ -35,6 +35,21 @@ from .routers import (
 )
 
 
+async def _bootstrap_search_index(log) -> None:
+    """Best-effort first-run bootstrap: ensure the catalogue index exists
+    behind the read alias so a fresh deployment can serve /v1/search without a
+    manual console step. Failures (ES down/not configured) are logged and
+    ignored — startup must never block on the cluster."""
+    try:
+        import acip_search.index_admin as ia
+        from acip_core.clients import get_es_client
+
+        result = await ia.ensure_catalogue_index(get_es_client())
+        log.info("es.bootstrap", status=result.get("status"), index=result.get("index"))
+    except Exception as exc:  # noqa: BLE001 - degradation path, by design
+        log.warning("es.bootstrap_skipped", error=str(exc))
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
     configure_logging(settings.log_level, settings.service_name)
@@ -43,7 +58,14 @@ def create_app() -> FastAPI:
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         log.info("api.startup", env=settings.env)
+        bootstrap_task = None
+        if settings.es_bootstrap_on_startup:
+            import asyncio
+
+            bootstrap_task = asyncio.create_task(_bootstrap_search_index(log))
         yield
+        if bootstrap_task is not None and not bootstrap_task.done():
+            bootstrap_task.cancel()
         log.info("api.shutdown")
 
     app = FastAPI(
