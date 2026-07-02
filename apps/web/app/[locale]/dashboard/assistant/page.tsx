@@ -4,8 +4,16 @@ import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import type { TenantProfile } from "@/lib/api";
 import { authFetch } from "@/lib/auth";
+import { Link } from "@/i18n/navigation";
 import { DashboardShell, useOwnerNav } from "@/components/shell";
-import { Alert, Field, Input, Spinner } from "@/components/ui";
+import { Alert, Badge, Field, Input, Spinner } from "@/components/ui";
+
+interface AssistantStatus {
+  assistant_enabled: boolean;
+  llm_configured: boolean;
+  docs_indexed: number | null;
+  search_degraded: boolean;
+}
 
 export default function AssistantPage() {
   const t = useTranslations("dashboard");
@@ -15,12 +23,16 @@ export default function AssistantPage() {
   const [loaded, setLoaded] = useState(false);
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<AssistantStatus | null>(null);
 
   useEffect(() => {
     authFetch<TenantProfile>("/tenant/profile")
       .then((p) => setGreeting(p.settings.widget_greeting ?? ""))
       .catch(() => {})
       .finally(() => setLoaded(true));
+    authFetch<AssistantStatus>("/tenant/assistant-status")
+      .then(setStatus)
+      .catch(() => setStatus(null));
   }, []);
 
   async function save() {
@@ -44,6 +56,48 @@ export default function AssistantPage() {
   return (
     <DashboardShell title={t("nav.assistant")} nav={nav}>
       <p style={{ marginTop: "-1rem" }}>{t("assistant.intro")}</p>
+
+      <div className="card" style={{ marginBottom: "1.5rem" }}>
+        <h3>{t("assistant.statusTitle")}</h3>
+        {status === null ? <Spinner /> : (
+          <>
+            <div className="stat-grid">
+              <div className="stat">
+                <span className="stat-label">{t("assistant.statusFlag")}</span>
+                <span className="stat-value">
+                  <Badge tone={status.assistant_enabled ? "success" : "warning"}>
+                    {status.assistant_enabled ? t("assistant.statusOn") : t("assistant.statusOff")}
+                  </Badge>
+                </span>
+              </div>
+              <div className="stat">
+                <span className="stat-label">{t("assistant.statusLlm")}</span>
+                <span className="stat-value">
+                  <Badge tone={status.llm_configured ? "success" : "warning"}>
+                    {status.llm_configured ? t("assistant.statusReady") : t("assistant.statusNotConfigured")}
+                  </Badge>
+                </span>
+              </div>
+              <div className="stat">
+                <span className="stat-label">{t("assistant.statusDocs")}</span>
+                <span className="stat-value">
+                  {status.search_degraded
+                    ? <Badge tone="warning">{t("assistant.statusSearchDown")}</Badge>
+                    : status.docs_indexed ?? "—"}
+                </span>
+              </div>
+            </div>
+            {!status.search_degraded && (status.docs_indexed ?? 0) === 0 ? (
+              <div className="alert alert-warning" role="status" style={{ marginTop: "1rem" }}>
+                {t("assistant.emptyGuide")}{" "}
+                <Link className="btn btn-soft" href="/dashboard/catalog" style={{ marginInlineStart: ".5rem" }}>
+                  {t("assistant.emptyGuideCta")}
+                </Link>
+              </div>
+            ) : null}
+          </>
+        )}
+      </div>
 
       <div className="card" style={{ marginBottom: "1.5rem" }}>
         <h3>{t("assistant.greetingTitle")}</h3>

@@ -19,9 +19,10 @@ export default function AnalyticsPage() {
   const t = useTranslations("dashboard");
   const locale = useLocale() as Locale;
   const nav = useOwnerNav();
-  const { data } = useResource<AnalyticsBundle>("/tenant/analytics");
-  const { data: insightData } = useResource<{ insight: Insight }>("/tenant/insight");
+  const { data } = useResource<AnalyticsBundle & { degraded?: boolean }>("/tenant/analytics");
+  const { data: insightData } = useResource<{ insight: Insight; degraded?: boolean }>("/tenant/insight");
   const insight = insightData?.insight;
+  const degraded = Boolean(data?.degraded || insightData?.degraded);
 
   const fd = data?.four_dimensions;
   const pct = (v: number) => formatNumber(v, locale, { style: "percent", maximumFractionDigits: 0 });
@@ -30,6 +31,9 @@ export default function AnalyticsPage() {
   return (
     <DashboardShell title={t("nav.analytics")} nav={nav}>
       <p style={{ marginTop: "-1rem" }}>{t("analytics.intro")}</p>
+      {degraded ? (
+        <div className="alert alert-warning" role="status">{t("analytics.degradedBanner")}</div>
+      ) : null}
       <div className="stat-grid" style={{ marginBottom: "2rem" }}>
         <Stat
           label={t("analytics.latencyP95")}

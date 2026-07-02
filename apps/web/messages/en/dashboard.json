@@ -48,7 +48,18 @@
     "setupBody": "Complete the guided steps to connect your store and go live.",
     "setupOpenGuide": "Open setup guide",
     "setupApiKeys": "API keys",
-    "setupConnect": "Connect store"
+    "setupConnect": "Connect store",
+    "lowCreditsWarning": "Your monthly credits are almost gone — {remaining} left.",
+    "lowCreditsCta": "Buy credits",
+    "checklistTitle": "Setup checklist",
+    "checklistProgress": "{done} of {total}",
+    "checklistDone": "All steps complete — your store is fully ready. 🎉",
+    "stepVerify": "Verify your account email",
+    "stepConnect": "Connect your store (URL + platform)",
+    "stepSync": "Run the first catalogue sync",
+    "stepWidget": "Create a widget key and install it",
+    "stepPending": "—",
+    "stepGo": "Go"
   },
   "getStarted": {
     "title": "Get started",
@@ -87,7 +98,19 @@
     "howStep1": "Install the {platform} plugin and paste a sync-scoped API key.",
     "howStep2": "The plugin runs an initial bulk import, then posts a webhook on every product change.",
     "howStep3": "Only the delta is sent — prices, stock and new products stay fresh automatically.",
-    "resyncHint": "A manual re-sync button appears here once a sync key has been used."
+    "resyncHint": "A manual re-sync button appears here once a sync key has been used.",
+    "syncTitle": "Sync status",
+    "syncNow": "Sync now",
+    "syncQueued": "Sync request recorded and queued.",
+    "syncFailed": "Could not queue the sync request.",
+    "docsIndexed": "Indexed products",
+    "docsUnavailable": "Search engine unavailable",
+    "lastSync": "Last sync",
+    "esDegraded": "The search engine (Elasticsearch) is currently unreachable — the indexed-product count will show once it reconnects.",
+    "colSource": "Source",
+    "colLastRun": "Last run",
+    "colStatus": "Status",
+    "noSyncYet": "No sync recorded yet — hit “Sync now” or install the store plugin."
   },
   "search": {
     "intro": "Shape relevance with synonyms and learn what shoppers can't find.",
@@ -97,7 +120,19 @@
     "saveSynonyms": "Save synonyms",
     "zeroTitle": "Zero-result searches",
     "zeroHint": "High-demand queries with no matches — add products or a synonym rule.",
-    "zeroEmpty": "No zero-result data yet."
+    "zeroEmpty": "No zero-result data yet.",
+    "testTitle": "Live search test",
+    "testHint": "The exact hybrid search your widget runs — see the results before your customers do.",
+    "testPlaceholder": "e.g. men's running shoes…",
+    "testRun": "Search",
+    "testFailed": "The search failed.",
+    "testDegraded": "The search engine is currently unavailable — try again once Elasticsearch reconnects.",
+    "testNoResults": "No results — if a product should have matched, add a synonym rule.",
+    "colProduct": "Product",
+    "colBrand": "Brand",
+    "colPrice": "Price",
+    "synonymsPlaceholder": "mobile, cellphone, موبایل\ntv, television, تلویزیون",
+    "zeroTryIt": "Try it"
   },
   "assistant": {
     "intro": "A grounded RAG assistant that answers only from your catalogue — no invented products.",
@@ -109,7 +144,18 @@
     "guardrail2": "Prompt-injection defences and a release-blocking guardrail test protect every turn.",
     "guardrail3": "The cost ladder (cache → search → small model → large model) keeps spend low.",
     "guardrail4": "Out-of-scope questions are politely declined rather than answered from the open web.",
-    "guardrailsHint": "Model routing & budget caps are managed by the platform AI gateway."
+    "guardrailsHint": "Model routing & budget caps are managed by the platform AI gateway.",
+    "statusTitle": "Assistant status",
+    "statusFlag": "Assistant on platform",
+    "statusOn": "Enabled",
+    "statusOff": "Disabled",
+    "statusLlm": "Local language model",
+    "statusReady": "Configured",
+    "statusNotConfigured": "Not configured",
+    "statusDocs": "Indexed products",
+    "statusSearchDown": "Search unavailable",
+    "emptyGuide": "The assistant needs an indexed catalogue to answer — connect and sync your store first.",
+    "emptyGuideCta": "Connect catalogue"
   },
   "knowledge": {
     "intro": "FAQ & policy articles the assistant can ground answers on — alongside your catalogue.",
@@ -127,7 +173,8 @@
     "editTitle": "Edit article",
     "publish": "Publish",
     "unpublish": "Unpublish",
-    "updated": "Article updated."
+    "updated": "Article updated.",
+    "searchPlaceholder": "Search article titles and bodies…"
   },
   "analytics": {
     "intro": "Relevance · latency · cost · reliability for your store.",
@@ -146,7 +193,8 @@
     "dropoffTitle": "Biggest drop-off",
     "funnelTitle": "Funnel breakdown",
     "funnelEmpty": "No funnel events yet.",
-    "colStage": "Stage"
+    "colStage": "Stage",
+    "degradedBanner": "The search engine (Elasticsearch) is currently unreachable — search data shows empty for now; the remaining figures come from the database."
   },
   "chat": {
     "intro": "How shoppers engage with the AI assistant.",
@@ -168,7 +216,8 @@
     "ctr": "CTR",
     "breakdown": "Funnel breakdown",
     "colStage": "Stage",
-    "empty": "No conversion events yet. Embed the widget and emit click / add-to-cart events to populate this funnel."
+    "empty": "No conversion events yet. Embed the widget and emit click / add-to-cart events to populate this funnel.",
+    "degradedBanner": "The search engine is currently unavailable — the funnel fills again once it reconnects."
   },
   "leads": {
     "intro": "Contacts captured in-conversation by the assistant.",
@@ -188,7 +237,15 @@
     "statusContacted": "Contacted",
     "statusQualified": "Qualified",
     "statusWon": "Won",
-    "statusLost": "Lost"
+    "statusLost": "Lost",
+    "filterAll": "All",
+    "noMatches": "No leads with this status.",
+    "bulkSelected": "{n} selected",
+    "bulkApply": "Apply status",
+    "bulkApplied": "Updated {n} lead(s).",
+    "bulkClear": "Clear selection",
+    "bulkSelectAll": "Select all",
+    "bulkSelectRow": "Select lead"
   },
   "widget": {
     "intro": "Embed the search + chat widget and match it to your brand.",
@@ -217,7 +274,13 @@
     "configSaved": "Widget settings saved.",
     "previewTitle": "Live preview",
     "previewHint": "How your launcher looks on your storefront with these settings.",
-    "previewGreetingFallback": "Hi! How can I help you find a product?"
+    "previewGreetingFallback": "Hi! How can I help you find a product?",
+    "liveTestTitle": "Live widget test on this page",
+    "liveTestHint": "The real widget/v1.js loads here in a sandboxed iframe. Paste your widget key and search/chat actually hit your store.",
+    "liveTestKeyPlaceholder": "acip_… (optional — for a full search/chat test)",
+    "liveTestRun": "Run test",
+    "liveTestReload": "Reload",
+    "liveTestKeyNote": "The key is used only in your browser and never stored."
   },
   "keys": {
     "intro": "Scoped, least-privilege keys connect your store and widget to Vitrin.",
@@ -257,7 +320,10 @@
     "removeConfirm": "Remove {email} from the team?",
     "roleOwner": "owner",
     "roleStaff": "staff",
-    "active": "active"
+    "active": "active",
+    "pending": "Pending",
+    "pendingCount": "{n} pending invite(s)",
+    "resendInvite": "Resend invite"
   },
   "credits": {
     "intro": "AI credits power search, the assistant, and analytics.",
@@ -313,5 +379,24 @@
     "newEmail": "New email",
     "changeEmailSubmit": "Change email",
     "emailChanged": "Email changed. Check your new inbox to verify it."
+  },
+  "connect": {
+    "title": "Connect your store (OpenCart / WooCommerce)",
+    "hint": "Three steps to a full connection: store details, plugin + sync key, and a connection check. Each step ticks itself off for real.",
+    "step1Title": "Store details",
+    "step1Save": "Save",
+    "step1Saved": "Store details saved.",
+    "step2Title": "Install plugin + key",
+    "step2Opencart": "Install the OpenCart 3 module from integrations/opencart3 (upload via Extensions) and enter the API URL and sync key in its settings.",
+    "step2Woo": "Install and activate the WordPress plugin from integrations/wordpress, then enter the API URL and sync key on its settings tab.",
+    "step2Key": "Create a key with the “sync” scope so the plugin can authenticate.",
+    "step2KeyReady": "Sync key ready ✓",
+    "step2KeyCta": "Create sync key",
+    "step3Title": "Verify connection",
+    "step3Body": "A test sync is queued; this step ticks once the plugin delivers products.",
+    "step3Verify": "Verify connection",
+    "step3Done": "Connected ✓",
+    "verifyQueued": "Check queued — the status updates after the worker runs.",
+    "verifyFailed": "Could not queue the check."
   }
 }

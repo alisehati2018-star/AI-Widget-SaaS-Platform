@@ -56,29 +56,11 @@ export default function BillingPage() {
     reload();
   }, [reload]);
 
-  async function choose(code: string) {
-    setError(null);
-    setNote(null);
+  const [preview, setPreview] = useState<(Preview & { code: string }) | null>(null);
+
+  async function checkout(code: string) {
     setPending(code);
     try {
-      if (profile?.sub_status === "active" && profile.plan.toLowerCase() !== "free") {
-        const pv = await authFetch<Preview>(`/tenant/billing/preview?plan_code=${code}`).catch(() => null);
-        if (pv && pv.proration_credit > 0) {
-          const ok = window.confirm(
-            t("previewConfirm", {
-              plan: pv.plan_name,
-              currency: pv.currency,
-              base: formatNumber(pv.base_price, locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-              credit: formatNumber(pv.proration_credit, locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-              due: formatNumber(pv.amount_due, locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-            }),
-          );
-          if (!ok) {
-            setPending(null);
-            return;
-          }
-        }
-      }
       const r = await authFetch<{ instructions?: string; redirect_url?: string; next?: string }>(
         "/tenant/billing/checkout",
         { body: { plan_code: code } },
@@ -94,6 +76,24 @@ export default function BillingPage() {
     } finally {
       setPending(null);
     }
+  }
+
+  async function choose(code: string) {
+    setError(null);
+    setNote(null);
+    setPreview(null);
+    // Upgrading from a live paid plan → show the proration preview inline and
+    // wait for an explicit confirm; fresh/trial stores check out directly.
+    if (profile?.sub_status === "active" && profile.plan.toLowerCase() !== "free") {
+      setPending(code);
+      const pv = await authFetch<Preview>(`/tenant/billing/preview?plan_code=${code}`).catch(() => null);
+      setPending(null);
+      if (pv) {
+        setPreview({ ...pv, code });
+        return;
+      }
+    }
+    await checkout(code);
   }
 
   async function buyTopup() {
@@ -156,6 +156,39 @@ export default function BillingPage() {
         </div>
       </div>
 
+      {preview ? (
+        <div className="card" style={{ marginBottom: "1.5rem", borderColor: "var(--brand)" }}>
+          <h3>{t("previewTitle", { plan: preview.plan_name })}</h3>
+          <table className="table" style={{ maxWidth: 480 }}>
+            <tbody>
+              <tr>
+                <td className="muted">{t("previewBase")}</td>
+                <td>{formatCurrency(preview.base_price, preview.currency, locale)}</td>
+              </tr>
+              <tr>
+                <td className="muted">{t("previewCredit")}</td>
+                <td>−{formatCurrency(preview.proration_credit, preview.currency, locale)}</td>
+              </tr>
+              <tr>
+                <td><strong>{t("previewDue")}</strong></td>
+                <td><strong>{formatCurrency(preview.amount_due, preview.currency, locale)}</strong></td>
+              </tr>
+            </tbody>
+          </table>
+          <p className="hint">{t("previewHint")}</p>
+          <div className="row" style={{ gap: ".5rem" }}>
+            <button
+              className="btn btn-primary"
+              disabled={pending === preview.code}
+              onClick={() => { const c = preview.code; setPreview(null); void checkout(c); }}
+            >
+              {pending === preview.code ? <Spinner /> : t("previewConfirmBtn")}
+            </button>
+            <button className="btn btn-soft" onClick={() => setPreview(null)}>{t("previewCancel")}</button>
+          </div>
+        </div>
+      ) : null}
+
       <h3>{t("choosePlan")}</h3>
       <div className="pricing-grid" style={{ marginBottom: "2rem" }}>
         {plans.filter((p) => p.code !== "free").map((p) => {
@@ -205,7 +238,7 @@ export default function BillingPage() {
           <p className="muted">{t("invoicesEmpty")}</p>
         ) : (
           <table className="table">
-            <thead><tr><th>{t("colNumber")}</th><th>{t("colDescription")}</th><th>{t("colAmount")}</th><th>{t("colStatus")}</th><th>{t("colDate")}</th></tr></thead>
+            <thead><tr><th>{t("colNumber")}</th><th>{t("colDescription")}</th><th>{t("colAmount")}</th><th>{t("colStatus")}</th><th>{t("colDate")}</th><th></th></tr></thead>
             <tbody>
               {invoices.map((inv) => (
                 <tr key={inv.number}>
@@ -214,6 +247,16 @@ export default function BillingPage() {
                   <td>{formatCurrency(inv.amount, inv.currency, locale)}</td>
                   <td><Badge tone="success">{inv.status}</Badge></td>
                   <td className="muted">{formatDate(inv.created_at, locale)}</td>
+                  <td>
+                    <a
+                      className="btn btn-ghost"
+                      href={`/api/tenant/billing/invoices/${inv.number}/html`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {t("invoiceDownload")}
+                    </a>
+                  </td>
                 </tr>
               ))}
             </tbody>

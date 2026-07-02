@@ -12,7 +12,7 @@ export default function ChatAnalyticsPage() {
   const t = useTranslations("dashboard");
   const locale = useLocale() as Locale;
   const nav = useOwnerNav();
-  const { data } = useResource<AnalyticsBundle>("/tenant/analytics");
+  const { data } = useResource<AnalyticsBundle & { degraded?: boolean }>("/tenant/analytics");
 
   const fd = data?.four_dimensions;
   const pct = (v: number) => formatNumber(v, locale, { style: "percent", maximumFractionDigits: 0 });
@@ -20,6 +20,9 @@ export default function ChatAnalyticsPage() {
   return (
     <DashboardShell title={t("nav.chat")} nav={nav}>
       <p style={{ marginTop: "-1rem" }}>{t("chat.intro")}</p>
+      {data?.degraded ? (
+        <div className="alert alert-warning" role="status">{t("analytics.degradedBanner")}</div>
+      ) : null}
       <div className="stat-grid" style={{ marginBottom: "2rem" }}>
         <Stat label={t("chat.turns")} value={fd?.reliability?.turns != null ? formatNumber(fd.reliability.turns, locale) : "—"} />
         <Stat label={t("chat.noPaidShare")} value={fd?.cost?.no_paid_share != null ? pct(fd.cost.no_paid_share) : "—"} />

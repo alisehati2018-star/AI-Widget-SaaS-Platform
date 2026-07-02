@@ -10,9 +10,9 @@
 | ۱ | Admin Tenant Management | ✅ تأییدشده ([گزارش](../reports/phases/phase-01-admin-tenant.md)) |
 | ۲ | Admin Revenue, Plans, Users, Inbox | ✅ تأییدشده ([گزارش](../reports/phases/phase-02-admin-revenue.md)) |
 | ۳ | Admin Observability و امنیت | ✅ تأییدشده ([گزارش](../reports/phases/phase-03-admin-observability.md)) |
-| ۴ | Admin ES Console, Agent, Widget, QA | ✅ **تحویل‌شده — منتظر تأیید شما** ([گزارش](../reports/phases/phase-04-admin-qa.md)) |
-| ۵ | Owner Dashboard (۱۷ صفحه) | ⬜ منتظر تأیید فاز ۴ |
-| ۶ | موتور هوشمند: ES + Sync + Inference | ⬜ |
+| ۴ | Admin ES Console, Agent, Widget, QA | ✅ تأییدشده ([گزارش](../reports/phases/phase-04-admin-qa.md)) |
+| ۵ | Owner Dashboard (۱۷ صفحه) | ✅ **تحویل‌شده — منتظر تأیید شما** ([گزارش](../reports/phases/phase-05-owner-dashboard.md)) |
+| ۶ | موتور هوشمند: ES + Sync + Inference | ⬜ منتظر تأیید فاز ۵ |
 | ۷ | یکپارچه‌سازی OpenCart / WooCommerce | ⬜ |
 | ۸ | Dev Sign-off (تست نهایی ویندوز) | ⬜ |
 | ۹ | انتقال سرور + hardening (عملیاتی) | ⬜ |
@@ -104,26 +104,27 @@
 - [x] fe-qa: ۷ route ادمین به responsive (پوشش کامل ۲۰ مسیر) + ۴ چک functional جدید + a11y ادمین (۸ صفحه با ورود واقعی؛ نقص select بدون نام در همهٔ صفحات رفع شد)
 - [x] پذیرش: `check:all` سبز + responsive همهٔ routeهای ادمین + a11y صفر نقض
 - [x] گزارش: `reports/phases/phase-04-admin-qa.md`
-- [ ] **تأیید شما برای فاز ۵** ⏸️
+- [x] **تأیید شما برای فاز ۵** ✅
 
 ---
 
-## فاز ۵ — داشبورد فروشگاه‌دار ⬜
+## فاز ۵ — داشبورد فروشگاه‌دار ✅
 
-- [ ] Overview: KPI + هشدار اعتبار + چک‌لیست onboarding
-- [ ] Catalog: وضعیت sync (last sync + doc count از ES) + دکمهٔ «sync now»
-- [ ] Search: تست جست‌وجوی زنده + لینک zero-results
-- [ ] Chat/Assistant: وضعیت inference + empty state راهنما
-- [ ] Analytics/Sales: degraded states
-- [ ] Leads: فیلتر status + bulk actions
-- [ ] Billing: پیش‌نمایش upgrade + دانلود فاکتور (HTML)
-- [ ] Widget: embed واقعی + تست در صفحه
-- [ ] Knowledge: جست‌وجو در مقالات
-- [ ] Team: pending invites + resend
-- [ ] Settings: wizard اتصال OpenCart/Woo
-- [ ] Backend: `GET /tenant/sync-status` + `POST /tenant/sync/trigger`
-- [ ] پذیرش: signup → onboarding → widget embed روی localhost + degraded states
-- [ ] گزارش: `reports/phases/phase-05-owner-dashboard.md` + **تأیید شما**
+- [x] Overview: KPI + هشدار اعتبار کم + چک‌لیست onboarding زنده (۴ گام از وضعیت واقعی)
+- [x] Catalog: وضعیت sync (last sync + doc count از ES با تفکیک «خالی/خاموش») + دکمهٔ «sync now»
+- [x] Search: تست جست‌وجوی زنده (`POST /tenant/search-test`) + دکمهٔ «امتحان» روی عبارت‌های بدون‌نتیجه
+- [x] Chat/Assistant: وضعیت inference برای مالک (`GET /tenant/assistant-status`) + empty state راهنما
+- [x] Analytics/Sales/Chat: degraded states (بنر + پرچم backend)
+- [x] Leads: فیلتر status (چیپ با شمارش) + bulk actions (انتخاب گروهی + اعمال وضعیت)
+- [x] Billing: پنل پیش‌نمایش upgrade (تناسب‌سنجی) + دانلود فاکتور HTML قابل چاپ
+- [x] Widget: embed واقعی + تست زنده در صفحه (loader واقعی در iframe + کلید اختیاری)
+- [x] Knowledge: جست‌وجو در مقالات
+- [x] Team: pending invites (نشان + شمارنده) + resend (`POST /tenant/team/resend`)
+- [x] Settings: wizard اتصال OpenCart/Woo (۳ گام با تیک از وضعیت واقعی)
+- [x] Backend: `GET /tenant/sync-status` + `POST /tenant/sync/trigger` (+ ثبت اجرای worker در sync_state)
+- [x] پذیرش: signup → onboarding ۴از۴ → widget embed روی localhost + degraded states (۲۴ چک زنده)
+- [x] گزارش: `reports/phases/phase-05-owner-dashboard.md`
+- [ ] **تأیید شما برای فاز ۶** ⏸️
 
 ---
 
