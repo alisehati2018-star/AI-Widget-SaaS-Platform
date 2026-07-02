@@ -266,6 +266,70 @@ async def invoices(authorization: str | None = _AUTHZ, vitrin_access: str | None
     }
 
 
+_INVOICE_HTML = """<!doctype html><html dir="rtl" lang="fa"><head><meta charset="utf-8">
+<title>فاکتور {number}</title>
+<style>
+  body {{ font-family: Tahoma, sans-serif; max-width: 640px; margin: 3rem auto; color: #111; }}
+  .head {{ display: flex; justify-content: space-between; align-items: baseline;
+           border-bottom: 2px solid #111; padding-bottom: .75rem; }}
+  h1 {{ font-size: 1.3rem; margin: 0; }}
+  table {{ width: 100%; border-collapse: collapse; margin-top: 1.5rem; }}
+  td, th {{ padding: .6rem .4rem; border-bottom: 1px solid #ddd; text-align: right; }}
+  .total {{ font-weight: bold; font-size: 1.1rem; }}
+  .muted {{ color: #666; font-size: .85rem; }}
+  .badge {{ padding: .15rem .6rem; border: 1px solid #111; border-radius: 999px;
+            font-size: .8rem; }}
+  @media print {{ body {{ margin: 1rem; }} }}
+</style></head><body>
+<div class="head"><h1>فاکتور شمارهٔ {number}</h1><span class="badge">{status_fa}</span></div>
+<p class="muted">فروشگاه: {store} · تاریخ صدور: {date}</p>
+<table>
+  <thead><tr><th>شرح</th><th>مبلغ</th></tr></thead>
+  <tbody>
+    <tr><td>{description}</td><td>{amount} {currency}</td></tr>
+    <tr class="total"><td>جمع کل</td><td>{amount} {currency}</td></tr>
+  </tbody>
+</table>
+<p class="muted">این فاکتور توسط پلتفرم ویترین صادر شده است. برای چاپ یا ذخیره به‌صورت PDF از
+گزینهٔ Print مرورگر استفاده کنید.</p>
+</body></html>"""
+
+
+@router.get("/tenant/billing/invoices/{number}/html")
+async def invoice_html(
+    number: int, authorization: str | None = _AUTHZ, vitrin_access: str | None = _COOKIE
+):
+    """A standalone, printable HTML invoice (browser print → PDF). Scoped to
+    the signed-in tenant — the number is only looked up within their rows."""
+    p = await _require_tenant(authorization, vitrin_access)
+    if p is None:
+        return error_response(401, "unauthenticated", "Sign in to your store account.")
+    assert p.tenant_id is not None
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT i.number, i.description, i.amount, i.currency, i.status, i.created_at, "
+            "t.name AS store FROM invoices i JOIN tenants t ON t.id = i.tenant_id "
+            "WHERE i.tenant_id = $1 AND i.number = $2",
+            p.tenant_id,
+            number,
+        )
+    if row is None:
+        return error_response(404, "not_found", "No such invoice.")
+    from fastapi.responses import HTMLResponse
+
+    html = _INVOICE_HTML.format(
+        number=row["number"],
+        status_fa="پرداخت‌شده" if row["status"] == "paid" else "باطل‌شده",
+        store=row["store"],
+        date=row["created_at"].strftime("%Y-%m-%d") if row["created_at"] else "—",
+        description=row["description"],
+        amount=f"{float(row['amount']):,.2f}",
+        currency=row["currency"],
+    )
+    return HTMLResponse(content=html)
+
+
 @router.post("/billing/webhook")
 async def webhook(request: Request, x_billing_signature: str | None = _SIGNATURE):
     """Payment-provider callback. Body is HMAC-SHA256 signed with

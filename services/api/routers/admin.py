@@ -9,6 +9,7 @@ management. Full least-privilege RBAC + audit hardening is Phase 3 (M11).
 
 from __future__ import annotations
 
+import re
 import secrets
 from typing import Any
 
@@ -151,26 +152,27 @@ async def overview(
             "JOIN plans p ON p.id = s.plan_id WHERE s.status = 'active'"
         )
         signup_rows = await conn.fetch(
-            "SELECT created_at::date AS d, count(*)::float AS signups FROM tenants "
+            "SELECT (created_at AT TIME ZONE 'UTC')::date AS d, count(*)::float AS signups "
+            "FROM tenants "
             "WHERE created_at >= now() - make_interval(days => $1) GROUP BY 1",
             days,
         )
         usage_rows = await conn.fetch(
-            "SELECT occurred_at::date AS d, count(*)::float AS calls, "
+            "SELECT (occurred_at AT TIME ZONE 'UTC')::date AS d, count(*)::float AS calls, "
             "COALESCE(sum(cost), 0)::float AS credits FROM usage_events "
             "WHERE occurred_at >= now() - make_interval(days => $1) GROUP BY 1",
             days,
         )
         revenue_rows = await conn.fetch(
-            "SELECT COALESCE(paid_at, created_at)::date AS d, "
+            "SELECT (COALESCE(paid_at, created_at) AT TIME ZONE 'UTC')::date AS d, "
             "COALESCE(sum(amount), 0)::float AS revenue FROM orders "
             "WHERE status = 'paid' "
             "AND COALESCE(paid_at, created_at) >= now() - make_interval(days => $1) GROUP BY 1",
             days,
         )
         failed_rows = await conn.fetch(
-            "SELECT created_at::date AS d, count(*)::float AS failed FROM orders "
-            "WHERE status = 'failed' "
+            "SELECT (created_at AT TIME ZONE 'UTC')::date AS d, count(*)::float AS failed "
+            "FROM orders WHERE status = 'failed' "
             "AND created_at >= now() - make_interval(days => $1) GROUP BY 1",
             days,
         )
@@ -613,19 +615,44 @@ async def change_tenant_plan(
 
 @router.get("/users")
 async def list_users(
+    q: str | None = None,
+    role: str | None = None,
+    status: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
     x_admin_token: str | None = _ADMIN,
     authorization: str | None = _AUTHZ,
     vitrin_access: str | None = _COOKIE,
 ):
-    """List all platform users (Phase 6)."""
+    """Store users (customer plane) with email search + role/status filters."""
     if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
+    limit = max(1, min(int(limit), 200))
+    offset = max(0, int(offset))
+    where: list[str] = []
+    params: list[Any] = []
+    if q:
+        params.append(f"%{q.strip()}%")
+        where.append(
+            f"(u.email ILIKE ${len(params)} OR u.full_name ILIKE ${len(params)} "
+            f"OR t.slug ILIKE ${len(params)} OR t.name ILIKE ${len(params)})"
+        )
+    if role:
+        params.append(role)
+        where.append(f"u.role = ${len(params)}")
+    if status:
+        params.append(status)
+        where.append(f"u.status = ${len(params)}")
+    clause = ("WHERE " + " AND ".join(where)) if where else ""
+    base = f"FROM users u LEFT JOIN tenants t ON t.id = u.tenant_id {clause}"
     pool = await get_pg_pool()
     async with pool.acquire() as conn:
+        total = await conn.fetchval(f"SELECT count(*) {base}", *params)
         rows = await conn.fetch(
-            "SELECT u.email, u.full_name, u.role, u.status, u.last_login_at, u.tenant_id, "
-            "COALESCE(t.name, '—') AS tenant FROM users u "
-            "LEFT JOIN tenants t ON t.id = u.tenant_id ORDER BY u.created_at DESC LIMIT 500"
+            f"SELECT u.email, u.full_name, u.role, u.status, u.last_login_at, u.tenant_id, "
+            f"COALESCE(t.name, '—') AS tenant {base} "
+            f"ORDER BY u.created_at DESC LIMIT ${len(params) + 1} OFFSET ${len(params) + 2}",
+            *params, limit, offset,
         )
     return {
         "users": [
@@ -639,35 +666,116 @@ async def list_users(
                 "last_login_at": r["last_login_at"].isoformat() if r["last_login_at"] else None,
             }
             for r in rows
-        ]
+        ],
+        "total": int(total),
+        "limit": limit,
+        "offset": offset,
     }
 
 
 @router.get("/audit")
 async def audit_log(
+    actor: str | None = None,
+    action: str | None = None,
+    tenant: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    cursor: int | None = None,
+    limit: int = 50,
+    fmt: str | None = None,
     x_admin_token: str | None = _ADMIN,
     authorization: str | None = _AUTHZ,
     vitrin_access: str | None = _COOKIE,
 ):
-    """Recent audit-log entries (Phase 6)."""
+    """Audit-log browser: actor/action-prefix/tenant/date filters + keyset
+    cursor (pass the previous page's `next_cursor` to continue).
+    `fmt=csv` streams the filtered entries as a CSV download."""
     if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
+    limit = max(1, min(int(limit), 200))
+    where: list[str] = []
+    params: list[Any] = []
+    if actor:
+        params.append(f"%{actor.strip()}%")
+        where.append(f"a.actor ILIKE ${len(params)}")
+    if action:
+        params.append(f"{action.strip()}%")
+        where.append(f"a.action LIKE ${len(params)}")
+    if tenant:
+        params.append(f"%{tenant.strip()}%")
+        where.append(
+            f"a.tenant_id IN (SELECT id FROM tenants "
+            f"WHERE slug ILIKE ${len(params)} OR name ILIKE ${len(params)})"
+        )
+    for field, op, value in (("date_from", ">=", date_from), ("date_to", "<", date_to)):
+        if value:
+            try:
+                from datetime import date, timedelta
+
+                day = date.fromisoformat(value)
+            except ValueError:
+                return error_response(422, "invalid_request", f"Invalid '{field}' (YYYY-MM-DD).")
+            if field == "date_to":
+                day = day + timedelta(days=1)  # inclusive end date
+            params.append(day)
+            where.append(f"a.created_at {op} ${len(params)}::date")
+    if cursor is not None:
+        params.append(int(cursor))
+        where.append(f"a.id < ${len(params)}")
+    clause = ("WHERE " + " AND ".join(where)) if where else ""
     pool = await get_pg_pool()
+
+    if fmt == "csv":
+        import csv
+        import io
+        import json
+
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                f"SELECT a.id, a.actor, a.action, a.detail, a.created_at, "
+                f"t.slug AS tenant_slug "
+                f"FROM audit_log a LEFT JOIN tenants t ON t.id = a.tenant_id {clause} "
+                f"ORDER BY a.id DESC LIMIT 10000",
+                *params,
+            )
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(["id", "created_at", "actor", "action", "tenant", "detail"])
+        for r in rows:
+            writer.writerow([
+                int(r["id"]), _iso(r["created_at"]), r["actor"], r["action"],
+                r["tenant_slug"] or "", json.dumps(r["detail"], ensure_ascii=False),
+            ])
+        from fastapi.responses import Response
+
+        return Response(
+            content=buf.getvalue(),
+            media_type="text/csv; charset=utf-8",
+            headers={"content-disposition": 'attachment; filename="audit-export.csv"'},
+        )
+
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            "SELECT actor, action, detail, created_at FROM audit_log "
-            "ORDER BY created_at DESC LIMIT 200"
+            f"SELECT a.id, a.actor, a.action, a.detail, a.created_at, t.slug AS tenant_slug "
+            f"FROM audit_log a LEFT JOIN tenants t ON t.id = a.tenant_id {clause} "
+            f"ORDER BY a.id DESC LIMIT ${len(params) + 1}",
+            *params, limit + 1,
         )
+    has_more = len(rows) > limit
+    rows = rows[:limit]
     return {
         "entries": [
             {
+                "id": int(r["id"]),
                 "actor": r["actor"],
                 "action": r["action"],
+                "tenant": r["tenant_slug"],
                 "detail": r["detail"],
-                "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+                "created_at": _iso(r["created_at"]),
             }
             for r in rows
-        ]
+        ],
+        "next_cursor": int(rows[-1]["id"]) if has_more and rows else None,
     }
 
 
@@ -821,6 +929,15 @@ async def admin_refund(
     return {"status": "refunded"}
 
 
+async def _es_or_default(coro, default):
+    """Run an ES-backed analytics call; on any cluster/transport failure return
+    (default, degraded=True) so the admin surface degrades instead of 500ing."""
+    try:
+        return await coro, False
+    except Exception:  # noqa: BLE001 - ES down/unreachable must not crash admin
+        return default, True
+
+
 @router.get("/analytics")
 async def analytics(
     tenant: str,
@@ -833,12 +950,16 @@ async def analytics(
     pool = await get_pg_pool()
     redis = get_redis()
     es = get_es_client()
+    most_wanted, d1 = await _es_or_default(_agg.most_wanted(es, tenant), [])
+    zero, d2 = await _es_or_default(_agg.zero_result_terms(es, tenant), [])
+    funnel, d3 = await _es_or_default(_agg.funnel(es, tenant), {})
     return {
         "tenant_id": tenant,
         "four_dimensions": await _attr.four_dimension_summary(pool, redis, tenant),
-        "most_wanted": await _agg.most_wanted(es, tenant),
-        "zero_results": await _agg.zero_result_terms(es, tenant),
-        "funnel": await _agg.funnel(es, tenant),
+        "most_wanted": most_wanted,
+        "zero_results": zero,
+        "funnel": funnel,
+        "degraded": d1 or d2 or d3,
     }
 
 
@@ -851,7 +972,10 @@ async def zero_results(
 ):
     if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
-    return {"tenant_id": tenant, "terms": await _agg.zero_result_terms(get_es_client(), tenant)}
+    terms, degraded = await _es_or_default(
+        _agg.zero_result_terms(get_es_client(), tenant), []
+    )
+    return {"tenant_id": tenant, "terms": terms, "degraded": degraded}
 
 
 @router.get("/insight")
@@ -864,7 +988,12 @@ async def insight(
     """Insight 'why' engine (M10: REQ-M10-002): demand gaps + funnel drop-off."""
     if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
-    return {"tenant_id": tenant, "insight": await _why(get_es_client(), tenant)}
+    empty: dict[str, Any] = {
+        "demand_gaps": [], "funnel": {}, "dropoffs": [],
+        "biggest_dropoff": None, "headline": "",
+    }
+    result, degraded = await _es_or_default(_why(get_es_client(), tenant), empty)
+    return {"tenant_id": tenant, "insight": result, "degraded": degraded}
 
 
 @router.post("/analyst")
@@ -883,8 +1012,11 @@ async def analyst(
         return error_response(422, "invalid_request", "Field 'question' is required.")
     from ..runtime import get_provider_chain
 
-    result = await _analyze(question, get_es_client(), tenant, providers=get_provider_chain())
-    return {"tenant_id": tenant, **result}
+    result, degraded = await _es_or_default(
+        _analyze(question, get_es_client(), tenant, providers=get_provider_chain()),
+        {"answer": "", "grounding": None, "narrated_by": "none"},
+    )
+    return {"tenant_id": tenant, **result, "degraded": degraded}
 
 
 def _syn_key(tenant: str) -> str:
@@ -1036,24 +1168,34 @@ async def security_monitoring(
     authorization: str | None = _AUTHZ,
     vitrin_access: str | None = _COOKIE,
 ):
-    """Locked accounts, failed-login counts, and recent auth events."""
+    """Locked accounts (both identity planes), failed-login counts, and
+    recent auth events."""
     if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
     pool = await get_pg_pool()
     async with pool.acquire() as conn:
         locked = await conn.fetch(
-            "SELECT email, failed_logins, locked_until FROM users "
-            "WHERE locked_until IS NOT NULL AND locked_until > now() ORDER BY locked_until DESC"
+            "SELECT email, failed_logins, locked_until, 'customer' AS plane FROM users "
+            "WHERE locked_until IS NOT NULL AND locked_until > now() "
+            "UNION ALL "
+            "SELECT email, failed_logins, locked_until, 'admin' AS plane FROM admin_users "
+            "WHERE locked_until IS NOT NULL AND locked_until > now() "
+            "ORDER BY locked_until DESC"
         )
-        at_risk = await conn.fetchval("SELECT count(*) FROM users WHERE failed_logins > 0")
+        at_risk = await conn.fetchval(
+            "SELECT (SELECT count(*) FROM users WHERE failed_logins > 0) "
+            "+ (SELECT count(*) FROM admin_users WHERE failed_logins > 0)"
+        )
         events = await conn.fetch(
             "SELECT actor, action, created_at FROM audit_log "
-            "WHERE action LIKE 'auth.%' ORDER BY created_at DESC LIMIT 50"
+            "WHERE action LIKE 'auth.%' OR action LIKE 'admin_auth.%' "
+            "ORDER BY created_at DESC LIMIT 50"
         )
     return {
         "locked_accounts": [
             {
                 "email": r["email"],
+                "plane": r["plane"],
                 "failed_logins": r["failed_logins"],
                 "locked_until": r["locked_until"].isoformat() if r["locked_until"] else None,
             }
@@ -1071,55 +1213,198 @@ async def security_monitoring(
     }
 
 
+@router.post("/security/unlock")
+async def unlock_account(
+    payload: dict[str, Any],
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    """Manually clear a lockout (failed logins + locked_until) for a customer
+    or admin account, so the user doesn't have to wait out the window."""
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    email = str(payload.get("email", "")).strip().lower()
+    plane = str(payload.get("plane", "customer"))
+    if not email:
+        return error_response(422, "invalid_request", "Field 'email' is required.")
+    if plane not in ("customer", "admin"):
+        return error_response(422, "invalid_request", "plane must be customer or admin.")
+    table = "users" if plane == "customer" else "admin_users"
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        unlocked = await conn.fetchval(
+            f"UPDATE {table} SET failed_logins = 0, locked_until = NULL "  # noqa: S608
+            f"WHERE lower(email) = $1 RETURNING id",
+            email,
+        )
+    if unlocked is None:
+        return error_response(404, "not_found", "No such account.")
+    await audit(pool, actor="operator", action="security.unlock",
+                detail={"email": email, "plane": plane})
+    return {"email": email, "plane": plane, "status": "unlocked"}
+
+
 @router.get("/health")
 async def system_health(
     x_admin_token: str | None = _ADMIN,
     authorization: str | None = _AUTHZ,
     vitrin_access: str | None = _COOKIE,
 ):
-    """Live dependency status for the ops dashboard (PG / Redis / Elasticsearch)."""
+    """Live dependency status (PG / Redis / Elasticsearch) with per-probe
+    latency, plus a rolling history (kept in Redis) for the health sparkline."""
     if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
+    import json
+    import time
+
     deps: dict[str, str] = {}
+    latency: dict[str, int | None] = {}
+
+    t0 = time.monotonic()
     try:
         pool = await get_pg_pool()
         async with pool.acquire() as conn:
             await conn.fetchval("SELECT 1")
         deps["postgres"] = "ok"
+        latency["postgres"] = int((time.monotonic() - t0) * 1000)
     except Exception:  # noqa: BLE001
         deps["postgres"] = "unavailable"
+        latency["postgres"] = None
     redis = get_redis()
+    t0 = time.monotonic()
     try:
         deps["redis"] = "ok" if (redis is not None and await redis.ping()) else "unavailable"
+        latency["redis"] = (
+            int((time.monotonic() - t0) * 1000) if deps["redis"] == "ok" else None
+        )
     except Exception:  # noqa: BLE001
         deps["redis"] = "unavailable"
+        latency["redis"] = None
+    t0 = time.monotonic()
     try:
         deps["elasticsearch"] = "ok" if await get_es_client().ping() else "unavailable"
+        latency["elasticsearch"] = (
+            int((time.monotonic() - t0) * 1000) if deps["elasticsearch"] == "ok" else None
+        )
     except Exception:  # noqa: BLE001
         deps["elasticsearch"] = "unavailable"
+        latency["elasticsearch"] = None
+
     overall = "ok" if all(v == "ok" for v in deps.values()) else "degraded"
-    return {"status": overall, "dependencies": deps}
+
+    # Rolling sample history for the sparkline (best-effort; capped at 96).
+    history: list[dict[str, Any]] = []
+    if redis is not None and deps["redis"] == "ok":
+        try:
+            sample = {
+                "ts": int(time.time()),
+                "ok": sum(1 for v in deps.values() if v == "ok"),
+                "total": len(deps),
+                "pg_ms": latency["postgres"],
+            }
+            key = "admin:health:history"
+            await redis.lpush(key, json.dumps(sample))
+            await redis.ltrim(key, 0, 95)
+            raw = await redis.lrange(key, 0, 95)
+            history = [json.loads(x) for x in reversed(raw)]
+        except Exception:  # noqa: BLE001
+            history = []
+    return {"status": overall, "dependencies": deps, "latency_ms": latency, "history": history}
+
+
+def _usage_filters(
+    tenant: str | None, route: str | None, rung: str | None, days: int
+) -> tuple[str, list[Any]]:
+    """WHERE clause + params shared by the usage summary, event list and CSV
+    export, so all three views always describe the same slice."""
+    where: list[str] = []
+    params: list[Any] = []
+    if tenant:
+        params.append(f"%{tenant.strip()}%")
+        where.append(
+            f"u.tenant_id IN (SELECT id FROM tenants "
+            f"WHERE slug ILIKE ${len(params)} OR name ILIKE ${len(params)})"
+        )
+    if route:
+        params.append(f"%{route.strip()}%")
+        where.append(f"u.route ILIKE ${len(params)}")
+    if rung:
+        params.append(rung.strip())
+        where.append(f"COALESCE(u.rung, 'unknown') = ${len(params)}")
+    if days:
+        params.append(days)
+        where.append(f"u.occurred_at >= now() - make_interval(days => ${len(params)})")
+    return ("WHERE " + " AND ".join(where)) if where else "", params
+
+
+_USAGE_SELECT = (
+    "SELECT u.occurred_at, t.slug AS tenant_slug, u.route, "
+    "COALESCE(u.rung, 'unknown') AS rung, u.tokens_in, u.tokens_out, "
+    "u.cache_outcome, u.latency_ms, u.cost "
+    "FROM usage_events u JOIN tenants t ON t.id = u.tenant_id"
+)
 
 
 @router.get("/usage")
 async def usage_monitoring(
+    tenant: str | None = None,
+    route: str | None = None,
+    rung: str | None = None,
+    days: int = 30,
+    fmt: str | None = None,
     x_admin_token: str | None = _ADMIN,
     authorization: str | None = _AUTHZ,
     vitrin_access: str | None = _COOKIE,
 ):
-    """Platform-wide usage + credit consumption (from usage_events / credit_ledger)."""
+    """Platform-wide usage + credit consumption with tenant/route/rung/date
+    filters. `fmt=csv` streams the filtered events as a CSV download."""
     if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
+    days = max(1, min(int(days), 366))
+    clause, params = _usage_filters(tenant, route, rung, days)
     pool = await get_pg_pool()
+
+    if fmt == "csv":
+        import csv
+        import io
+
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                f"{_USAGE_SELECT} {clause} ORDER BY u.occurred_at DESC LIMIT 10000", *params
+            )
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow([
+            "occurred_at", "tenant", "route", "rung",
+            "tokens_in", "tokens_out", "cache_outcome", "latency_ms", "cost",
+        ])
+        for r in rows:
+            writer.writerow([
+                _iso(r["occurred_at"]), r["tenant_slug"], r["route"], r["rung"],
+                r["tokens_in"], r["tokens_out"], r["cache_outcome"],
+                r["latency_ms"], float(r["cost"]),
+            ])
+        from fastapi.responses import Response
+
+        return Response(
+            content=buf.getvalue(),
+            media_type="text/csv; charset=utf-8",
+            headers={"content-disposition": 'attachment; filename="usage-export.csv"'},
+        )
+
     async with pool.acquire() as conn:
         totals = await conn.fetchrow(
-            "SELECT count(*) AS calls, COALESCE(sum(tokens_in), 0) AS tin, "
-            "COALESCE(sum(tokens_out), 0) AS tout, COALESCE(sum(cost), 0) AS cost "
-            "FROM usage_events"
-        )
+            f"SELECT count(*) AS calls, COALESCE(sum(u.tokens_in), 0) AS tin, "
+            f"COALESCE(sum(u.tokens_out), 0) AS tout, COALESCE(sum(u.cost), 0) AS cost "
+            f"FROM usage_events u {clause}"
+        , *params)
         by_rung = await conn.fetch(
-            "SELECT COALESCE(rung, 'unknown') AS rung, count(*) AS n FROM usage_events "
-            "GROUP BY rung ORDER BY n DESC"
+            f"SELECT COALESCE(u.rung, 'unknown') AS rung, count(*) AS n "
+            f"FROM usage_events u {clause} GROUP BY 1 ORDER BY n DESC", *params
+        )
+        recent = await conn.fetch(
+            f"{_USAGE_SELECT} {clause} ORDER BY u.occurred_at DESC LIMIT 50", *params
         )
         spent = await conn.fetchval(
             "SELECT COALESCE(-sum(delta), 0) FROM credit_ledger WHERE delta < 0"
@@ -1131,7 +1416,48 @@ async def usage_monitoring(
         "cost": float(totals["cost"]),
         "credits_spent": float(spent or 0),
         "by_rung": [{"rung": r["rung"], "count": int(r["n"])} for r in by_rung],
+        "events": [
+            {
+                "occurred_at": _iso(r["occurred_at"]),
+                "tenant": r["tenant_slug"],
+                "route": r["route"],
+                "rung": r["rung"],
+                "tokens_in": r["tokens_in"],
+                "tokens_out": r["tokens_out"],
+                "cache_outcome": r["cache_outcome"],
+                "latency_ms": r["latency_ms"],
+                "cost": float(r["cost"]),
+            }
+            for r in recent
+        ],
+        "days": days,
     }
+
+
+def _inspect_workers() -> list[dict[str, Any]]:
+    """Blocking Celery inspect (run in a thread): live workers, their active
+    task counts and registered task names. Empty list = no worker replied.
+    Each inspect call waits its full timeout (it cannot know how many workers
+    exist), so keep it short — three calls run back to back."""
+    from worker.celery_app import celery_app
+
+    insp = celery_app.control.inspect(timeout=1.0)
+    ping = insp.ping() or {}
+    active = insp.active() or {}
+    registered = insp.registered() or {}
+    workers: list[dict[str, Any]] = []
+    for name in sorted(ping):
+        tasks = active.get(name) or []
+        workers.append({
+            "name": name,
+            "status": "online",
+            "active_tasks": [
+                {"name": t.get("name"), "id": t.get("id")} for t in tasks[:10]
+            ],
+            "active_count": len(tasks),
+            "registered": sorted(registered.get(name) or [])[:20],
+        })
+    return workers
 
 
 @router.get("/queue")
@@ -1140,20 +1466,41 @@ async def queue_monitoring(
     authorization: str | None = _AUTHZ,
     vitrin_access: str | None = _COOKIE,
 ):
-    """Celery broker reachability + pending task depth (best-effort)."""
+    """Celery broker reachability, pending depth, and live worker heartbeat
+    (workers answering a control ping, with their active tasks)."""
     if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
+    import asyncio
+
     s = get_settings()
-    redis = get_redis()
+    # The queue lives in the BROKER's Redis database (often a different db
+    # index than the app cache), so probe that URL, not get_redis().
+    import redis.asyncio as aioredis
+
     depth: int | None = None
     reachable = False
     try:
-        if redis is not None and await redis.ping():
-            reachable = True
-            depth = int(await redis.llen("celery"))
+        broker = aioredis.from_url(s.celery_broker_url)
+        try:
+            if await broker.ping():
+                reachable = True
+                depth = int(await broker.llen("celery"))
+        finally:
+            await broker.aclose()
     except Exception:  # noqa: BLE001
         reachable = False
-    return {"broker": s.celery_broker_url, "reachable": reachable, "pending": depth}
+    workers: list[dict[str, Any]] = []
+    if reachable:
+        try:
+            workers = await asyncio.wait_for(asyncio.to_thread(_inspect_workers), timeout=10)
+        except Exception:  # noqa: BLE001 - inspect is best-effort
+            workers = []
+    return {
+        "broker": s.celery_broker_url,
+        "reachable": reachable,
+        "pending": depth,
+        "workers": workers,
+    }
 
 
 @router.get("/models")
@@ -1184,6 +1531,47 @@ async def model_monitoring(
     }
 
 
+@router.post("/models/ping")
+async def model_ping(
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    """Probe the configured inference services (embeddings / reranker / LLM)
+    and report reachability + latency, so the operator can see at a glance
+    which local models are actually up."""
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    import time
+
+    import httpx
+
+    s = get_settings()
+    targets = {
+        "embeddings": s.embeddings_url,
+        "reranker": s.reranker_url,
+        "llm": s.llm_url,
+    }
+    results: dict[str, dict[str, Any]] = {}
+    async with httpx.AsyncClient(timeout=3, follow_redirects=True) as client:
+        for name, url in targets.items():
+            if not url:
+                results[name] = {"configured": False, "reachable": False, "latency_ms": None}
+                continue
+            t0 = time.monotonic()
+            try:
+                # Any HTTP answer (even 404) proves the service is listening.
+                await client.get(url)
+                results[name] = {
+                    "configured": True,
+                    "reachable": True,
+                    "latency_ms": int((time.monotonic() - t0) * 1000),
+                }
+            except Exception:  # noqa: BLE001
+                results[name] = {"configured": True, "reachable": False, "latency_ms": None}
+    return {"services": results}
+
+
 @router.get("/feature-flags")
 async def get_feature_flags(
     x_admin_token: str | None = _ADMIN,
@@ -1195,7 +1583,8 @@ async def get_feature_flags(
     pool = await get_pg_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            "SELECT key, enabled, description, updated_at FROM feature_flags ORDER BY key"
+            "SELECT key, enabled, description, updated_at, updated_by "
+            "FROM feature_flags ORDER BY key"
         )
     return {
         "flags": [
@@ -1204,6 +1593,7 @@ async def get_feature_flags(
                 "enabled": r["enabled"],
                 "description": r["description"],
                 "updated_at": r["updated_at"].isoformat() if r["updated_at"] else None,
+                "updated_by": r["updated_by"],
             }
             for r in rows
         ]
@@ -1221,17 +1611,22 @@ async def set_feature_flag(
     if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
     enabled = bool(payload.get("enabled", False))
+    from .admin_auth import admin_current_principal
+
+    principal = await admin_current_principal(authorization, vitrin_access)
+    actor = principal.email if principal else "operator"
     pool = await get_pg_pool()
     async with pool.acquire() as conn:
         updated = await conn.fetchval(
-            "UPDATE feature_flags SET enabled = $1, updated_at = now() "
-            "WHERE key = $2 RETURNING key",
+            "UPDATE feature_flags SET enabled = $1, updated_at = now(), updated_by = $2 "
+            "WHERE key = $3 RETURNING key",
             enabled,
+            actor,
             key,
         )
     if updated is None:
         return error_response(404, "not_found", "No such flag.")
-    await audit(pool, actor="operator", action="flag.set", detail={"key": key, "enabled": enabled})
+    await audit(pool, actor=actor, action="flag.set", detail={"key": key, "enabled": enabled})
     return {"key": key, "enabled": enabled}
 
 
@@ -1306,15 +1701,15 @@ async def set_user_role(
     authorization: str | None = _AUTHZ,
     vitrin_access: str | None = _COOKIE,
 ):
-    """Change a user's platform role. Promoting to platform_admin clears their
-    tenant (a platform admin owns no single tenant); demoting a platform_admin
-    to a store role requires them to already have a tenant on record."""
+    """Change a store user's role within their tenant. Platform admins are a
+    separate identity plane (``admin_users``) managed on /admin/operators —
+    store users can never be promoted into it from here."""
     if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
     role = str(payload.get("role", ""))
-    if role not in ("platform_admin", "store_owner", "store_staff"):
+    if role not in ("store_owner", "store_staff"):
         return error_response(
-            422, "invalid_request", "role must be platform_admin, store_owner, or store_staff."
+            422, "invalid_request", "role must be store_owner or store_staff."
         )
     pool = await get_pg_pool()
     async with pool.acquire() as conn:
@@ -1323,16 +1718,7 @@ async def set_user_role(
         )
         if row is None:
             return error_response(404, "not_found", "No such user.")
-        if role == "platform_admin":
-            await conn.execute(
-                "UPDATE users SET role = $1, tenant_id = NULL WHERE id = $2", role, row["id"]
-            )
-        else:
-            if row["tenant_id"] is None:
-                return error_response(
-                    422, "no_tenant", "This user has no tenant to assign a store role to."
-                )
-            await conn.execute("UPDATE users SET role = $1 WHERE id = $2", role, row["id"])
+        await conn.execute("UPDATE users SET role = $1 WHERE id = $2", role, row["id"])
     await audit(pool, actor="operator", action="user.role", detail={"email": email, "role": role})
     return {"email": email, "role": role}
 
@@ -1660,6 +2046,280 @@ async def update_plan(
     await audit(pool, actor="operator", action="plan.update",
                 detail={"plan_id": plan_id, "fields": list(payload.keys())})
     return {"plan_id": plan_id, "status": "updated"}
+
+
+_PLAN_CODE_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{1,30}$")
+
+
+@router.post("/plans")
+async def create_plan(
+    payload: dict[str, Any],
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    """Create a new pricing plan. `code` is the stable identifier used by
+    checkout and the public /plans page; it cannot be changed later."""
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    code = str(payload.get("code", "")).strip().lower()
+    name = str(payload.get("name", "")).strip()
+    if not _PLAN_CODE_RE.match(code):
+        return error_response(
+            422, "invalid_request",
+            "Field 'code' must be 2-31 chars of a-z, 0-9, '-' or '_'.",
+        )
+    if not name:
+        return error_response(422, "invalid_request", "Field 'name' is required.")
+    optional = {
+        "description": (str, None),
+        "price_monthly": (float, 0.0),
+        "currency": (str, "USD"),
+        "credits_per_month": (float, 0.0),
+        "monthly_credit_cap": (float, 100000.0),
+        "rate_limit_per_min": (int, 120),
+        "is_public": (bool, True),
+        "sort_order": (int, 100),
+    }
+    values: dict[str, Any] = {}
+    for col, (caster, default) in optional.items():
+        if col in payload and payload[col] is not None:
+            try:
+                values[col] = caster(payload[col])
+            except (TypeError, ValueError):
+                return error_response(422, "invalid_request", f"Invalid value for '{col}'.")
+        else:
+            values[col] = default
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        if await conn.fetchval("SELECT 1 FROM plans WHERE code = $1", code):
+            return error_response(409, "code_taken", "A plan with this code already exists.")
+        plan_id = await conn.fetchval(
+            "INSERT INTO plans (code, name, description, price_monthly, currency, "
+            "credits_per_month, monthly_credit_cap, rate_limit_per_min, is_public, sort_order) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id",
+            code, name, values["description"], values["price_monthly"], values["currency"],
+            values["credits_per_month"], values["monthly_credit_cap"],
+            values["rate_limit_per_min"], values["is_public"], values["sort_order"],
+        )
+    await audit(pool, actor="operator", action="plan.create",
+                detail={"plan_id": str(plan_id), "code": code})
+    return {"plan_id": str(plan_id), "code": code, "status": "created"}
+
+
+@router.delete("/plans/{plan_id}")
+async def delete_plan(
+    plan_id: str,
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    """Delete a plan that is not referenced by any tenant, subscription or
+    order. Plans in use must be hidden (`is_public = false`) instead."""
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    if not _valid_uuid(plan_id):
+        return error_response(404, "not_found", "No such plan.")
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        refs = await conn.fetchrow(
+            "SELECT (SELECT count(*) FROM tenants WHERE plan_id = $1::uuid) AS tenants, "
+            "(SELECT count(*) FROM subscriptions WHERE plan_id = $1::uuid) AS subs, "
+            "(SELECT count(*) FROM orders WHERE plan_id = $1::uuid) AS orders",
+            plan_id,
+        )
+        in_use = int(refs["tenants"]) + int(refs["subs"]) + int(refs["orders"])
+        if in_use:
+            return error_response(
+                409, "plan_in_use",
+                f"Plan is referenced by {refs['tenants']} tenant(s), {refs['subs']} "
+                f"subscription(s) and {refs['orders']} order(s); hide it instead.",
+            )
+        deleted = await conn.fetchval(
+            "DELETE FROM plans WHERE id = $1::uuid RETURNING code", plan_id
+        )
+    if deleted is None:
+        return error_response(404, "not_found", "No such plan.")
+    await audit(pool, actor="operator", action="plan.delete",
+                detail={"plan_id": plan_id, "code": deleted})
+    return {"plan_id": plan_id, "status": "deleted"}
+
+
+# --------------------------------------------------------------------------- #
+# Platform invoices — every issued invoice across all tenants, with a revenue  #
+# summary over the same filter, for the admin billing screen.                  #
+# --------------------------------------------------------------------------- #
+@router.get("/invoices")
+async def list_invoices(
+    q: str | None = None,
+    status: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    limit = max(1, min(int(limit), 100))
+    offset = max(0, int(offset))
+    where: list[str] = []
+    params: list[Any] = []
+    if q:
+        params.append(f"%{q.strip()}%")
+        where.append(f"(t.slug ILIKE ${len(params)} OR t.name ILIKE ${len(params)})")
+    if status in ("paid", "void"):
+        params.append(status)
+        where.append(f"i.status = ${len(params)}")
+    clause = ("WHERE " + " AND ".join(where)) if where else ""
+    base = f"FROM invoices i JOIN tenants t ON t.id = i.tenant_id {clause}"
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        summary = await conn.fetchrow(
+            f"SELECT count(*) AS total, "
+            f"COALESCE(sum(i.amount) FILTER (WHERE i.status = 'paid'), 0) AS paid_amount, "
+            f"count(*) FILTER (WHERE i.status = 'paid') AS paid_count {base}",
+            *params,
+        )
+        rows = await conn.fetch(
+            f"SELECT i.id, i.number, i.description, i.amount, i.currency, i.status, "
+            f"i.created_at, t.slug, t.name {base} "
+            f"ORDER BY i.created_at DESC LIMIT ${len(params) + 1} OFFSET ${len(params) + 2}",
+            *params, limit, offset,
+        )
+    return {
+        "invoices": [
+            {
+                "id": str(r["id"]),
+                "number": int(r["number"]),
+                "tenant_slug": r["slug"],
+                "tenant_name": r["name"],
+                "description": r["description"],
+                "amount": float(r["amount"]),
+                "currency": r["currency"],
+                "status": r["status"],
+                "created_at": _iso(r["created_at"]),
+            }
+            for r in rows
+        ],
+        "total": int(summary["total"]),
+        "paid_amount": float(summary["paid_amount"]),
+        "paid_count": int(summary["paid_count"]),
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Contact inbox — public contact-form submissions, triaged by the operator     #
+# (new → read → resolved) with an internal follow-up note.                     #
+# --------------------------------------------------------------------------- #
+@router.get("/contact")
+async def list_contact_messages(
+    status: str | None = None,
+    q: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    limit = max(1, min(int(limit), 100))
+    offset = max(0, int(offset))
+    where: list[str] = []
+    params: list[Any] = []
+    if status in ("new", "read", "resolved"):
+        params.append(status)
+        where.append(f"status = ${len(params)}")
+    if q:
+        params.append(f"%{q.strip()}%")
+        where.append(f"(email ILIKE ${len(params)} OR name ILIKE ${len(params)})")
+    clause = ("WHERE " + " AND ".join(where)) if where else ""
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        counts = await conn.fetchrow(
+            "SELECT count(*) AS all_count, "
+            "count(*) FILTER (WHERE status = 'new') AS new_count, "
+            "count(*) FILTER (WHERE status = 'read') AS read_count, "
+            "count(*) FILTER (WHERE status = 'resolved') AS resolved_count "
+            "FROM contact_messages"
+        )
+        total = await conn.fetchval(
+            f"SELECT count(*) FROM contact_messages {clause}", *params
+        )
+        rows = await conn.fetch(
+            f"SELECT id, name, email, message, status, admin_note, created_at, updated_at "
+            f"FROM contact_messages {clause} "
+            f"ORDER BY created_at DESC LIMIT ${len(params) + 1} OFFSET ${len(params) + 2}",
+            *params, limit, offset,
+        )
+    return {
+        "messages": [
+            {
+                "id": int(r["id"]),
+                "name": r["name"],
+                "email": r["email"],
+                "message": r["message"],
+                "status": r["status"],
+                "admin_note": r["admin_note"],
+                "created_at": _iso(r["created_at"]),
+                "updated_at": _iso(r["updated_at"]),
+            }
+            for r in rows
+        ],
+        "total": int(total),
+        "counts": {
+            "all": int(counts["all_count"]),
+            "new": int(counts["new_count"]),
+            "read": int(counts["read_count"]),
+            "resolved": int(counts["resolved_count"]),
+        },
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+@router.patch("/contact/{message_id}")
+async def update_contact_message(
+    message_id: int,
+    payload: dict[str, Any],
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    sets: list[str] = []
+    values: list[Any] = []
+    if "status" in payload:
+        status = str(payload["status"])
+        if status not in ("new", "read", "resolved"):
+            return error_response(
+                422, "invalid_request", "Status must be new, read or resolved."
+            )
+        values.append(status)
+        sets.append(f"status = ${len(values)}")
+    if "admin_note" in payload:
+        note = str(payload.get("admin_note") or "").strip()[:4000] or None
+        values.append(note)
+        sets.append(f"admin_note = ${len(values)}")
+    if not sets:
+        return error_response(422, "invalid_request", "No editable fields supplied.")
+    values.append(message_id)
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        updated = await conn.fetchval(
+            f"UPDATE contact_messages SET {', '.join(sets)}, updated_at = now() "
+            f"WHERE id = ${len(values)} RETURNING id",
+            *values,
+        )
+    if updated is None:
+        return error_response(404, "not_found", "No such message.")
+    await audit(await get_pg_pool(), actor="operator", action="contact.update",
+                detail={"message_id": message_id, "fields": list(payload.keys())})
+    return {"id": message_id, "status": "updated"}
 
 
 # --------------------------------------------------------------------------- #

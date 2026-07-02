@@ -6,6 +6,7 @@ import { ApiError, type TenantProfile } from "@/lib/api";
 import { authFetch, useSession } from "@/lib/auth";
 import { DashboardShell, useOwnerNav } from "@/components/shell";
 import { Alert, Badge, Field, Input, Spinner } from "@/components/ui";
+import { ConnectWizard } from "./connect-wizard";
 
 export default function SettingsPage() {
   const t = useTranslations("dashboard");
@@ -107,6 +108,8 @@ export default function SettingsPage() {
   return (
     <DashboardShell title={t("nav.settings")} nav={nav}>
       {note ? <Alert kind="success">{note}</Alert> : null}
+
+      <ConnectWizard />
 
       <div className="dash-2col">
         <div className="card-stack">

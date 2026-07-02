@@ -59,6 +59,23 @@ export default function TeamPage() {
     load();
   }
 
+  async function resend(memberEmail: string) {
+    setError(null);
+    setInvite(null);
+    try {
+      const r = await authFetch<{ setup_token?: string }>("/tenant/team/resend", {
+        body: { email: memberEmail },
+      });
+      setInvite(r.setup_token
+        ? `${window.location.origin}/reset-password?token=${r.setup_token}`
+        : "invited");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : tErrors("saveFailed"));
+    }
+  }
+
+  const pendingCount = members?.filter((m) => m.status === "pending").length ?? 0;
+
   return (
     <DashboardShell title={t("nav.team")} nav={nav}>
       <p style={{ marginTop: "-1rem" }}>{t("team.intro")}</p>
@@ -89,7 +106,12 @@ export default function TeamPage() {
       </div>
 
       <div className="card">
-        <h3>{t("team.members")}</h3>
+        <div className="row-between" style={{ flexWrap: "wrap", gap: ".6rem" }}>
+          <h3 style={{ margin: 0 }}>{t("team.members")}</h3>
+          {pendingCount ? (
+            <Badge tone="warning">{t("team.pendingCount", { n: pendingCount })}</Badge>
+          ) : null}
+        </div>
         {members === null ? (
           <Spinner />
         ) : (
@@ -101,9 +123,20 @@ export default function TeamPage() {
                   <td>{m.email}</td>
                   <td>{m.full_name ?? "—"}</td>
                   <td><Badge tone={m.role === "store_owner" ? "brand" : undefined}>{roleLabel(m.role)}</Badge></td>
-                  <td>{m.status === "active" ? <Badge tone="success">{t("team.active")}</Badge> : <Badge tone="warning">{m.status}</Badge>}</td>
                   <td>
-                    <div className="row" style={{ gap: "0.4rem" }}>
+                    {m.status === "active"
+                      ? <Badge tone="success">{t("team.active")}</Badge>
+                      : m.status === "pending"
+                        ? <Badge tone="warning">{t("team.pending")}</Badge>
+                        : <Badge tone="warning">{m.status}</Badge>}
+                  </td>
+                  <td>
+                    <div className="row" style={{ gap: "0.4rem", flexWrap: "wrap" }}>
+                      {m.status === "pending" ? (
+                        <button className="btn btn-soft" onClick={() => void resend(m.email)}>
+                          {t("team.resendInvite")}
+                        </button>
+                      ) : null}
                       <button className="btn btn-soft" onClick={() => void changeRole(m.email, m.role === "store_owner" ? "store_staff" : "store_owner")}>
                         {m.role === "store_owner" ? t("team.makeStaff") : t("team.makeOwner")}
                       </button>

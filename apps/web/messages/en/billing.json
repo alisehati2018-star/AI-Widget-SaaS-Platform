@@ -26,10 +26,17 @@
   "colPlan": "Plan",
   "colProvider": "Provider",
   "ordersNote": "Manual orders activate once the platform confirms payment. Card / gateway checkout (Stripe / ZarinPal) plugs into the same flow.",
-  "previewConfirm": "Switch to {plan}: {currency} {base} − {currency} {credit} credit = {currency} {due} due. Continue?",
   "noteCancel": "Subscription will cancel at period end.",
   "noteResume": "Subscription resumed.",
   "noteOrder": "Order created — pending confirmation.",
   "noteTopup": "Top-up order created for {credits} credits — pending confirmation.",
-  "topupFailed": "Top-up failed."
+  "topupFailed": "Top-up failed.",
+  "previewTitle": "Upgrade preview — {plan}",
+  "previewBase": "Plan base price",
+  "previewCredit": "Unused-time credit",
+  "previewDue": "Amount due",
+  "previewHint": "The remaining credit of your current period is deducted automatically.",
+  "previewConfirmBtn": "Confirm and continue",
+  "previewCancel": "Cancel",
+  "invoiceDownload": "Download HTML"
 }

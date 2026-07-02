@@ -156,6 +156,31 @@ async def widget_embed(authorization: str | None = _AUTHZ, vitrin_access: str | 
 # --------------------------------------------------------------------------- #
 # Analytics (tenant-scoped)                                                   #
 # --------------------------------------------------------------------------- #
+async def _es_or_default(coro, default):
+    """Run an ES-backed call; on any cluster failure return (default, True) so
+    the owner dashboard degrades gracefully instead of 500ing."""
+    try:
+        return await coro, False
+    except Exception:  # noqa: BLE001 - ES down must not crash the dashboard
+        return default, True
+
+
+async def _tenant_docs(tenant_id: str) -> tuple[int | None, bool]:
+    """(indexed-doc count, degraded). ``tenant_doc_count`` swallows errors and
+    returns 0 (a missing index is a legitimate 0), so reachability must be
+    probed separately — otherwise "cluster down" would masquerade as "empty"."""
+    es = get_es_client()
+    try:
+        reachable = await es.ping()
+    except Exception:  # noqa: BLE001
+        reachable = False
+    if not reachable:
+        return None, True
+    import acip_search.index_admin as ia
+
+    return await ia.tenant_doc_count(es, tenant_id), False
+
+
 @router.get("/analytics")
 async def analytics(authorization: str | None = _AUTHZ, vitrin_access: str | None = _COOKIE):
     p = await _require_tenant(authorization, vitrin_access)
@@ -164,11 +189,15 @@ async def analytics(authorization: str | None = _AUTHZ, vitrin_access: str | Non
     assert p.tenant_id is not None  # narrowed: _require_tenant guarantees a tenant
     pool = await get_pg_pool()
     es = get_es_client()
+    most_wanted, d1 = await _es_or_default(_agg.most_wanted(es, p.tenant_id), [])
+    zero, d2 = await _es_or_default(_agg.zero_result_terms(es, p.tenant_id), [])
+    funnel, d3 = await _es_or_default(_agg.funnel(es, p.tenant_id), {})
     return {
         "four_dimensions": await _attr.four_dimension_summary(pool, get_redis(), p.tenant_id),
-        "most_wanted": await _agg.most_wanted(es, p.tenant_id),
-        "zero_results": await _agg.zero_result_terms(es, p.tenant_id),
-        "funnel": await _agg.funnel(es, p.tenant_id),
+        "most_wanted": most_wanted,
+        "zero_results": zero,
+        "funnel": funnel,
+        "degraded": d1 or d2 or d3,
     }
 
 
@@ -178,7 +207,136 @@ async def insight(authorization: str | None = _AUTHZ, vitrin_access: str | None 
     if p is None:
         return _unauth()
     assert p.tenant_id is not None  # narrowed: _require_tenant guarantees a tenant
-    return {"insight": await _why(get_es_client(), p.tenant_id)}
+    empty: dict[str, Any] = {
+        "demand_gaps": [], "funnel": {}, "dropoffs": [],
+        "biggest_dropoff": None, "headline": "",
+    }
+    result, degraded = await _es_or_default(_why(get_es_client(), p.tenant_id), empty)
+    return {"insight": result, "degraded": degraded}
+
+
+@router.get("/assistant-status")
+async def assistant_status(
+    authorization: str | None = _AUTHZ, vitrin_access: str | None = _COOKIE
+):
+    """Owner-safe assistant health: is the platform flag on, is a local LLM
+    configured, and is the store's catalogue searchable — WITHOUT exposing any
+    internal URLs or infrastructure detail."""
+    p = await _require_tenant(authorization, vitrin_access)
+    if p is None:
+        return _unauth()
+    assert p.tenant_id is not None  # narrowed: _require_tenant guarantees a tenant
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        flag = await conn.fetchval(
+            "SELECT enabled FROM feature_flags WHERE key = 'assistant_enabled'"
+        )
+    s = get_settings()
+    docs, degraded = await _tenant_docs(p.tenant_id)
+    return {
+        "assistant_enabled": bool(flag) if flag is not None else True,
+        "llm_configured": bool(s.llm_url),
+        "docs_indexed": docs,
+        "search_degraded": degraded,
+    }
+
+
+@router.post("/search-test")
+async def search_test(
+    payload: dict[str, Any], authorization: str | None = _AUTHZ, vitrin_access: str | None = _COOKIE
+):
+    """Live search test from the dashboard: runs the SAME hybrid retrieval the
+    widget uses, scoped to the signed-in store. Degrades (200 + flag) when the
+    search cluster is unreachable."""
+    p = await _require_tenant(authorization, vitrin_access)
+    if p is None:
+        return _unauth()
+    assert p.tenant_id is not None  # narrowed: _require_tenant guarantees a tenant
+    query = str(payload.get("query", "")).strip()
+    if not query:
+        return error_response(422, "invalid_request", "Field 'query' is required.")
+    from ..runtime import get_search_service
+
+    try:
+        result = await get_search_service().search(p.tenant_id, query, size=payload.get("size"))
+    except Exception:  # noqa: BLE001 - ES down: degrade, don't crash
+        return {"query": query, "results": [], "total": 0, "degraded": True}
+    return {"query": query, **result, "degraded": False}
+
+
+# --------------------------------------------------------------------------- #
+# Catalogue sync: status + manual trigger                                      #
+# --------------------------------------------------------------------------- #
+@router.get("/sync-status")
+async def sync_status(authorization: str | None = _AUTHZ, vitrin_access: str | None = _COOKIE):
+    """Per-source sync watermarks + the live indexed-document count from ES
+    (degraded-safe: docs is null when the cluster is unreachable)."""
+    p = await _require_tenant(authorization, vitrin_access)
+    if p is None:
+        return _unauth()
+    assert p.tenant_id is not None  # narrowed: _require_tenant guarantees a tenant
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT source, high_watermark, last_run_at, last_status FROM sync_state "
+            "WHERE tenant_id = $1 ORDER BY source",
+            p.tenant_id,
+        )
+    docs, degraded = await _tenant_docs(p.tenant_id)
+    return {
+        "sources": [
+            {
+                "source": r["source"],
+                "high_watermark": r["high_watermark"].isoformat() if r["high_watermark"] else None,
+                "last_run_at": r["last_run_at"].isoformat() if r["last_run_at"] else None,
+                "last_status": r["last_status"],
+            }
+            for r in rows
+        ],
+        "docs_indexed": docs,
+        "degraded": degraded,
+    }
+
+
+@router.post("/sync/trigger")
+async def sync_trigger(
+    payload: dict[str, Any], authorization: str | None = _AUTHZ, vitrin_access: str | None = _COOKIE
+):
+    """Queue an immediate reconciliation run ("sync now"). The request is
+    recorded in sync_state right away so the dashboard reflects it even before
+    a worker picks the task up."""
+    p = await _require_tenant(authorization, vitrin_access)
+    if p is None:
+        return _unauth()
+    assert p.tenant_id is not None  # narrowed: _require_tenant guarantees a tenant
+    source = str(payload.get("source", "") or "rest").strip().lower()
+    if source not in ("opencart", "woocommerce", "rest"):
+        return error_response(422, "invalid_request", "source must be opencart/woocommerce/rest.")
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO sync_state (tenant_id, source, last_run_at, last_status) "
+            "VALUES ($1, $2, now(), 'queued') "
+            "ON CONFLICT (tenant_id, source) "
+            "DO UPDATE SET last_run_at = now(), last_status = 'queued'",
+            p.tenant_id,
+            source,
+        )
+    queued = True
+    try:
+        from worker.tasks import reconcile_tenant
+
+        reconcile_tenant.delay(p.tenant_id, source)
+    except Exception:  # noqa: BLE001 - broker down: the request stays recorded
+        queued = False
+    await audit(
+        pool,
+        actor=p.email,
+        action="sync.trigger",
+        tenant_id=p.tenant_id,
+        detail={"source": source, "queued": queued},
+    )
+    return {"status": "queued" if queued else "recorded", "source": source}
 
 
 # --------------------------------------------------------------------------- #
@@ -222,7 +380,10 @@ async def zero_results(authorization: str | None = _AUTHZ, vitrin_access: str | 
     if p is None:
         return _unauth()
     assert p.tenant_id is not None  # narrowed: _require_tenant guarantees a tenant
-    return {"terms": await _agg.zero_result_terms(get_es_client(), p.tenant_id)}
+    terms, degraded = await _es_or_default(
+        _agg.zero_result_terms(get_es_client(), p.tenant_id), []
+    )
+    return {"terms": terms, "degraded": degraded}
 
 
 # --------------------------------------------------------------------------- #
@@ -500,6 +661,57 @@ async def invite(
     )
     await send_email(email, subject, text, html)
     result = {"status": "invited", "email": email}
+    if s.env != "production":  # dev convenience: surface the setup link token
+        result["setup_token"] = setup_token
+    return result
+
+
+@router.post("/team/resend")
+async def resend_invite(
+    payload: dict[str, Any], authorization: str | None = _AUTHZ, vitrin_access: str | None = _COOKIE
+):
+    """Re-send the setup email for a PENDING teammate (fresh 7-day token)."""
+    p = await _require_tenant(authorization, vitrin_access)
+    if p is None:
+        return _unauth()
+    assert p.tenant_id is not None  # narrowed: _require_tenant guarantees a tenant
+    if p.role != Role.STORE_OWNER:
+        return _owner_only()
+    email = str(payload.get("email", "")).strip().lower()
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        user_id = await conn.fetchval(
+            "SELECT id FROM users WHERE lower(email) = $1 AND tenant_id = $2 "
+            "AND status = 'pending'",
+            email,
+            p.tenant_id,
+        )
+        if user_id is None:
+            return error_response(404, "not_found", "No pending invite for this email.")
+        setup_token = secrets.token_urlsafe(32)
+        async with conn.transaction():
+            # Invalidate previous setup links before issuing the fresh one.
+            await conn.execute(
+                "UPDATE password_resets SET used_at = now() "
+                "WHERE user_id = $1 AND used_at IS NULL",
+                user_id,
+            )
+            await conn.execute(
+                "INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES ($1, $2, $3)",
+                user_id,
+                hash_key(setup_token),
+                datetime.now(UTC) + timedelta(days=7),
+            )
+        store_name = await conn.fetchval("SELECT name FROM tenants WHERE id = $1", p.tenant_id)
+    await audit(
+        pool, actor=p.email, action="team.resend", tenant_id=p.tenant_id, detail={"email": email}
+    )
+    s = get_settings()
+    subject, text, html = invite_email(
+        f"{s.app_base_url}/reset-password?token={setup_token}", store_name or "your store"
+    )
+    await send_email(email, subject, text, html)
+    result = {"status": "resent", "email": email}
     if s.env != "production":  # dev convenience: surface the setup link token
         result["setup_token"] = setup_token
     return result

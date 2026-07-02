@@ -98,11 +98,31 @@ def bulk_import(tenant_id: str, source: str, products: list[dict]) -> int:
 def reconcile_tenant(tenant_id: str, source: str = "rest") -> str:
     """Periodic delta reconciliation hook (REQ-M3-002/012).
 
-    Phase 1 scaffolds the schedule + entry point; the store-side
-    `fetch_changed_since` fetch is provided per-connector when a live store is
-    configured. Without one this is a no-op that records its run.
+    The store-side `fetch_changed_since` fetch is provided per-connector when
+    a live store is configured (Phase 7). Until then the run itself is real:
+    it records its completion in ``sync_state`` so "sync now" on the dashboard
+    visibly transitions queued → ok.
     """
     log.info("task.reconcile", tenant_id=tenant_id, source=source)
+
+    async def _record():
+        from acip_core.clients import get_pg_pool
+
+        pool = await get_pg_pool()
+        async with pool.acquire() as conn:
+            await conn.execute(
+                "INSERT INTO sync_state (tenant_id, source, last_run_at, last_status) "
+                "VALUES ($1::uuid, $2, now(), 'ok') "
+                "ON CONFLICT (tenant_id, source) "
+                "DO UPDATE SET last_run_at = now(), last_status = 'ok'",
+                tenant_id,
+                source,
+            )
+
+    try:
+        _run(_record())
+    except Exception as exc:  # noqa: BLE001 - PG down: log, don't crash the beat
+        log.warning("task.reconcile_record_failed", error=str(exc))
     return "scheduled"
 
 

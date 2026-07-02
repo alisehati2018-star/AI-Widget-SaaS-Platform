@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { ApiError } from "@/lib/api";
 import { adminFetch, useAdminSession } from "@/lib/auth";
+import { Link } from "@/i18n/navigation";
 import { DashboardShell, useAdminNav } from "@/components/shell";
 import { Alert, Badge, Field, Input, Spinner } from "@/components/ui";
 
@@ -74,6 +75,10 @@ export default function AdminSettings() {
               <tbody>
                 <tr><td className="muted">{t("settings.email")}</td><td>{user?.email ?? "—"}</td></tr>
                 <tr><td className="muted">{t("settings.role")}</td><td><Badge tone="brand">{t("settings.platformAdmin")}</Badge></td></tr>
+                <tr>
+                  <td className="muted">{t("settings.sessionLabel")}</td>
+                  <td>{user ? <Badge tone="success">{t("settings.sessionActive")}</Badge> : <Badge tone="warning">—</Badge>}</td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -125,6 +130,12 @@ export default function AdminSettings() {
               ))}
             </ul>
             <p className="hint">{t("settings.securityHint")}</p>
+          </div>
+
+          <div className="card">
+            <h3>{t("settings.operatorsTitle")}</h3>
+            <p className="muted">{t("settings.operatorsBody")}</p>
+            <Link className="btn btn-soft" href="/admin/operators">{t("settings.operatorsLink")}</Link>
           </div>
 
           <div className="card">

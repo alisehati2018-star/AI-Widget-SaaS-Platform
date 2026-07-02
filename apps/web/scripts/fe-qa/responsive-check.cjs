@@ -14,7 +14,10 @@ const PUBLIC = ["/", "/en", "/pricing", "/features", "/docs", "/contact", "/logi
   "/forgot-password", "/reset-password", "/verify-email", "/legal/terms", "/legal/privacy"];
 const ADMIN = ["/admin", "/admin/tenants", "/admin/users", "/admin/plans", "/admin/billing",
   "/admin/usage", "/admin/analytics", "/admin/models", "/admin/health", "/admin/security",
-  "/admin/flags", "/admin/audit", "/admin/settings"];
+  "/admin/flags", "/admin/audit", "/admin/settings",
+  // Phase 4: the console/tooling pages too — the FULL admin surface is swept.
+  "/admin/elasticsearch", "/admin/agent", "/admin/widget", "/admin/synonyms",
+  "/admin/queue", "/admin/contact", "/admin/operators"];
 const OWNER = ["/dashboard", "/onboarding", "/dashboard/catalog", "/dashboard/search",
   "/dashboard/widget", "/dashboard/assistant", "/dashboard/knowledge", "/dashboard/analytics",
   "/dashboard/chat", "/dashboard/sales", "/dashboard/leads", "/dashboard/keys", "/dashboard/team",

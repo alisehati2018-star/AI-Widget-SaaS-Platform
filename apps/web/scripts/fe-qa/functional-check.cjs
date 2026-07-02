@@ -60,6 +60,31 @@ const ok = (c, m) => { if (!c) { console.error(`✗ ${m}`); failures++; } else c
     ok(exportBtn > 0, "tenant detail exposes Export data action");
   }
 
+  // --- Phase 4: feature-flag toggle round-trip (mutation reflected in UI) ---
+  await page.goto(`${BASE}/en/admin/flags`, { waitUntil: "networkidle" });
+  const flagRow = page.locator("tbody tr").first();
+  await page.waitForSelector("tbody tr", { timeout: 8000 }).catch(() => {});
+  const stateBefore = await flagRow.locator(".badge").first().textContent().catch(() => null);
+  await flagRow.locator("button").click();
+  await page.waitForTimeout(1200);
+  const stateAfter = await flagRow.locator(".badge").first().textContent().catch(() => null);
+  ok(!!stateBefore && !!stateAfter && stateBefore !== stateAfter, "flag toggle flips the state badge");
+  await flagRow.locator("button").click(); // restore
+  await page.waitForTimeout(1000);
+  const stateRestored = await flagRow.locator(".badge").first().textContent().catch(() => null);
+  ok(stateRestored === stateBefore, "flag toggles back to the original state");
+
+  // --- Phase 4: ES console renders its wizard even with the cluster down ---
+  await page.goto(`${BASE}/en/admin/elasticsearch`, { waitUntil: "networkidle" });
+  const wizardBtn = await page.locator('button:has-text("Run wizard")').count();
+  ok(wizardBtn > 0, "ES console shows the setup wizard");
+
+  // --- Phase 4: admin widget page embeds the REAL loader in an iframe ---
+  await page.goto(`${BASE}/en/admin/widget`, { waitUntil: "networkidle" });
+  await page.waitForSelector("iframe[sandbox]", { timeout: 8000 }).catch(() => {});
+  const srcdoc = await page.locator("iframe[sandbox]").getAttribute("srcdoc").catch(() => null);
+  ok(!!srcdoc && srcdoc.includes("/api/widget/v1.js"), "widget preview iframe embeds the real loader");
+
   await browser.close();
   console.log(`\nfunctional-check: ${failures} failure(s).`);
   process.exit(failures > 0 ? 1 : 0);

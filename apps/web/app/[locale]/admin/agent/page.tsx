@@ -17,6 +17,32 @@ interface ChatTurn {
   latency_ms?: number;
 }
 interface SearchResult { results?: Citation[] }
+interface HistoryEntry {
+  role: "user" | "assistant";
+  text: string;
+  rung?: string;
+  latency_ms?: number;
+  cached?: boolean;
+  citations?: Citation[];
+}
+
+const HISTORY_KEY = (tenant: string) => `vitrin.agent.history.${tenant}`;
+
+function loadHistory(tenant: string): HistoryEntry[] {
+  try {
+    return JSON.parse(window.localStorage.getItem(HISTORY_KEY(tenant)) ?? "[]") as HistoryEntry[];
+  } catch {
+    return [];
+  }
+}
+
+function saveHistory(tenant: string, turns: HistoryEntry[]) {
+  try {
+    window.localStorage.setItem(HISTORY_KEY(tenant), JSON.stringify(turns.slice(-40)));
+  } catch {
+    // storage full/blocked — history is a convenience, never an error
+  }
+}
 
 export default function AdminAgent() {
   const t = useTranslations("admin");
@@ -27,7 +53,7 @@ export default function AdminAgent() {
   const [message, setMessage] = useState("");
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
-  const [turn, setTurn] = useState<ChatTurn | null>(null);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [results, setResults] = useState<Citation[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [docCount, setDocCount] = useState<number | null>(null);
@@ -41,21 +67,45 @@ export default function AdminAgent() {
   useEffect(() => {
     if (!selected) return;
     setDocCount(null);
-    setTurn(null);
     setResults(null);
+    // Each tenant keeps its own console history (locally, per browser).
+    setHistory(loadHistory(selected));
     authFetch<{ docs: number }>(`/admin/es/tenant-count?tenant=${encodeURIComponent(selected)}`)
       .then((r) => setDocCount(r.docs))
       .catch(() => setDocCount(null));
   }, [selected]);
 
+  function pushTurns(...entries: HistoryEntry[]) {
+    setHistory((cur) => {
+      const next = [...cur, ...entries];
+      saveHistory(selected, next);
+      return next;
+    });
+  }
+
+  function clearHistory() {
+    setHistory([]);
+    saveHistory(selected, []);
+  }
+
   async function send() {
     if (!selected || !message.trim()) return;
-    setBusy(true); setErr(null); setTurn(null);
+    const question = message.trim();
+    setBusy(true); setErr(null);
+    setMessage("");
+    pushTurns({ role: "user", text: question });
     try {
       const r = await authFetch<ChatTurn>("/admin/agent/test", {
-        body: { tenant_id: selected, message: message.trim() },
+        body: { tenant_id: selected, message: question },
       });
-      setTurn(r);
+      pushTurns({
+        role: "assistant",
+        text: r.answer ?? "",
+        rung: r.rung,
+        latency_ms: r.latency_ms,
+        cached: r.cached,
+        citations: r.citations,
+      });
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : t("agent.failed"));
     } finally { setBusy(false); }
@@ -95,7 +145,7 @@ export default function AdminAgent() {
     <DashboardShell title={t("agent.title")} nav={nav} requireAdmin loginHref="/admin/login">
       <div className="row-between" style={{ marginTop: "-1rem", marginBottom: "1.5rem", flexWrap: "wrap", gap: ".75rem" }}>
         <p style={{ margin: 0 }}>{t("agent.intro")}</p>
-        <select className="input" style={{ maxWidth: 260 }} value={selected} onChange={(e) => setSelected(e.target.value)}>
+        <select className="input" style={{ maxWidth: 260 }} aria-label={t("common.tenant")} value={selected} onChange={(e) => setSelected(e.target.value)}>
           {tenants.length === 0 ? <option value="">{t("common.noTenants")}</option> : null}
           {tenants.map((tn) => <option key={tn.id} value={tn.id}>{tn.name}</option>)}
         </select>
@@ -111,27 +161,44 @@ export default function AdminAgent() {
 
           {tab === "chat" ? (
             <div className="card">
+              {history.length === 0 ? (
+                <p className="muted">{t("agent.empty")}</p>
+              ) : (
+                <div style={{ maxHeight: 420, overflowY: "auto", display: "flex", flexDirection: "column", gap: ".75rem", marginBottom: "1rem" }}>
+                  {history.map((h, i) => (
+                    <div key={i} className={`mock-bubble ${h.role === "user" ? "user" : "bot"}`}>
+                      <p style={{ whiteSpace: "pre-wrap", margin: 0 }}>{h.text}</p>
+                      {h.role === "assistant" ? (
+                        <div className="row" style={{ gap: ".4rem", flexWrap: "wrap", marginTop: ".5rem" }}>
+                          {h.rung ? <Badge tone="brand">{t("agent.rung")}: {h.rung}</Badge> : null}
+                          {h.latency_ms != null ? <Badge>{t("agent.latency")}: {h.latency_ms} ms</Badge> : null}
+                          {h.cached ? <Badge tone="success">{t("agent.cached")}</Badge> : null}
+                          {h.citations?.length ? <Badge>{t("agent.citations")}: {h.citations.length}</Badge> : null}
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              )}
               <Field label={t("agent.messageLabel")}>
                 <Input value={message} onChange={(e) => setMessage(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") void send(); }}
                   placeholder={t("agent.messagePlaceholder")} />
               </Field>
-              <button className="btn btn-primary" disabled={busy || !selected} onClick={() => void send()}>
-                {busy ? <Spinner /> : t("agent.send")}
-              </button>
-              {turn ? (
+              <div className="row" style={{ gap: ".5rem", flexWrap: "wrap" }}>
+                <button className="btn btn-primary" disabled={busy || !selected} onClick={() => void send()}>
+                  {busy ? <Spinner /> : t("agent.send")}
+                </button>
+                {history.length ? (
+                  <button className="btn btn-ghost" onClick={clearHistory}>{t("agent.clearHistory")}</button>
+                ) : null}
+              </div>
+              {history.at(-1)?.role === "assistant" && history.at(-1)?.citations?.length ? (
                 <div style={{ marginTop: "1.25rem" }}>
-                  <div className="row" style={{ gap: ".5rem", flexWrap: "wrap", marginBottom: ".75rem" }}>
-                    <Badge tone="brand">{t("agent.rung")}: {turn.rung}</Badge>
-                    {turn.latency_ms != null ? <Badge>{t("agent.latency")}: {turn.latency_ms} ms</Badge> : null}
-                    {turn.cached ? <Badge tone="success">{t("agent.cached")}</Badge> : null}
-                  </div>
-                  <h4>{t("agent.answer")}</h4>
-                  <p style={{ whiteSpace: "pre-wrap" }}>{turn.answer}</p>
                   <h4>{t("agent.citations")}</h4>
-                  {citationList(turn.citations ?? [])}
+                  {citationList(history.at(-1)?.citations ?? [])}
                 </div>
-              ) : <p className="muted" style={{ marginTop: "1rem" }}>{t("agent.empty")}</p>}
+              ) : null}
             </div>
           ) : (
             <div className="card">
@@ -164,6 +231,17 @@ export default function AdminAgent() {
           <div className="card">
             <h3>{t("agent.sessionTitle")}</h3>
             <p className="hint">{t("agent.sessionHint")}</p>
+            <table className="table">
+              <tbody>
+                <tr>
+                  <td className="muted">{t("agent.historyCount")}</td>
+                  <td>{history.length}</td>
+                </tr>
+              </tbody>
+            </table>
+            {history.length ? (
+              <button className="btn btn-soft" onClick={clearHistory}>{t("agent.clearHistory")}</button>
+            ) : null}
           </div>
         </div>
       </div>

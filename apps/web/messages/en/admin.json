@@ -20,7 +20,9 @@
     "groupPlatform": "Platform",
     "elasticsearch": "Elasticsearch",
     "agent": "Agent console",
-    "widget": "Widget defaults"
+    "widget": "Widget defaults",
+    "contact": "Contact inbox",
+    "operators": "Operators"
   },
   "common": {
     "ms": "ms",
@@ -176,14 +178,20 @@
     "colStatus": "Status",
     "suspend": "Suspend",
     "activate": "Activate",
-    "rolePlatformAdmin": "platform admin",
     "roleStoreOwner": "store owner",
     "roleStoreStaff": "store staff",
     "colActions": "Actions",
     "roleChanged": "Role updated.",
     "roleChangeFailed": "Could not change role — this user has no tenant on record.",
-    "confirmPromote": "Make {email} a platform admin? They will lose access to any single store and gain full platform access.",
-    "confirmDemote": "Change {email} back to a store role?"
+    "searchPlaceholder": "Search email, name or store…",
+    "filterAllRoles": "All roles",
+    "filterAllStatuses": "All statuses",
+    "statusSuspended": "Suspended",
+    "noMatches": "No users match this filter.",
+    "pageInfo": "{from}–{to} of {total}",
+    "prev": "Previous",
+    "next": "Next",
+    "statusChangeFailed": "Changing the user status failed."
   },
   "plans": {
     "title": "Plans",
@@ -204,7 +212,20 @@
     "rateLimit": "Rate limit / min",
     "public": "Public",
     "colCap": "Cap",
-    "selectHint": "Select a plan from the list to edit its pricing, credits, and limits."
+    "selectHint": "Select a plan from the list to edit its pricing, credits, and limits.",
+    "newPlan": "New plan",
+    "code": "Plan code",
+    "codeHint": "Stable identifier (lowercase letters/digits/dashes) — cannot be changed later.",
+    "codeInvalid": "Code must be 2-31 characters of lowercase letters, digits, dashes or underscores.",
+    "nameRequired": "Plan name is required.",
+    "negativeInvalid": "Price and credit values cannot be negative.",
+    "create": "Create plan",
+    "createdNote": "New plan created.",
+    "delete": "Delete",
+    "confirmDelete": "Delete plan “{name}” permanently? This cannot be undone.",
+    "deletedNote": "Plan deleted.",
+    "saveFailed": "Saving the plan failed.",
+    "deleteFailed": "Deleting the plan failed."
   },
   "billing": {
     "title": "Billing",
@@ -227,7 +248,22 @@
     "colProvider": "Provider",
     "colStatus": "Status",
     "markPaid": "Mark paid",
-    "refund": "Refund"
+    "refund": "Refund",
+    "tabOrders": "Orders",
+    "tabInvoices": "Invoices",
+    "invPaidAmount": "Paid revenue (current filter)",
+    "invPaidCount": "Paid invoices",
+    "invTotal": "All invoices",
+    "invSearchPlaceholder": "Search store (name or slug)…",
+    "invAllStatuses": "All statuses",
+    "invStatusPaid": "Paid",
+    "invStatusVoid": "Void",
+    "invColNumber": "Number",
+    "invColDescription": "Description",
+    "invEmpty": "No invoices match this filter.",
+    "invPageInfo": "{from}–{to} of {total}",
+    "invPrev": "Previous",
+    "invNext": "Next"
   },
   "usage": {
     "title": "Usage monitoring",
@@ -237,7 +273,18 @@
     "tokensOut": "Tokens out",
     "creditsSpent": "Credits spent",
     "byRung": "Calls by rung",
-    "empty": "No usage recorded yet (needs live traffic through the gateway)."
+    "empty": "No usage recorded yet (needs live traffic through the gateway).",
+    "filterTenant": "Filter store…",
+    "filterRoute": "Filter route (e.g. /v1/search)…",
+    "filterAllRungs": "All rungs",
+    "rangeDays": "Last {days} days",
+    "exportCsv": "Export CSV",
+    "recentEvents": "Recent events",
+    "colTenant": "Store",
+    "colRoute": "Route",
+    "colLatency": "Latency",
+    "colCost": "Cost",
+    "rungHint": "Rungs (L1–L4) are the model tier used per call; a lower rung is cheaper and faster."
   },
   "analytics": {
     "title": "Analytics",
@@ -257,7 +304,9 @@
     "analystAsk": "Ask",
     "analystEmpty": "Ask a question to get a grounded answer.",
     "analystNarratedTemplate": "template answer (no LLM configured)",
-    "analystNarratedLlm": "AI-narrated answer"
+    "analystNarratedLlm": "AI-narrated answer",
+    "degradedBanner": "Elasticsearch is unavailable — search data (most wanted, zero results, funnel) is temporarily empty. The remaining figures come from the database.",
+    "analystDegraded": "The analyst needs search data and Elasticsearch is unavailable."
   },
   "models": {
     "title": "Models & gateway",
@@ -268,7 +317,12 @@
     "reranker": "Reranker",
     "frontier": "Frontier fallback",
     "byRung": "Calls by rung",
-    "empty": "No routing data yet (needs live gateway traffic)."
+    "empty": "No routing data yet (needs live gateway traffic).",
+    "pingAll": "Ping models",
+    "reachable": "Reachable",
+    "unreachable": "Unreachable",
+    "notConfigured": "Not configured",
+    "pingHint": "Any HTTP answer (even 404) means the service is up; a connection error means it is not running."
   },
   "queue": {
     "title": "Queue monitoring",
@@ -278,7 +332,17 @@
     "down": "down",
     "pendingTasks": "Pending tasks",
     "brokerTitle": "Broker",
-    "hint": "Worker-level inspection (active/scheduled) is added with the observability stack."
+    "hint": "Worker-level inspection (active/scheduled) is added with the observability stack.",
+    "workersOnline": "Workers online",
+    "workersTitle": "Workers",
+    "noWorkers": "No worker answered — start one: scripts/start-worker.ps1",
+    "colWorker": "Worker",
+    "colStatus": "Status",
+    "colActive": "Running tasks",
+    "colTasks": "Active tasks",
+    "online": "Online",
+    "workersHint": "Built from a live Celery ping; refreshes every 10 seconds.",
+    "registeredTitle": "Registered tasks"
   },
   "health": {
     "title": "System health",
@@ -288,7 +352,11 @@
     "linkQueue": "Queue & workers",
     "linkElasticsearch": "Elasticsearch cluster",
     "linkModels": "AI models & routing",
-    "linkSecurity": "Security monitoring"
+    "linkSecurity": "Security monitoring",
+    "sparklineTitle": "Database latency trend",
+    "sparklineLabel": "PG latency",
+    "sparklineEmpty": "Not enough samples yet — this page records one every 10 seconds.",
+    "sparklineHint": "Each visit records a latency sample (the most recent 96 are kept)."
   },
   "security": {
     "title": "Security monitoring",
@@ -302,7 +370,14 @@
     "colFailed": "Failed",
     "colLockedUntil": "Locked until",
     "recentTitle": "Recent auth events",
-    "noEvents": "No auth events yet."
+    "noEvents": "No auth events yet.",
+    "colPlane": "Account type",
+    "planeAdmin": "Admin",
+    "planeCustomer": "Customer",
+    "unlock": "Unlock",
+    "unlocked": "Account {email} unlocked.",
+    "unlockFailed": "Unlock failed.",
+    "unlockHint": "Unlocking resets the failed-login counter so the user can sign in without waiting."
   },
   "synonyms": {
     "title": "Synonyms",
@@ -313,20 +388,36 @@
     "count": "{n} rules",
     "helpTitle": "How synonym rules work",
     "helpBody": "One rule per line. Comma-separated terms in a rule are treated as equivalent during search — e.g. a shopper searching \"laptop\" also matches products tagged \"notebook\" or \"لپ‌تاپ\".",
-    "helpExampleTitle": "Examples"
+    "helpExampleTitle": "Examples",
+    "editorPlaceholder": "laptop, notebook, لپ‌تاپ\nmobile, cellphone, موبایل",
+    "exampleRules": "laptop, notebook, لپ‌تاپ\nmobile, cellphone, موبایل\nsneaker, trainer, کتانی"
   },
   "flags": {
     "title": "Feature flags",
     "intro": "Toggle platform capabilities without a deploy.",
     "colFlag": "Flag",
-    "colDescription": "Description",
-    "colState": "State"
+    "colState": "State",
+    "colEffect": "Effect when on",
+    "colLastChanged": "Last changed",
+    "effectAssistant": "Shopping assistant (RAG chat) is available to stores; turning it off disables the widget chat tab and the chat APIs.",
+    "effectInsight": "The insight engine (demand gaps, funnel analysis) is computed and shown on dashboards.",
+    "effectLeads": "In-conversation lead capture (customer phone/email) is active.",
+    "effectAgentActions": "Money-moving agent actions (orders/payments/discounts) — off by default, only for fully hardened deployments.",
+    "hint": "Flag changes apply platform-wide immediately and are recorded in the audit log with the changer's name."
   },
   "audit": {
     "title": "Audit log",
     "intro": "Append-only record of admin actions, auth events, and money tools.",
     "empty": "No audit entries yet.",
-    "colDetail": "Detail"
+    "colDetail": "Detail",
+    "filterActor": "Filter actor…",
+    "filterAction": "Action prefix (e.g. tenant.)…",
+    "filterTenant": "Filter store…",
+    "filterFrom": "From date",
+    "filterTo": "To date",
+    "exportCsv": "Export CSV",
+    "colTenant": "Store",
+    "loadMore": "Load older entries"
   },
   "settings": {
     "title": "Platform settings",
@@ -352,7 +443,12 @@
     "newEmail": "New email",
     "changeEmailSubmit": "Change email",
     "emailChanged": "Email changed. Check your new inbox to verify it.",
-    "genericError": "Something went wrong."
+    "genericError": "Something went wrong.",
+    "sessionLabel": "Current session",
+    "sessionActive": "Connected",
+    "operatorsTitle": "Platform operators",
+    "operatorsBody": "Add more admins or manage operator access — no bootstrap token required.",
+    "operatorsLink": "Manage operators"
   },
   "elasticsearch": {
     "title": "Elasticsearch control",
@@ -393,7 +489,31 @@
     "live": "live",
     "tenantCountTitle": "Per-store document count",
     "tenantCountBtn": "Count documents",
-    "docsForTenant": "Indexed documents for this store"
+    "docsForTenant": "Indexed documents for this store",
+    "wizardTitle": "First-run index setup (wizard)",
+    "wizardHint": "The three standard deployment steps: create the index behind the read alias, optionally reindex from a previous index, and atomically switch the alias. Each step drives the same console APIs and lands in the operation log.",
+    "wizardStepEnsure": "Create/verify index",
+    "wizardStepEnsureHint": "If the read alias doesn't exist yet, a fresh versioned index is created and attached.",
+    "wizardStepReindex": "Reindex (optional)",
+    "wizardStepReindexHint": "Provide a source index to migrate data into a fresh index with zero downtime.",
+    "wizardStepAlias": "Switch alias",
+    "wizardStepAliasHint": "The read alias is atomically pointed at the final index.",
+    "wizardSourceLabel": "Source index (optional)",
+    "wizardSourceHint": "Leave empty to only create the index and alias.",
+    "wizardSourcePlaceholder": "acip-catalogue-000001",
+    "wizardRun": "Run wizard",
+    "wizardPending": "Pending",
+    "wizardRunning": "Running",
+    "wizardDone": "Done",
+    "wizardFailed": "Failed",
+    "wizardSkipped": "Skipped",
+    "wizardSkippedNoSource": "No source index given — reindex not needed.",
+    "wizardSkippedNoIndex": "No index available to attach the alias to.",
+    "logTitle": "Operation log",
+    "logEmpty": "No operations yet — wizard results and every action on this page are recorded here.",
+    "logOk": "OK",
+    "logFail": "Error",
+    "logHint": "This log is local to the session (most recent 100); the durable record of every operation lives in the audit log."
   },
   "agent": {
     "title": "Agent console",
@@ -405,7 +525,6 @@
     "send": "Send",
     "queryPlaceholder": "e.g. کفش ورزشی",
     "runSearch": "Run search",
-    "answer": "Answer",
     "rung": "Rung",
     "latency": "Latency",
     "cached": "cached",
@@ -418,7 +537,9 @@
     "indexedDocs": "Indexed documents",
     "docsLoading": "Checking…",
     "sessionTitle": "Session",
-    "sessionHint": "Each test uses a fresh session so it never mixes with a real shopper's conversation."
+    "sessionHint": "Each test uses a fresh session so it never mixes with a real shopper's conversation.",
+    "clearHistory": "Clear history",
+    "historyCount": "Messages in this conversation"
   },
   "widget": {
     "title": "Widget defaults",
@@ -435,6 +556,66 @@
     "save": "Save defaults",
     "saved": "Widget defaults saved.",
     "previewTitle": "Live preview",
-    "previewHint": "How the launcher looks with these defaults (a store can still override branding)."
+    "previewHint": "How the launcher looks with these defaults (a store can still override branding).",
+    "livePreviewTitle": "Real widget preview",
+    "livePreviewHint": "The exact `widget/v1.js` file stores embed is loaded here in a sandboxed iframe, reading the saved platform defaults — the preview refreshes after every save.",
+    "reloadPreview": "Reload"
+  },
+  "contact": {
+    "title": "Contact inbox",
+    "intro": "Messages from the public contact form; click a message to read it in full, set its status, and keep a follow-up note.",
+    "filterAll": "All",
+    "statusNew": "New",
+    "statusRead": "Read",
+    "statusResolved": "Resolved",
+    "searchPlaceholder": "Search sender name or email…",
+    "colFrom": "From",
+    "colMessage": "Message",
+    "colStatus": "Status",
+    "empty": "No messages match this filter.",
+    "pageInfo": "{from}–{to} of {total}",
+    "prev": "Previous",
+    "next": "Next",
+    "selectHint": "Select a message from the list to see its details.",
+    "noteLabel": "Follow-up note",
+    "noteHint": "Visible to operators only; never sent to the sender.",
+    "notePlaceholder": "e.g. replied by email…",
+    "saveNote": "Save note",
+    "savedNote": "Saved.",
+    "saveFailed": "Saving failed.",
+    "markResolved": "Mark resolved",
+    "reopen": "Reopen",
+    "replyEmail": "Reply by email"
+  },
+  "operators": {
+    "title": "Operators",
+    "intro": "Manage platform admins — these accounts are fully separate from store users.",
+    "colOperator": "Operator",
+    "colStatus": "Status",
+    "colSessions": "Active sessions",
+    "colLastLogin": "Last login",
+    "colActions": "Actions",
+    "you": "You",
+    "suspended": "Suspended",
+    "rename": "Rename",
+    "suspend": "Suspend",
+    "activate": "Activate",
+    "delete": "Delete",
+    "empty": "No operators yet.",
+    "note": "Safety rails: no admin can suspend or delete their own account, and the last active admin can never be suspended or deleted. Suspension also revokes live sessions immediately.",
+    "renameTitle": "Rename operator",
+    "fullName": "Full name",
+    "save": "Save",
+    "cancel": "Cancel",
+    "inviteTitle": "Add a new admin",
+    "inviteHint": "The account is active immediately; share the email and initial password so they can sign in and change it in Settings.",
+    "email": "Email",
+    "initialPassword": "Initial password",
+    "passwordHint": "At least 10 characters with upper/lower case letters and a digit.",
+    "invite": "Add admin",
+    "invited": "Admin account created for {email}.",
+    "actionFailed": "The action failed.",
+    "confirmSuspend": "Suspend {email}? Their live sessions end immediately.",
+    "confirmDelete": "Delete {email} permanently? This cannot be undone."
   }
 }

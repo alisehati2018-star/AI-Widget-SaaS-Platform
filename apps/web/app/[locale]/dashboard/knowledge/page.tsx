@@ -26,6 +26,7 @@ export default function KnowledgePage() {
   const locale = useLocale() as Locale;
   const nav = useOwnerNav();
   const [articles, setArticles] = useState<Article[] | null>(null);
+  const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<Article | null>(null);
   const [draft, setDraft] = useState(EMPTY_DRAFT);
   const [error, setError] = useState<string | null>(null);
@@ -102,6 +103,13 @@ export default function KnowledgePage() {
             <h3 style={{ margin: 0 }}>{t("knowledge.articles")}</h3>
             <button className="btn btn-soft" onClick={startCreate}>{t("knowledge.addArticle")}</button>
           </div>
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t("knowledge.searchPlaceholder")}
+            style={{ marginBottom: "1rem" }}
+            aria-label={t("knowledge.searchPlaceholder")}
+          />
           {articles === null ? (
             <Spinner />
           ) : articles.length === 0 ? (
@@ -110,7 +118,12 @@ export default function KnowledgePage() {
             <table className="table">
               <thead><tr><th>{t("knowledge.colTitle")}</th><th>{t("common.status")}</th><th>{t("knowledge.colUpdated")}</th><th></th></tr></thead>
               <tbody>
-                {articles.map((a) => (
+                {articles
+                  .filter((a) => {
+                    const q = query.trim().toLowerCase();
+                    return !q || a.title.toLowerCase().includes(q) || a.body.toLowerCase().includes(q);
+                  })
+                  .map((a) => (
                   <tr key={a.id} className={editing?.id === a.id ? "row-selected" : undefined}>
                     <td>{a.title}</td>
                     <td>{a.published ? <Badge tone="success">{t("knowledge.published")}</Badge> : <Badge>{t("common.draft")}</Badge>}</td>
@@ -122,7 +135,7 @@ export default function KnowledgePage() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  ))}
               </tbody>
             </table>
           )}

@@ -39,6 +39,9 @@ export default function WidgetPage() {
   const [savedConfig, setSavedConfig] = useState(false);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [testKey, setTestKey] = useState("");
+  const [testNonce, setTestNonce] = useState(0);
+  const [testOn, setTestOn] = useState(false);
 
   useEffect(() => {
     authFetch<WidgetInfo>("/tenant/widget")
@@ -91,6 +94,18 @@ export default function WidgetPage() {
     setCopied(true);
   }
 
+  // The REAL production loader inside a sandboxed iframe, exactly as a store
+  // page would embed it. With the store's widget key pasted in, search/chat
+  // hit the live public API; without it the widget still mounts with defaults.
+  function testDoc(): string {
+    const origin = window.location.origin;
+    const key = testKey.trim() || "dashboard-preview";
+    return `<!doctype html><html dir="rtl" lang="fa"><head><meta charset="utf-8">
+<style>body{margin:0;min-height:340px;background:#f7f7f9}</style></head><body>
+<script src="${origin}/api/widget/v1.js" data-acip-key="${key.replace(/"/g, "")}"
+  data-acip-base="${origin}/api" async><\/script></body></html>`;
+  }
+
   return (
     <DashboardShell title={t("nav.widget")} nav={nav}>
       <p style={{ marginTop: "-1rem" }}>{t("widget.intro")}</p>
@@ -106,7 +121,7 @@ export default function WidgetPage() {
         {!info ? <Spinner /> : (
           <>
             <p className="hint">{info.ready ? t("widget.embedReady") : t("widget.embedNotReady")}</p>
-            <pre className="input" style={{ whiteSpace: "pre-wrap", fontFamily: "monospace", fontSize: "0.82rem", opacity: info.ready ? 1 : 0.6 }}>
+            <pre className="input" style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontFamily: "monospace", fontSize: "0.82rem", opacity: info.ready ? 1 : 0.6 }}>
 {info.snippet}
             </pre>
             <p className="hint">{t("widget.embedKeyHint")}</p>
@@ -119,6 +134,44 @@ export default function WidgetPage() {
             {copied ? <Alert kind="success">{t("common.saved")}</Alert> : null}
           </>
         )}
+      </div>
+
+      <div className="card" style={{ marginBottom: "1.5rem" }}>
+        <div className="row-between" style={{ flexWrap: "wrap", gap: ".6rem" }}>
+          <h3 style={{ margin: 0 }}>{t("widget.liveTestTitle")}</h3>
+          {testOn ? (
+            <button className="btn btn-ghost" onClick={() => setTestNonce((n) => n + 1)}>
+              {t("widget.liveTestReload")}
+            </button>
+          ) : null}
+        </div>
+        <p className="hint">{t("widget.liveTestHint")}</p>
+        <div className="row" style={{ flexWrap: "wrap", gap: ".6rem", marginBottom: "1rem" }}>
+          <Input
+            dir="ltr"
+            value={testKey}
+            onChange={(e) => setTestKey(e.target.value)}
+            placeholder={t("widget.liveTestKeyPlaceholder")}
+            style={{ flex: 1, minWidth: 240 }}
+            aria-label={t("widget.liveTestKeyPlaceholder")}
+          />
+          <button className="btn btn-primary" onClick={() => { setTestOn(true); setTestNonce((n) => n + 1); }}>
+            {t("widget.liveTestRun")}
+          </button>
+        </div>
+        {testOn ? (
+          <iframe
+            key={testNonce}
+            title={t("widget.liveTestTitle")}
+            sandbox="allow-scripts"
+            srcDoc={testDoc()}
+            style={{
+              width: "100%", height: 360, border: "1px solid var(--border)",
+              borderRadius: "var(--radius)", background: "#f7f7f9",
+            }}
+          />
+        ) : null}
+        <p className="hint" style={{ marginTop: ".5rem" }}>{t("widget.liveTestKeyNote")}</p>
       </div>
 
       <div className="dash-2col">

@@ -48,7 +48,7 @@ export default function AdminSynonyms() {
     <DashboardShell title={t("synonyms.title")} nav={nav} requireAdmin loginHref="/admin/login">
       <div className="row-between" style={{ marginTop: "-1rem", marginBottom: "1.5rem", flexWrap: "wrap", gap: ".75rem" }}>
         <p style={{ margin: 0 }}>{t("synonyms.intro")}</p>
-        <select className="input" style={{ maxWidth: 260 }} value={selected} onChange={(e) => setSelected(e.target.value)}>
+        <select className="input" style={{ maxWidth: 260 }} aria-label={t("common.tenant")} value={selected} onChange={(e) => setSelected(e.target.value)}>
           {tenants.length === 0 ? <option value="">{t("common.noTenants")}</option> : null}
           {tenants.map((tn) => <option key={tn.id} value={tn.id}>{tn.name}</option>)}
         </select>
@@ -69,7 +69,7 @@ export default function AdminSynonyms() {
               style={{ minHeight: 340, fontFamily: "monospace" }}
               value={text}
               onChange={(e) => { setText(e.target.value); setSaved(false); }}
-              placeholder={"laptop, notebook, لپ‌تاپ\nmobile, cellphone, موبایل"}
+              placeholder={t("synonyms.editorPlaceholder")}
             />
           )}
           <div style={{ marginTop: "1rem" }}>
@@ -81,7 +81,7 @@ export default function AdminSynonyms() {
           <h3>{t("synonyms.helpTitle")}</h3>
           <p className="hint">{t("synonyms.helpBody")}</p>
           <h4>{t("synonyms.helpExampleTitle")}</h4>
-          <pre className="code-block">{"laptop, notebook, لپ‌تاپ\nmobile, cellphone, موبایل\nsneaker, trainer, کتانی"}</pre>
+          <pre className="code-block">{t("synonyms.exampleRules")}</pre>
         </div>
       </div>
     </DashboardShell>

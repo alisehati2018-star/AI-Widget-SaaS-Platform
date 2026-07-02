@@ -8,11 +8,13 @@ import { formatCurrency, formatDate, formatNumber } from "@/lib/datetime";
 import type { Locale } from "@/i18n/routing";
 import { DashboardShell, useAdminNav } from "@/components/shell";
 import { Alert, Badge, Spinner, Stat } from "@/components/ui";
+import { InvoicesPanel } from "./invoices";
 
 export default function AdminBilling() {
   const t = useTranslations("admin");
   const locale = useLocale() as Locale;
   const nav = useAdminNav();
+  const [tab, setTab] = useState<"orders" | "invoices">("orders");
   const [orders, setOrders] = useState<Order[] | null>(null);
   const [revenue, setRevenue] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -59,6 +61,18 @@ export default function AdminBilling() {
     <DashboardShell title={t("billing.title")} nav={nav} requireAdmin loginHref="/admin/login">
       <p style={{ marginTop: "-1rem" }}>{t("billing.intro")}</p>
       {msg ? <Alert kind="success">{msg}</Alert> : null}
+      <div className="row" style={{ gap: ".4rem", marginBottom: "1.25rem" }}>
+        <button className={tab === "orders" ? "btn btn-primary" : "btn btn-soft"} onClick={() => setTab("orders")}>
+          {t("billing.tabOrders")}
+        </button>
+        <button className={tab === "invoices" ? "btn btn-primary" : "btn btn-soft"} onClick={() => setTab("invoices")}>
+          {t("billing.tabInvoices")}
+        </button>
+      </div>
+      {tab === "invoices" ? (
+        <div className="card"><InvoicesPanel /></div>
+      ) : (
+      <>
       <div className="stat-grid" style={{ marginBottom: "1.5rem" }}>
         <Stat label={t("billing.paidRevenue")} value={`$${formatNumber(Math.round(revenue), locale)}`} />
         <Stat label={t("billing.orders")} value={num(orders?.length)} />
@@ -116,6 +130,8 @@ export default function AdminBilling() {
           </table>
         )}
       </div>
+      </>
+      )}
     </DashboardShell>
   );
 }

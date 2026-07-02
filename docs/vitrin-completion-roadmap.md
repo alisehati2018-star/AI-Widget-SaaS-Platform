@@ -7,12 +7,12 @@
 
 | فاز | عنوان | وضعیت |
 |-----|-------|--------|
-| ۱ | Admin Tenant Management | ✅ **تحویل‌شده — منتظر تأیید شما** ([گزارش](../reports/phases/phase-01-admin-tenant.md)) |
-| ۲ | Admin Revenue, Plans, Users, Inbox | ⬜ منتظر تأیید فاز ۱ |
-| ۳ | Admin Observability و امنیت | ⬜ |
-| ۴ | Admin ES Console, Agent, Widget, QA | ⬜ |
-| ۵ | Owner Dashboard (۱۷ صفحه) | ⬜ |
-| ۶ | موتور هوشمند: ES + Sync + Inference | ⬜ |
+| ۱ | Admin Tenant Management | ✅ تأییدشده ([گزارش](../reports/phases/phase-01-admin-tenant.md)) |
+| ۲ | Admin Revenue, Plans, Users, Inbox | ✅ تأییدشده ([گزارش](../reports/phases/phase-02-admin-revenue.md)) |
+| ۳ | Admin Observability و امنیت | ✅ تأییدشده ([گزارش](../reports/phases/phase-03-admin-observability.md)) |
+| ۴ | Admin ES Console, Agent, Widget, QA | ✅ تأییدشده ([گزارش](../reports/phases/phase-04-admin-qa.md)) |
+| ۵ | Owner Dashboard (۱۷ صفحه) | ✅ **تحویل‌شده — منتظر تأیید شما** ([گزارش](../reports/phases/phase-05-owner-dashboard.md)) |
+| ۶ | موتور هوشمند: ES + Sync + Inference | ⬜ منتظر تأیید فاز ۵ |
 | ۷ | یکپارچه‌سازی OpenCart / WooCommerce | ⬜ |
 | ۸ | Dev Sign-off (تست نهایی ویندوز) | ⬜ |
 | ۹ | انتقال سرور + hardening (عملیاتی) | ⬜ |
@@ -48,79 +48,83 @@
 ### پذیرش
 - [x] ایجاد tenant → پروفایل کامل → suspend → activate → export (تأیید زنده با Playwright + PG در محیط توسعه؛ دستورات ویندوز در گزارش فاز)
 - [x] Overview نمودار با دادهٔ PG پر شد
-- [ ] **تأیید شما برای فاز ۲** ⏸️
+- [x] **تأیید شما برای فاز ۲** ✅ (پس از بازبینی مجدد کامل: اصلاح bucketing منطقهٔ زمانی روندها + رفع ۳ سرریز responsive)
 
 ---
 
-## فاز ۲ — ادمین: Revenue, Plans, Users و Inbox ⬜
+## فاز ۲ — ادمین: Revenue, Plans, Users و Inbox ✅
 
 ### Backend
-- [ ] `POST /admin/plans` + `DELETE /admin/plans/{id}` — CRUD کامل پلن
-- [ ] `GET /admin/invoices` — فاکتورهای کل پلتفرم
-- [ ] `GET /admin/contact` + `PATCH /admin/contact/{id}` — inbox پیام‌های تماس
-- [ ] `GET/POST/PATCH/DELETE /admin/operators` + `POST /admin/operators/{id}/status` — CRUD ادمین‌ها (جدول `admin_users` از قبل جداست)
+- [x] `POST /admin/plans` + `DELETE /admin/plans/{id}` — CRUD کامل پلن (حذفِ پلنِ در حال استفاده → 409 با شمارش مراجع)
+- [x] `GET /admin/invoices` — فاکتورهای کل پلتفرم + فیلتر + خلاصهٔ درآمد روی همان فیلتر
+- [x] `GET /admin/contact` + `PATCH /admin/contact/{id}` — inbox پیام‌های تماس (migration `0013`: status/admin_note/updated_at)
+- [x] `GET/POST/PATCH/DELETE /admin/operators` + `POST /admin/operators/{id}/status` — CRUD ادمین‌ها با قوانین ایمنی (بدون self-suspend/delete؛ حفاظت از آخرین ادمین فعال؛ تعلیق = ابطال نشست‌ها)
+- [x] گسترش `GET /admin/users` — جست‌وجو + فیلتر role/status + صفحه‌بندی (و حذف مسیر شکستهٔ ارتقا به platform_admin)
 
 ### Frontend
-- [ ] Plans: دکمهٔ «پلن جدید» + confirm حذف + validation
-- [ ] Billing: تب Invoices + فیلتر status/tenant + خلاصهٔ درآمد
-- [ ] Users: فیلتر role/status/tenant + جست‌وجوی ایمیل
-- [ ] صفحهٔ جدید `/admin/contact` — inbox با mark-read/reply-note
-- [ ] صفحهٔ جدید `/admin/operators` — مدیریت ادمین‌ها
-- [ ] Settings: لینک به Operators + نمایش نشست فعال
-- [ ] i18n + افزودن به nav
+- [x] Plans: دکمهٔ «پلن جدید» + confirm حذف + validation
+- [x] Billing: تب Invoices + فیلتر status/tenant + خلاصهٔ درآمد
+- [x] Users: فیلتر role/status + جست‌وجوی ایمیل/نام/فروشگاه + صفحه‌بندی
+- [x] صفحهٔ جدید `/admin/contact` — inbox با mark-read خودکار + یادداشت پیگیری + resolve/بازگشایی
+- [x] صفحهٔ جدید `/admin/operators` — مدیریت ادمین‌ها (افزودن/نام/تعلیق/حذف + نشان «شما»)
+- [x] Settings: لینک به Operators + نمایش نشست فعال
+- [x] i18n (fa+en) + افزودن به nav
 
 ### پذیرش
-- [ ] ساخت پلن جدید → نمایش در `/plans` عمومی
-- [ ] inbox contact کار کند
-- [ ] ادمین دوم بدون bootstrap token
-- [ ] گزارش: `reports/phases/phase-02-admin-revenue.md`
-- [ ] **تأیید شما برای فاز ۳**
+- [x] ساخت پلن جدید → نمایش در صفحهٔ عمومی قیمت‌گذاری (`/pricing`)
+- [x] inbox contact کار می‌کند (تأیید زنده + تست خودکار)
+- [x] ادمین دوم بدون bootstrap token (از UI ساخته و وارد شد)
+- [x] گزارش: `reports/phases/phase-02-admin-revenue.md`
+- [x] **تأیید شما برای فاز ۳** ✅ (پس از بازبینی مجدد ۲۲مرحله‌ای + اصلاح همگام‌سازی نشان پیام)
 
 ---
 
-## فاز ۳ — ادمین: Observability و امنیت ⬜
+## فاز ۳ — ادمین: Observability و امنیت ✅
 
-- [ ] `GET /admin/audit` — فیلتر actor/action/tenant/date + cursor
-- [ ] `GET /admin/usage` — فیلتر tenant/route/rung + export CSV
-- [ ] `GET /admin/queue` — worker heartbeat + active tasks (Celery inspect)
-- [ ] `GET /admin/security` — unlock دستی حساب‌های قفل
-- [ ] degraded flags در analytics/insight/analyst به‌جای 500
-- [ ] UI: Analytics badge «Template» + empty state برای ES down · Usage/Audit فیلتر+export · Security unlock · Queue worker list · Models reachability ping · Health sparkline
-- [ ] `scripts/start-worker.ps1` + به‌روزرسانی مستندات نصب فارسی
-- [ ] پذیرش: ES خاموش → degraded نه crash · audit فیلتر tenant · worker در صفحهٔ queue
-- [ ] گزارش: `reports/phases/phase-03-admin-observability.md` + **تأیید شما**
-
----
-
-## فاز ۴ — ادمین: ES Console, Agent, Widget و QA ⬜
-
-- [ ] ES wizard راه‌اندازی اولیه (ensure-index → reindex → alias) + log عملیات
-- [ ] Agent: history مکالمه + دکمهٔ clear
-- [ ] Synonyms: placeholderهای hardcoded → i18n
-- [ ] Widget: preview واقعی `/widget/v1.js` در iframe sandbox
-- [ ] Flags: توضیح تأثیر + last changed by
-- [ ] fe-qa: افزودن ۶ route ادمین به responsive + گسترش functional + a11y ادمین
-- [ ] پذیرش: `check:all` سبز + responsive همهٔ routeهای ادمین
-- [ ] گزارش: `reports/phases/phase-04-admin-qa.md` + **تأیید شما**
+- [x] `GET /admin/audit` — فیلتر actor/action/tenant/date + cursor (+ خروجی CSV)
+- [x] `GET /admin/usage` — فیلتر tenant/route/rung (+ بازهٔ روز) + export CSV
+- [x] `GET /admin/queue` — worker heartbeat + active tasks (Celery inspect؛ عمق صف از Redisِ خود broker)
+- [x] `GET /admin/security` — قفل‌های هر دو صفحهٔ هویتی + `POST /admin/security/unlock`
+- [x] degraded flags در analytics/insight/zero-results/analyst به‌جای 500
+- [x] UI: بنر degraded تحلیل + نشان Template/LLM تحلیلگر · Usage/Audit فیلتر+export · Security unlock · Queue worker list · Models reachability ping · Health sparkline + تأخیر وابستگی‌ها
+- [x] `scripts/start-worker.ps1` + مستندات نصب فارسی (`docs/INSTALL-fa.md`)
+- [x] پذیرش: ES خاموش → degraded نه crash · audit فیلتر tenant · worker واقعی در صفحهٔ queue
+- [x] گزارش: `reports/phases/phase-03-admin-observability.md`
+- [x] **تأیید شما برای فاز ۴** ✅ (پس از بازبینی مجدد ۱۹مرحله‌ای بدون هیچ نقص)
 
 ---
 
-## فاز ۵ — داشبورد فروشگاه‌دار ⬜
+## فاز ۴ — ادمین: ES Console, Agent, Widget و QA ✅
 
-- [ ] Overview: KPI + هشدار اعتبار + چک‌لیست onboarding
-- [ ] Catalog: وضعیت sync (last sync + doc count از ES) + دکمهٔ «sync now»
-- [ ] Search: تست جست‌وجوی زنده + لینک zero-results
-- [ ] Chat/Assistant: وضعیت inference + empty state راهنما
-- [ ] Analytics/Sales: degraded states
-- [ ] Leads: فیلتر status + bulk actions
-- [ ] Billing: پیش‌نمایش upgrade + دانلود فاکتور (HTML)
-- [ ] Widget: embed واقعی + تست در صفحه
-- [ ] Knowledge: جست‌وجو در مقالات
-- [ ] Team: pending invites + resend
-- [ ] Settings: wizard اتصال OpenCart/Woo
-- [ ] Backend: `GET /tenant/sync-status` + `POST /tenant/sync/trigger`
-- [ ] پذیرش: signup → onboarding → widget embed روی localhost + degraded states
-- [ ] گزارش: `reports/phases/phase-05-owner-dashboard.md` + **تأیید شما**
+- [x] ES wizard راه‌اندازی اولیه (ensure-index → reindex اختیاری → alias) + log عملیات (همهٔ اکشن‌های کنسول هم ثبت می‌شوند)
+- [x] Agent: history مکالمه (به‌ازای هر فروشگاه، ماندگار در مرورگر) + دکمهٔ clear
+- [x] Synonyms: placeholderهای hardcoded → i18n (fa+en)
+- [x] Widget: preview واقعی `/widget/v1.js` در iframe sandbox (+ refresh بعد از ذخیره)
+- [x] Flags: توضیح تأثیر (i18n) + last changed by (migration `0014`)
+- [x] fe-qa: ۷ route ادمین به responsive (پوشش کامل ۲۰ مسیر) + ۴ چک functional جدید + a11y ادمین (۸ صفحه با ورود واقعی؛ نقص select بدون نام در همهٔ صفحات رفع شد)
+- [x] پذیرش: `check:all` سبز + responsive همهٔ routeهای ادمین + a11y صفر نقض
+- [x] گزارش: `reports/phases/phase-04-admin-qa.md`
+- [x] **تأیید شما برای فاز ۵** ✅
+
+---
+
+## فاز ۵ — داشبورد فروشگاه‌دار ✅
+
+- [x] Overview: KPI + هشدار اعتبار کم + چک‌لیست onboarding زنده (۴ گام از وضعیت واقعی)
+- [x] Catalog: وضعیت sync (last sync + doc count از ES با تفکیک «خالی/خاموش») + دکمهٔ «sync now»
+- [x] Search: تست جست‌وجوی زنده (`POST /tenant/search-test`) + دکمهٔ «امتحان» روی عبارت‌های بدون‌نتیجه
+- [x] Chat/Assistant: وضعیت inference برای مالک (`GET /tenant/assistant-status`) + empty state راهنما
+- [x] Analytics/Sales/Chat: degraded states (بنر + پرچم backend)
+- [x] Leads: فیلتر status (چیپ با شمارش) + bulk actions (انتخاب گروهی + اعمال وضعیت)
+- [x] Billing: پنل پیش‌نمایش upgrade (تناسب‌سنجی) + دانلود فاکتور HTML قابل چاپ
+- [x] Widget: embed واقعی + تست زنده در صفحه (loader واقعی در iframe + کلید اختیاری)
+- [x] Knowledge: جست‌وجو در مقالات
+- [x] Team: pending invites (نشان + شمارنده) + resend (`POST /tenant/team/resend`)
+- [x] Settings: wizard اتصال OpenCart/Woo (۳ گام با تیک از وضعیت واقعی)
+- [x] Backend: `GET /tenant/sync-status` + `POST /tenant/sync/trigger` (+ ثبت اجرای worker در sync_state)
+- [x] پذیرش: signup → onboarding ۴از۴ → widget embed روی localhost + degraded states (۲۴ چک زنده)
+- [x] گزارش: `reports/phases/phase-05-owner-dashboard.md`
+- [ ] **تأیید شما برای فاز ۶** ⏸️
 
 ---
 
