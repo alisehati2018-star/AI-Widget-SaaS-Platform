@@ -8,7 +8,19 @@ import type { Locale } from "@/i18n/routing";
 import { DashboardShell, useAdminNav } from "@/components/shell";
 import { Badge, Spinner, Stat } from "@/components/ui";
 
-interface Queue { broker: string; reachable: boolean; pending: number | null }
+interface Worker {
+  name: string;
+  status: string;
+  active_tasks: { name: string | null; id: string | null }[];
+  active_count: number;
+  registered: string[];
+}
+interface Queue {
+  broker: string;
+  reachable: boolean;
+  pending: number | null;
+  workers: Worker[];
+}
 
 export default function AdminQueue() {
   const t = useTranslations("admin");
@@ -29,11 +41,52 @@ export default function AdminQueue() {
       <div className="stat-grid" style={{ marginBottom: "1.5rem" }}>
         <Stat label={t("queue.broker")} value={data ? <Badge tone={data.reachable ? "success" : "warning"}>{data.reachable ? t("queue.reachable") : t("queue.down")}</Badge> : <Spinner />} />
         <Stat label={t("queue.pendingTasks")} value={data?.pending != null ? formatNumber(data.pending, locale) : "—"} />
+        <Stat label={t("queue.workersOnline")} value={data ? formatNumber(data.workers.length, locale) : "—"} />
       </div>
-      <div className="card">
-        <h3>{t("queue.brokerTitle")}</h3>
-        <p className="muted" style={{ marginBottom: 0, wordBreak: "break-all" }}>{data?.broker ?? "—"}</p>
-        <p className="hint">{t("queue.hint")}</p>
+
+      <div className="dash-2col">
+        <div className="card">
+          <h3>{t("queue.workersTitle")}</h3>
+          {!data ? <Spinner /> : data.workers.length === 0 ? (
+            <p className="muted">{t("queue.noWorkers")}</p>
+          ) : (
+            <table className="table">
+              <thead><tr>
+                <th>{t("queue.colWorker")}</th><th>{t("queue.colStatus")}</th>
+                <th>{t("queue.colActive")}</th><th>{t("queue.colTasks")}</th>
+              </tr></thead>
+              <tbody>
+                {data.workers.map((w) => (
+                  <tr key={w.name}>
+                    <td dir="ltr">{w.name}</td>
+                    <td><Badge tone="success">{t("queue.online")}</Badge></td>
+                    <td>{formatNumber(w.active_count, locale)}</td>
+                    <td className="muted" style={{ fontSize: "0.8rem" }} dir="ltr">
+                      {w.active_tasks.length
+                        ? w.active_tasks.map((task) => task.name).filter(Boolean).join("، ")
+                        : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          <p className="hint" style={{ marginTop: "1rem" }}>{t("queue.workersHint")}</p>
+        </div>
+
+        <div className="card">
+          <h3>{t("queue.brokerTitle")}</h3>
+          <p className="muted" style={{ wordBreak: "break-all" }} dir="ltr">{data?.broker ?? "—"}</p>
+          <p className="hint">{t("queue.hint")}</p>
+          {data?.workers.length ? (
+            <>
+              <h4 style={{ marginTop: "1rem" }}>{t("queue.registeredTitle")}</h4>
+              <ul className="feature-list" dir="ltr">
+                {data.workers[0].registered.map((name) => <li key={name}>{name}</li>)}
+              </ul>
+            </>
+          ) : null}
+        </div>
       </div>
     </DashboardShell>
   );

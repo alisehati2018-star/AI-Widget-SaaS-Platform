@@ -1,13 +1,21 @@
 "use client";
 
 import { useLocale, useTranslations } from "next-intl";
+import { useState } from "react";
+import { ApiError } from "@/lib/api";
+import { adminFetch as authFetch } from "@/lib/auth";
 import { formatDateTime, formatNumber } from "@/lib/datetime";
 import { useAdminResource as useResource } from "@/lib/hooks/useResource";
 import type { Locale } from "@/i18n/routing";
 import { DashboardShell, useAdminNav } from "@/components/shell";
-import { Badge, Spinner, Stat } from "@/components/ui";
+import { Alert, Badge, Spinner, Stat } from "@/components/ui";
 
-interface Locked { email: string; failed_logins: number; locked_until: string | null }
+interface Locked {
+  email: string;
+  plane: "customer" | "admin";
+  failed_logins: number;
+  locked_until: string | null;
+}
 interface AuthEvent { actor: string; action: string; created_at: string | null }
 interface SecResp {
   locked_accounts: Locked[];
@@ -19,13 +27,35 @@ export default function AdminSecurity() {
   const t = useTranslations("admin");
   const locale = useLocale() as Locale;
   const nav = useAdminNav();
-  const { data } = useResource<SecResp>("/admin/security");
+  const { data, reload } = useResource<SecResp>("/admin/security");
+  const [note, setNote] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
 
   const num = (n: number | undefined) => (n != null ? formatNumber(n, locale) : "—");
+
+  async function unlock(account: Locked) {
+    setNote(null);
+    setError(null);
+    setBusy(account.email);
+    try {
+      await authFetch("/admin/security/unlock", {
+        body: { email: account.email, plane: account.plane },
+      });
+      setNote(t("security.unlocked", { email: account.email }));
+      reload();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : t("security.unlockFailed"));
+    } finally {
+      setBusy(null);
+    }
+  }
 
   return (
     <DashboardShell title={t("security.title")} nav={nav} requireAdmin loginHref="/admin/login">
       <p style={{ marginTop: "-1rem" }}>{t("security.intro")}</p>
+      {note ? <Alert kind="success">{note}</Alert> : null}
+      {error ? <Alert kind="error">{error}</Alert> : null}
       <div className="stat-grid" style={{ marginBottom: "2rem" }}>
         <Stat label={t("security.lockedAccounts")} value={num(data?.locked_accounts.length)} />
         <Stat label={t("security.accountsWithFailures")} value={num(data?.accounts_with_failures)} />
@@ -38,18 +68,32 @@ export default function AdminSecurity() {
           <p className="muted">{t("security.noLocked")}</p>
         ) : (
           <table className="table">
-            <thead><tr><th>{t("security.colEmail")}</th><th>{t("security.colFailed")}</th><th>{t("security.colLockedUntil")}</th></tr></thead>
+            <thead><tr>
+              <th>{t("security.colEmail")}</th><th>{t("security.colPlane")}</th>
+              <th>{t("security.colFailed")}</th><th>{t("security.colLockedUntil")}</th><th></th>
+            </tr></thead>
             <tbody>
               {data.locked_accounts.map((l) => (
-                <tr key={l.email}>
-                  <td>{l.email}</td>
+                <tr key={`${l.plane}:${l.email}`}>
+                  <td dir="ltr">{l.email}</td>
+                  <td>
+                    <Badge tone={l.plane === "admin" ? "brand" : undefined}>
+                      {l.plane === "admin" ? t("security.planeAdmin") : t("security.planeCustomer")}
+                    </Badge>
+                  </td>
                   <td><Badge tone="warning">{formatNumber(l.failed_logins, locale)}</Badge></td>
                   <td className="muted">{formatDateTime(l.locked_until, locale)}</td>
+                  <td>
+                    <button className="btn btn-soft" disabled={busy !== null} onClick={() => void unlock(l)}>
+                      {busy === l.email ? <Spinner /> : t("security.unlock")}
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
+        <p className="hint" style={{ marginTop: "1rem" }}>{t("security.unlockHint")}</p>
       </div>
 
       <div className="card">

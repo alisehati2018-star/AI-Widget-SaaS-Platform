@@ -46,6 +46,16 @@ export function formatDateTime(value: DateInput, locale: Locale): string {
   }).format(d);
 }
 
+/** Time only (HH:MM), for intra-day series like the health sparkline. */
+export function formatTime(value: DateInput, locale: Locale): string {
+  const d = toDate(value);
+  if (!d) return "—";
+  return new Intl.DateTimeFormat(calendarFor(locale), {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(d);
+}
+
 /** Locale-aware integer/decimal formatting (Persian digits for fa). */
 export function formatNumber(
   value: number,

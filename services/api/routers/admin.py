@@ -675,29 +675,107 @@ async def list_users(
 
 @router.get("/audit")
 async def audit_log(
+    actor: str | None = None,
+    action: str | None = None,
+    tenant: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    cursor: int | None = None,
+    limit: int = 50,
+    fmt: str | None = None,
     x_admin_token: str | None = _ADMIN,
     authorization: str | None = _AUTHZ,
     vitrin_access: str | None = _COOKIE,
 ):
-    """Recent audit-log entries (Phase 6)."""
+    """Audit-log browser: actor/action-prefix/tenant/date filters + keyset
+    cursor (pass the previous page's `next_cursor` to continue).
+    `fmt=csv` streams the filtered entries as a CSV download."""
     if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
+    limit = max(1, min(int(limit), 200))
+    where: list[str] = []
+    params: list[Any] = []
+    if actor:
+        params.append(f"%{actor.strip()}%")
+        where.append(f"a.actor ILIKE ${len(params)}")
+    if action:
+        params.append(f"{action.strip()}%")
+        where.append(f"a.action LIKE ${len(params)}")
+    if tenant:
+        params.append(f"%{tenant.strip()}%")
+        where.append(
+            f"a.tenant_id IN (SELECT id FROM tenants "
+            f"WHERE slug ILIKE ${len(params)} OR name ILIKE ${len(params)})"
+        )
+    for field, op, value in (("date_from", ">=", date_from), ("date_to", "<", date_to)):
+        if value:
+            try:
+                from datetime import date, timedelta
+
+                day = date.fromisoformat(value)
+            except ValueError:
+                return error_response(422, "invalid_request", f"Invalid '{field}' (YYYY-MM-DD).")
+            if field == "date_to":
+                day = day + timedelta(days=1)  # inclusive end date
+            params.append(day)
+            where.append(f"a.created_at {op} ${len(params)}::date")
+    if cursor is not None:
+        params.append(int(cursor))
+        where.append(f"a.id < ${len(params)}")
+    clause = ("WHERE " + " AND ".join(where)) if where else ""
     pool = await get_pg_pool()
+
+    if fmt == "csv":
+        import csv
+        import io
+        import json
+
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                f"SELECT a.id, a.actor, a.action, a.detail, a.created_at, "
+                f"t.slug AS tenant_slug "
+                f"FROM audit_log a LEFT JOIN tenants t ON t.id = a.tenant_id {clause} "
+                f"ORDER BY a.id DESC LIMIT 10000",
+                *params,
+            )
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(["id", "created_at", "actor", "action", "tenant", "detail"])
+        for r in rows:
+            writer.writerow([
+                int(r["id"]), _iso(r["created_at"]), r["actor"], r["action"],
+                r["tenant_slug"] or "", json.dumps(r["detail"], ensure_ascii=False),
+            ])
+        from fastapi.responses import Response
+
+        return Response(
+            content=buf.getvalue(),
+            media_type="text/csv; charset=utf-8",
+            headers={"content-disposition": 'attachment; filename="audit-export.csv"'},
+        )
+
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            "SELECT actor, action, detail, created_at FROM audit_log "
-            "ORDER BY created_at DESC LIMIT 200"
+            f"SELECT a.id, a.actor, a.action, a.detail, a.created_at, t.slug AS tenant_slug "
+            f"FROM audit_log a LEFT JOIN tenants t ON t.id = a.tenant_id {clause} "
+            f"ORDER BY a.id DESC LIMIT ${len(params) + 1}",
+            *params, limit + 1,
         )
+    has_more = len(rows) > limit
+    rows = rows[:limit]
     return {
         "entries": [
             {
+                "id": int(r["id"]),
                 "actor": r["actor"],
                 "action": r["action"],
+                "tenant": r["tenant_slug"],
                 "detail": r["detail"],
-                "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+                "created_at": _iso(r["created_at"]),
             }
             for r in rows
-        ]
+        ],
+        "next_cursor": int(rows[-1]["id"]) if has_more and rows else None,
     }
 
 
@@ -851,6 +929,15 @@ async def admin_refund(
     return {"status": "refunded"}
 
 
+async def _es_or_default(coro, default):
+    """Run an ES-backed analytics call; on any cluster/transport failure return
+    (default, degraded=True) so the admin surface degrades instead of 500ing."""
+    try:
+        return await coro, False
+    except Exception:  # noqa: BLE001 - ES down/unreachable must not crash admin
+        return default, True
+
+
 @router.get("/analytics")
 async def analytics(
     tenant: str,
@@ -863,12 +950,16 @@ async def analytics(
     pool = await get_pg_pool()
     redis = get_redis()
     es = get_es_client()
+    most_wanted, d1 = await _es_or_default(_agg.most_wanted(es, tenant), [])
+    zero, d2 = await _es_or_default(_agg.zero_result_terms(es, tenant), [])
+    funnel, d3 = await _es_or_default(_agg.funnel(es, tenant), {})
     return {
         "tenant_id": tenant,
         "four_dimensions": await _attr.four_dimension_summary(pool, redis, tenant),
-        "most_wanted": await _agg.most_wanted(es, tenant),
-        "zero_results": await _agg.zero_result_terms(es, tenant),
-        "funnel": await _agg.funnel(es, tenant),
+        "most_wanted": most_wanted,
+        "zero_results": zero,
+        "funnel": funnel,
+        "degraded": d1 or d2 or d3,
     }
 
 
@@ -881,7 +972,10 @@ async def zero_results(
 ):
     if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
-    return {"tenant_id": tenant, "terms": await _agg.zero_result_terms(get_es_client(), tenant)}
+    terms, degraded = await _es_or_default(
+        _agg.zero_result_terms(get_es_client(), tenant), []
+    )
+    return {"tenant_id": tenant, "terms": terms, "degraded": degraded}
 
 
 @router.get("/insight")
@@ -894,7 +988,12 @@ async def insight(
     """Insight 'why' engine (M10: REQ-M10-002): demand gaps + funnel drop-off."""
     if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
-    return {"tenant_id": tenant, "insight": await _why(get_es_client(), tenant)}
+    empty: dict[str, Any] = {
+        "demand_gaps": [], "funnel": {}, "dropoffs": [],
+        "biggest_dropoff": None, "headline": "",
+    }
+    result, degraded = await _es_or_default(_why(get_es_client(), tenant), empty)
+    return {"tenant_id": tenant, "insight": result, "degraded": degraded}
 
 
 @router.post("/analyst")
@@ -913,8 +1012,11 @@ async def analyst(
         return error_response(422, "invalid_request", "Field 'question' is required.")
     from ..runtime import get_provider_chain
 
-    result = await _analyze(question, get_es_client(), tenant, providers=get_provider_chain())
-    return {"tenant_id": tenant, **result}
+    result, degraded = await _es_or_default(
+        _analyze(question, get_es_client(), tenant, providers=get_provider_chain()),
+        {"answer": "", "grounding": None, "narrated_by": "none"},
+    )
+    return {"tenant_id": tenant, **result, "degraded": degraded}
 
 
 def _syn_key(tenant: str) -> str:
@@ -1066,24 +1168,34 @@ async def security_monitoring(
     authorization: str | None = _AUTHZ,
     vitrin_access: str | None = _COOKIE,
 ):
-    """Locked accounts, failed-login counts, and recent auth events."""
+    """Locked accounts (both identity planes), failed-login counts, and
+    recent auth events."""
     if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
     pool = await get_pg_pool()
     async with pool.acquire() as conn:
         locked = await conn.fetch(
-            "SELECT email, failed_logins, locked_until FROM users "
-            "WHERE locked_until IS NOT NULL AND locked_until > now() ORDER BY locked_until DESC"
+            "SELECT email, failed_logins, locked_until, 'customer' AS plane FROM users "
+            "WHERE locked_until IS NOT NULL AND locked_until > now() "
+            "UNION ALL "
+            "SELECT email, failed_logins, locked_until, 'admin' AS plane FROM admin_users "
+            "WHERE locked_until IS NOT NULL AND locked_until > now() "
+            "ORDER BY locked_until DESC"
         )
-        at_risk = await conn.fetchval("SELECT count(*) FROM users WHERE failed_logins > 0")
+        at_risk = await conn.fetchval(
+            "SELECT (SELECT count(*) FROM users WHERE failed_logins > 0) "
+            "+ (SELECT count(*) FROM admin_users WHERE failed_logins > 0)"
+        )
         events = await conn.fetch(
             "SELECT actor, action, created_at FROM audit_log "
-            "WHERE action LIKE 'auth.%' ORDER BY created_at DESC LIMIT 50"
+            "WHERE action LIKE 'auth.%' OR action LIKE 'admin_auth.%' "
+            "ORDER BY created_at DESC LIMIT 50"
         )
     return {
         "locked_accounts": [
             {
                 "email": r["email"],
+                "plane": r["plane"],
                 "failed_logins": r["failed_logins"],
                 "locked_until": r["locked_until"].isoformat() if r["locked_until"] else None,
             }
@@ -1101,55 +1213,198 @@ async def security_monitoring(
     }
 
 
+@router.post("/security/unlock")
+async def unlock_account(
+    payload: dict[str, Any],
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    """Manually clear a lockout (failed logins + locked_until) for a customer
+    or admin account, so the user doesn't have to wait out the window."""
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    email = str(payload.get("email", "")).strip().lower()
+    plane = str(payload.get("plane", "customer"))
+    if not email:
+        return error_response(422, "invalid_request", "Field 'email' is required.")
+    if plane not in ("customer", "admin"):
+        return error_response(422, "invalid_request", "plane must be customer or admin.")
+    table = "users" if plane == "customer" else "admin_users"
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        unlocked = await conn.fetchval(
+            f"UPDATE {table} SET failed_logins = 0, locked_until = NULL "  # noqa: S608
+            f"WHERE lower(email) = $1 RETURNING id",
+            email,
+        )
+    if unlocked is None:
+        return error_response(404, "not_found", "No such account.")
+    await audit(pool, actor="operator", action="security.unlock",
+                detail={"email": email, "plane": plane})
+    return {"email": email, "plane": plane, "status": "unlocked"}
+
+
 @router.get("/health")
 async def system_health(
     x_admin_token: str | None = _ADMIN,
     authorization: str | None = _AUTHZ,
     vitrin_access: str | None = _COOKIE,
 ):
-    """Live dependency status for the ops dashboard (PG / Redis / Elasticsearch)."""
+    """Live dependency status (PG / Redis / Elasticsearch) with per-probe
+    latency, plus a rolling history (kept in Redis) for the health sparkline."""
     if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
+    import json
+    import time
+
     deps: dict[str, str] = {}
+    latency: dict[str, int | None] = {}
+
+    t0 = time.monotonic()
     try:
         pool = await get_pg_pool()
         async with pool.acquire() as conn:
             await conn.fetchval("SELECT 1")
         deps["postgres"] = "ok"
+        latency["postgres"] = int((time.monotonic() - t0) * 1000)
     except Exception:  # noqa: BLE001
         deps["postgres"] = "unavailable"
+        latency["postgres"] = None
     redis = get_redis()
+    t0 = time.monotonic()
     try:
         deps["redis"] = "ok" if (redis is not None and await redis.ping()) else "unavailable"
+        latency["redis"] = (
+            int((time.monotonic() - t0) * 1000) if deps["redis"] == "ok" else None
+        )
     except Exception:  # noqa: BLE001
         deps["redis"] = "unavailable"
+        latency["redis"] = None
+    t0 = time.monotonic()
     try:
         deps["elasticsearch"] = "ok" if await get_es_client().ping() else "unavailable"
+        latency["elasticsearch"] = (
+            int((time.monotonic() - t0) * 1000) if deps["elasticsearch"] == "ok" else None
+        )
     except Exception:  # noqa: BLE001
         deps["elasticsearch"] = "unavailable"
+        latency["elasticsearch"] = None
+
     overall = "ok" if all(v == "ok" for v in deps.values()) else "degraded"
-    return {"status": overall, "dependencies": deps}
+
+    # Rolling sample history for the sparkline (best-effort; capped at 96).
+    history: list[dict[str, Any]] = []
+    if redis is not None and deps["redis"] == "ok":
+        try:
+            sample = {
+                "ts": int(time.time()),
+                "ok": sum(1 for v in deps.values() if v == "ok"),
+                "total": len(deps),
+                "pg_ms": latency["postgres"],
+            }
+            key = "admin:health:history"
+            await redis.lpush(key, json.dumps(sample))
+            await redis.ltrim(key, 0, 95)
+            raw = await redis.lrange(key, 0, 95)
+            history = [json.loads(x) for x in reversed(raw)]
+        except Exception:  # noqa: BLE001
+            history = []
+    return {"status": overall, "dependencies": deps, "latency_ms": latency, "history": history}
+
+
+def _usage_filters(
+    tenant: str | None, route: str | None, rung: str | None, days: int
+) -> tuple[str, list[Any]]:
+    """WHERE clause + params shared by the usage summary, event list and CSV
+    export, so all three views always describe the same slice."""
+    where: list[str] = []
+    params: list[Any] = []
+    if tenant:
+        params.append(f"%{tenant.strip()}%")
+        where.append(
+            f"u.tenant_id IN (SELECT id FROM tenants "
+            f"WHERE slug ILIKE ${len(params)} OR name ILIKE ${len(params)})"
+        )
+    if route:
+        params.append(f"%{route.strip()}%")
+        where.append(f"u.route ILIKE ${len(params)}")
+    if rung:
+        params.append(rung.strip())
+        where.append(f"COALESCE(u.rung, 'unknown') = ${len(params)}")
+    if days:
+        params.append(days)
+        where.append(f"u.occurred_at >= now() - make_interval(days => ${len(params)})")
+    return ("WHERE " + " AND ".join(where)) if where else "", params
+
+
+_USAGE_SELECT = (
+    "SELECT u.occurred_at, t.slug AS tenant_slug, u.route, "
+    "COALESCE(u.rung, 'unknown') AS rung, u.tokens_in, u.tokens_out, "
+    "u.cache_outcome, u.latency_ms, u.cost "
+    "FROM usage_events u JOIN tenants t ON t.id = u.tenant_id"
+)
 
 
 @router.get("/usage")
 async def usage_monitoring(
+    tenant: str | None = None,
+    route: str | None = None,
+    rung: str | None = None,
+    days: int = 30,
+    fmt: str | None = None,
     x_admin_token: str | None = _ADMIN,
     authorization: str | None = _AUTHZ,
     vitrin_access: str | None = _COOKIE,
 ):
-    """Platform-wide usage + credit consumption (from usage_events / credit_ledger)."""
+    """Platform-wide usage + credit consumption with tenant/route/rung/date
+    filters. `fmt=csv` streams the filtered events as a CSV download."""
     if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
+    days = max(1, min(int(days), 366))
+    clause, params = _usage_filters(tenant, route, rung, days)
     pool = await get_pg_pool()
+
+    if fmt == "csv":
+        import csv
+        import io
+
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                f"{_USAGE_SELECT} {clause} ORDER BY u.occurred_at DESC LIMIT 10000", *params
+            )
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow([
+            "occurred_at", "tenant", "route", "rung",
+            "tokens_in", "tokens_out", "cache_outcome", "latency_ms", "cost",
+        ])
+        for r in rows:
+            writer.writerow([
+                _iso(r["occurred_at"]), r["tenant_slug"], r["route"], r["rung"],
+                r["tokens_in"], r["tokens_out"], r["cache_outcome"],
+                r["latency_ms"], float(r["cost"]),
+            ])
+        from fastapi.responses import Response
+
+        return Response(
+            content=buf.getvalue(),
+            media_type="text/csv; charset=utf-8",
+            headers={"content-disposition": 'attachment; filename="usage-export.csv"'},
+        )
+
     async with pool.acquire() as conn:
         totals = await conn.fetchrow(
-            "SELECT count(*) AS calls, COALESCE(sum(tokens_in), 0) AS tin, "
-            "COALESCE(sum(tokens_out), 0) AS tout, COALESCE(sum(cost), 0) AS cost "
-            "FROM usage_events"
-        )
+            f"SELECT count(*) AS calls, COALESCE(sum(u.tokens_in), 0) AS tin, "
+            f"COALESCE(sum(u.tokens_out), 0) AS tout, COALESCE(sum(u.cost), 0) AS cost "
+            f"FROM usage_events u {clause}"
+        , *params)
         by_rung = await conn.fetch(
-            "SELECT COALESCE(rung, 'unknown') AS rung, count(*) AS n FROM usage_events "
-            "GROUP BY rung ORDER BY n DESC"
+            f"SELECT COALESCE(u.rung, 'unknown') AS rung, count(*) AS n "
+            f"FROM usage_events u {clause} GROUP BY 1 ORDER BY n DESC", *params
+        )
+        recent = await conn.fetch(
+            f"{_USAGE_SELECT} {clause} ORDER BY u.occurred_at DESC LIMIT 50", *params
         )
         spent = await conn.fetchval(
             "SELECT COALESCE(-sum(delta), 0) FROM credit_ledger WHERE delta < 0"
@@ -1161,7 +1416,48 @@ async def usage_monitoring(
         "cost": float(totals["cost"]),
         "credits_spent": float(spent or 0),
         "by_rung": [{"rung": r["rung"], "count": int(r["n"])} for r in by_rung],
+        "events": [
+            {
+                "occurred_at": _iso(r["occurred_at"]),
+                "tenant": r["tenant_slug"],
+                "route": r["route"],
+                "rung": r["rung"],
+                "tokens_in": r["tokens_in"],
+                "tokens_out": r["tokens_out"],
+                "cache_outcome": r["cache_outcome"],
+                "latency_ms": r["latency_ms"],
+                "cost": float(r["cost"]),
+            }
+            for r in recent
+        ],
+        "days": days,
     }
+
+
+def _inspect_workers() -> list[dict[str, Any]]:
+    """Blocking Celery inspect (run in a thread): live workers, their active
+    task counts and registered task names. Empty list = no worker replied.
+    Each inspect call waits its full timeout (it cannot know how many workers
+    exist), so keep it short — three calls run back to back."""
+    from worker.celery_app import celery_app
+
+    insp = celery_app.control.inspect(timeout=1.0)
+    ping = insp.ping() or {}
+    active = insp.active() or {}
+    registered = insp.registered() or {}
+    workers: list[dict[str, Any]] = []
+    for name in sorted(ping):
+        tasks = active.get(name) or []
+        workers.append({
+            "name": name,
+            "status": "online",
+            "active_tasks": [
+                {"name": t.get("name"), "id": t.get("id")} for t in tasks[:10]
+            ],
+            "active_count": len(tasks),
+            "registered": sorted(registered.get(name) or [])[:20],
+        })
+    return workers
 
 
 @router.get("/queue")
@@ -1170,20 +1466,41 @@ async def queue_monitoring(
     authorization: str | None = _AUTHZ,
     vitrin_access: str | None = _COOKIE,
 ):
-    """Celery broker reachability + pending task depth (best-effort)."""
+    """Celery broker reachability, pending depth, and live worker heartbeat
+    (workers answering a control ping, with their active tasks)."""
     if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
+    import asyncio
+
     s = get_settings()
-    redis = get_redis()
+    # The queue lives in the BROKER's Redis database (often a different db
+    # index than the app cache), so probe that URL, not get_redis().
+    import redis.asyncio as aioredis
+
     depth: int | None = None
     reachable = False
     try:
-        if redis is not None and await redis.ping():
-            reachable = True
-            depth = int(await redis.llen("celery"))
+        broker = aioredis.from_url(s.celery_broker_url)
+        try:
+            if await broker.ping():
+                reachable = True
+                depth = int(await broker.llen("celery"))
+        finally:
+            await broker.aclose()
     except Exception:  # noqa: BLE001
         reachable = False
-    return {"broker": s.celery_broker_url, "reachable": reachable, "pending": depth}
+    workers: list[dict[str, Any]] = []
+    if reachable:
+        try:
+            workers = await asyncio.wait_for(asyncio.to_thread(_inspect_workers), timeout=10)
+        except Exception:  # noqa: BLE001 - inspect is best-effort
+            workers = []
+    return {
+        "broker": s.celery_broker_url,
+        "reachable": reachable,
+        "pending": depth,
+        "workers": workers,
+    }
 
 
 @router.get("/models")
@@ -1212,6 +1529,47 @@ async def model_monitoring(
         "rerank_enabled": s.rerank_enabled,
         "by_rung": [{"rung": r["rung"], "count": int(r["n"])} for r in by_rung],
     }
+
+
+@router.post("/models/ping")
+async def model_ping(
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    """Probe the configured inference services (embeddings / reranker / LLM)
+    and report reachability + latency, so the operator can see at a glance
+    which local models are actually up."""
+    if not await _admin_ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    import time
+
+    import httpx
+
+    s = get_settings()
+    targets = {
+        "embeddings": s.embeddings_url,
+        "reranker": s.reranker_url,
+        "llm": s.llm_url,
+    }
+    results: dict[str, dict[str, Any]] = {}
+    async with httpx.AsyncClient(timeout=3, follow_redirects=True) as client:
+        for name, url in targets.items():
+            if not url:
+                results[name] = {"configured": False, "reachable": False, "latency_ms": None}
+                continue
+            t0 = time.monotonic()
+            try:
+                # Any HTTP answer (even 404) proves the service is listening.
+                await client.get(url)
+                results[name] = {
+                    "configured": True,
+                    "reachable": True,
+                    "latency_ms": int((time.monotonic() - t0) * 1000),
+                }
+            except Exception:  # noqa: BLE001
+                results[name] = {"configured": True, "reachable": False, "latency_ms": None}
+    return {"services": results}
 
 
 @router.get("/feature-flags")

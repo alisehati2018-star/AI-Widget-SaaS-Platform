@@ -1,16 +1,26 @@
 "use client";
 
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { adminFetch as authFetch } from "@/lib/auth";
+import { formatNumber, formatTime } from "@/lib/datetime";
 import { Link } from "@/i18n/navigation";
+import type { Locale } from "@/i18n/routing";
 import { DashboardShell, useAdminNav } from "@/components/shell";
+import { TrendChart } from "@/components/trend-chart";
 import { Badge, Spinner } from "@/components/ui";
 
-interface Health { status: string; dependencies: Record<string, string> }
+interface Sample { ts: number; ok: number; total: number; pg_ms: number | null }
+interface Health {
+  status: string;
+  dependencies: Record<string, string>;
+  latency_ms: Record<string, number | null>;
+  history: Sample[];
+}
 
 export default function AdminHealth() {
   const t = useTranslations("admin");
+  const locale = useLocale() as Locale;
   const nav = useAdminNav();
   const [data, setData] = useState<Health | null>(null);
 
@@ -20,6 +30,10 @@ export default function AdminHealth() {
     const id = setInterval(load, 10000);
     return () => clearInterval(id);
   }, []);
+
+  const spark = (data?.history ?? [])
+    .filter((s) => s.pg_ms != null)
+    .map((s) => ({ date: new Date(s.ts * 1000).toISOString(), value: s.pg_ms as number }));
 
   return (
     <DashboardShell title={t("health.title")} nav={nav} requireAdmin loginHref="/admin/login">
@@ -39,6 +53,11 @@ export default function AdminHealth() {
                   <tr key={k}>
                     <td style={{ textTransform: "capitalize" }}>{k}</td>
                     <td><Badge tone={v === "ok" ? "success" : "warning"}>{v}</Badge></td>
+                    <td className="muted">
+                      {data.latency_ms?.[k] != null
+                        ? `${formatNumber(data.latency_ms[k] as number, locale)} ${t("common.ms")}`
+                        : "—"}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -55,6 +74,22 @@ export default function AdminHealth() {
             <Link className="btn btn-soft btn-block" href="/admin/security">{t("health.linkSecurity")}</Link>
           </div>
         </div>
+      </div>
+
+      <div className="card" style={{ marginTop: "1.5rem" }}>
+        <h3>{t("health.sparklineTitle")}</h3>
+        {spark.length >= 2 ? (
+          <TrendChart
+            data={spark}
+            label={t("health.sparklineLabel")}
+            formatValue={(v) => `${formatNumber(Math.round(v), locale)} ${t("common.ms")}`}
+            formatDate={(iso) => formatTime(iso, locale)}
+            height={80}
+          />
+        ) : (
+          <p className="muted">{t("health.sparklineEmpty")}</p>
+        )}
+        <p className="hint">{t("health.sparklineHint")}</p>
       </div>
     </DashboardShell>
   );

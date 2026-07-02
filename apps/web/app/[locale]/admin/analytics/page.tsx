@@ -7,7 +7,7 @@ import { adminFetch as authFetch } from "@/lib/auth";
 import { formatNumber } from "@/lib/datetime";
 import type { Locale } from "@/i18n/routing";
 import { DashboardShell, useAdminNav } from "@/components/shell";
-import { Alert, Spinner, Stat } from "@/components/ui";
+import { Alert, Badge, Spinner, Stat } from "@/components/ui";
 
 interface TenantRow { id: string; name: string }
 interface DropOff { from: string; to: string; drop_rate: number; from_count: number }
@@ -20,7 +20,8 @@ interface Insight {
 }
 interface AnalystResult {
   answer: string;
-  narrated_by: "template" | "llm";
+  narrated_by: "template" | "llm" | "none";
+  degraded?: boolean;
 }
 
 export default function AdminAnalytics() {
@@ -31,6 +32,7 @@ export default function AdminAnalytics() {
   const [selected, setSelected] = useState("");
   const [data, setData] = useState<AnalyticsBundle | null>(null);
   const [insight, setInsight] = useState<Insight | null>(null);
+  const [degraded, setDegraded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [question, setQuestion] = useState("");
   const [analyst, setAnalyst] = useState<AnalystResult | null>(null);
@@ -51,10 +53,14 @@ export default function AdminAnalytics() {
     setLoading(true);
     setAnalyst(null);
     Promise.all([
-      authFetch<AnalyticsBundle>(`/admin/analytics?tenant=${encodeURIComponent(selected)}`),
-      authFetch<{ insight: Insight }>(`/admin/insight?tenant=${encodeURIComponent(selected)}`),
+      authFetch<AnalyticsBundle & { degraded?: boolean }>(`/admin/analytics?tenant=${encodeURIComponent(selected)}`),
+      authFetch<{ insight: Insight; degraded?: boolean }>(`/admin/insight?tenant=${encodeURIComponent(selected)}`),
     ])
-      .then(([a, i]) => { setData(a); setInsight(i.insight); })
+      .then(([a, i]) => {
+        setData(a);
+        setInsight(i.insight);
+        setDegraded(Boolean(a.degraded || i.degraded));
+      })
       .catch(() => { setData(null); setInsight(null); })
       .finally(() => setLoading(false));
   }, [selected]);
@@ -93,6 +99,11 @@ export default function AdminAnalytics() {
         <Spinner />
       ) : (
         <>
+          {degraded ? (
+            <div className="alert alert-warning" role="status" style={{ marginBottom: "1.5rem" }}>
+              {t("analytics.degradedBanner")}
+            </div>
+          ) : null}
           <div className="stat-grid" style={{ marginBottom: "1.5rem" }}>
             <Stat label={t("common.latencyP95")} value={fd?.latency?.p95_ms != null ? `${formatNumber(fd.latency.p95_ms, locale)} ${t("common.ms")}` : "—"} />
             <Stat label={t("common.noPaidShare")} value={fd?.cost?.no_paid_share != null ? pct(fd.cost.no_paid_share) : "—"} />
@@ -170,10 +181,16 @@ export default function AdminAnalytics() {
             </div>
             {analyst ? (
               <div style={{ marginTop: "1rem" }}>
-                <p style={{ whiteSpace: "pre-wrap" }}>{analyst.answer}</p>
-                <p className="hint">
-                  {analyst.narrated_by === "llm" ? t("analytics.analystNarratedLlm") : t("analytics.analystNarratedTemplate")}
-                </p>
+                {analyst.degraded ? (
+                  <p className="muted">{t("analytics.analystDegraded")}</p>
+                ) : (
+                  <>
+                    <p style={{ whiteSpace: "pre-wrap" }}>{analyst.answer}</p>
+                    <Badge tone={analyst.narrated_by === "llm" ? "brand" : undefined}>
+                      {analyst.narrated_by === "llm" ? t("analytics.analystNarratedLlm") : t("analytics.analystNarratedTemplate")}
+                    </Badge>
+                  </>
+                )}
               </div>
             ) : !analystError ? <p className="muted" style={{ marginTop: "1rem" }}>{t("analytics.analystEmpty")}</p> : null}
           </div>

@@ -8,9 +8,9 @@
 | فاز | عنوان | وضعیت |
 |-----|-------|--------|
 | ۱ | Admin Tenant Management | ✅ تأییدشده ([گزارش](../reports/phases/phase-01-admin-tenant.md)) |
-| ۲ | Admin Revenue, Plans, Users, Inbox | ✅ **تحویل‌شده — منتظر تأیید شما** ([گزارش](../reports/phases/phase-02-admin-revenue.md)) |
-| ۳ | Admin Observability و امنیت | ⬜ منتظر تأیید فاز ۲ |
-| ۴ | Admin ES Console, Agent, Widget, QA | ⬜ |
+| ۲ | Admin Revenue, Plans, Users, Inbox | ✅ تأییدشده ([گزارش](../reports/phases/phase-02-admin-revenue.md)) |
+| ۳ | Admin Observability و امنیت | ✅ **تحویل‌شده — منتظر تأیید شما** ([گزارش](../reports/phases/phase-03-admin-observability.md)) |
+| ۴ | Admin ES Console, Agent, Widget, QA | ⬜ منتظر تأیید فاز ۳ |
 | ۵ | Owner Dashboard (۱۷ صفحه) | ⬜ |
 | ۶ | موتور هوشمند: ES + Sync + Inference | ⬜ |
 | ۷ | یکپارچه‌سازی OpenCart / WooCommerce | ⬜ |
@@ -75,21 +75,22 @@
 - [x] inbox contact کار می‌کند (تأیید زنده + تست خودکار)
 - [x] ادمین دوم بدون bootstrap token (از UI ساخته و وارد شد)
 - [x] گزارش: `reports/phases/phase-02-admin-revenue.md`
-- [ ] **تأیید شما برای فاز ۳** ⏸️
+- [x] **تأیید شما برای فاز ۳** ✅ (پس از بازبینی مجدد ۲۲مرحله‌ای + اصلاح همگام‌سازی نشان پیام)
 
 ---
 
-## فاز ۳ — ادمین: Observability و امنیت ⬜
+## فاز ۳ — ادمین: Observability و امنیت ✅
 
-- [ ] `GET /admin/audit` — فیلتر actor/action/tenant/date + cursor
-- [ ] `GET /admin/usage` — فیلتر tenant/route/rung + export CSV
-- [ ] `GET /admin/queue` — worker heartbeat + active tasks (Celery inspect)
-- [ ] `GET /admin/security` — unlock دستی حساب‌های قفل
-- [ ] degraded flags در analytics/insight/analyst به‌جای 500
-- [ ] UI: Analytics badge «Template» + empty state برای ES down · Usage/Audit فیلتر+export · Security unlock · Queue worker list · Models reachability ping · Health sparkline
-- [ ] `scripts/start-worker.ps1` + به‌روزرسانی مستندات نصب فارسی
-- [ ] پذیرش: ES خاموش → degraded نه crash · audit فیلتر tenant · worker در صفحهٔ queue
-- [ ] گزارش: `reports/phases/phase-03-admin-observability.md` + **تأیید شما**
+- [x] `GET /admin/audit` — فیلتر actor/action/tenant/date + cursor (+ خروجی CSV)
+- [x] `GET /admin/usage` — فیلتر tenant/route/rung (+ بازهٔ روز) + export CSV
+- [x] `GET /admin/queue` — worker heartbeat + active tasks (Celery inspect؛ عمق صف از Redisِ خود broker)
+- [x] `GET /admin/security` — قفل‌های هر دو صفحهٔ هویتی + `POST /admin/security/unlock`
+- [x] degraded flags در analytics/insight/zero-results/analyst به‌جای 500
+- [x] UI: بنر degraded تحلیل + نشان Template/LLM تحلیلگر · Usage/Audit فیلتر+export · Security unlock · Queue worker list · Models reachability ping · Health sparkline + تأخیر وابستگی‌ها
+- [x] `scripts/start-worker.ps1` + مستندات نصب فارسی (`docs/INSTALL-fa.md`)
+- [x] پذیرش: ES خاموش → degraded نه crash · audit فیلتر tenant · worker واقعی در صفحهٔ queue
+- [x] گزارش: `reports/phases/phase-03-admin-observability.md`
+- [ ] **تأیید شما برای فاز ۴** ⏸️
 
 ---
 

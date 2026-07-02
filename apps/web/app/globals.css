@@ -115,6 +115,7 @@ small { color: var(--faint); }
 .alert { padding: 0.8rem 1rem; border-radius: var(--radius-sm); font-size: 0.9rem; margin-bottom: 1rem; }
 .alert-error { background: rgba(255,92,124,0.1); color: var(--danger); border: 1px solid rgba(255,92,124,0.3); }
 .alert-success { background: rgba(56,211,159,0.1); color: var(--success); border: 1px solid rgba(56,211,159,0.3); }
+.alert-warning { background: rgba(255,180,84,0.1); color: var(--warning); border: 1px solid rgba(255,180,84,0.3); }
 
 /* ---------- Navbar ---------- */
 .nav {
