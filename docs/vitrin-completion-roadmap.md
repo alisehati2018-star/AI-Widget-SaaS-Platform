@@ -9,9 +9,9 @@
 |-----|-------|--------|
 | ۱ | Admin Tenant Management | ✅ تأییدشده ([گزارش](../reports/phases/phase-01-admin-tenant.md)) |
 | ۲ | Admin Revenue, Plans, Users, Inbox | ✅ تأییدشده ([گزارش](../reports/phases/phase-02-admin-revenue.md)) |
-| ۳ | Admin Observability و امنیت | ✅ **تحویل‌شده — منتظر تأیید شما** ([گزارش](../reports/phases/phase-03-admin-observability.md)) |
-| ۴ | Admin ES Console, Agent, Widget, QA | ⬜ منتظر تأیید فاز ۳ |
-| ۵ | Owner Dashboard (۱۷ صفحه) | ⬜ |
+| ۳ | Admin Observability و امنیت | ✅ تأییدشده ([گزارش](../reports/phases/phase-03-admin-observability.md)) |
+| ۴ | Admin ES Console, Agent, Widget, QA | ✅ **تحویل‌شده — منتظر تأیید شما** ([گزارش](../reports/phases/phase-04-admin-qa.md)) |
+| ۵ | Owner Dashboard (۱۷ صفحه) | ⬜ منتظر تأیید فاز ۴ |
 | ۶ | موتور هوشمند: ES + Sync + Inference | ⬜ |
 | ۷ | یکپارچه‌سازی OpenCart / WooCommerce | ⬜ |
 | ۸ | Dev Sign-off (تست نهایی ویندوز) | ⬜ |
@@ -90,20 +90,21 @@
 - [x] `scripts/start-worker.ps1` + مستندات نصب فارسی (`docs/INSTALL-fa.md`)
 - [x] پذیرش: ES خاموش → degraded نه crash · audit فیلتر tenant · worker واقعی در صفحهٔ queue
 - [x] گزارش: `reports/phases/phase-03-admin-observability.md`
-- [ ] **تأیید شما برای فاز ۴** ⏸️
+- [x] **تأیید شما برای فاز ۴** ✅ (پس از بازبینی مجدد ۱۹مرحله‌ای بدون هیچ نقص)
 
 ---
 
-## فاز ۴ — ادمین: ES Console, Agent, Widget و QA ⬜
+## فاز ۴ — ادمین: ES Console, Agent, Widget و QA ✅
 
-- [ ] ES wizard راه‌اندازی اولیه (ensure-index → reindex → alias) + log عملیات
-- [ ] Agent: history مکالمه + دکمهٔ clear
-- [ ] Synonyms: placeholderهای hardcoded → i18n
-- [ ] Widget: preview واقعی `/widget/v1.js` در iframe sandbox
-- [ ] Flags: توضیح تأثیر + last changed by
-- [ ] fe-qa: افزودن ۶ route ادمین به responsive + گسترش functional + a11y ادمین
-- [ ] پذیرش: `check:all` سبز + responsive همهٔ routeهای ادمین
-- [ ] گزارش: `reports/phases/phase-04-admin-qa.md` + **تأیید شما**
+- [x] ES wizard راه‌اندازی اولیه (ensure-index → reindex اختیاری → alias) + log عملیات (همهٔ اکشن‌های کنسول هم ثبت می‌شوند)
+- [x] Agent: history مکالمه (به‌ازای هر فروشگاه، ماندگار در مرورگر) + دکمهٔ clear
+- [x] Synonyms: placeholderهای hardcoded → i18n (fa+en)
+- [x] Widget: preview واقعی `/widget/v1.js` در iframe sandbox (+ refresh بعد از ذخیره)
+- [x] Flags: توضیح تأثیر (i18n) + last changed by (migration `0014`)
+- [x] fe-qa: ۷ route ادمین به responsive (پوشش کامل ۲۰ مسیر) + ۴ چک functional جدید + a11y ادمین (۸ صفحه با ورود واقعی؛ نقص select بدون نام در همهٔ صفحات رفع شد)
+- [x] پذیرش: `check:all` سبز + responsive همهٔ routeهای ادمین + a11y صفر نقض
+- [x] گزارش: `reports/phases/phase-04-admin-qa.md`
+- [ ] **تأیید شما برای فاز ۵** ⏸️
 
 ---
 

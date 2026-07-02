@@ -131,12 +131,12 @@ export default function AdminTenants() {
             placeholder={t("tenants.searchPlaceholder")}
             style={{ flex: 1, minWidth: 220 }}
           />
-          <select className="input" style={{ width: "auto" }} value={status} onChange={(e) => { setStatus(e.target.value); setOffset(0); }}>
+          <select className="input" style={{ width: "auto" }} aria-label={t("tenants.filterAllStatuses")} value={status} onChange={(e) => { setStatus(e.target.value); setOffset(0); }}>
             <option value="">{t("tenants.filterAllStatuses")}</option>
             <option value="active">{t("tenants.statusActive")}</option>
             <option value="suspended">{t("tenants.statusSuspended")}</option>
           </select>
-          <select className="input" style={{ width: "auto" }} value={plan} onChange={(e) => { setPlan(e.target.value); setOffset(0); }}>
+          <select className="input" style={{ width: "auto" }} aria-label={t("tenants.filterAllPlans")} value={plan} onChange={(e) => { setPlan(e.target.value); setOffset(0); }}>
             <option value="">{t("tenants.filterAllPlans")}</option>
             {(planData?.plans ?? []).map((p) => (
               <option key={p.code} value={p.code}>{p.name}</option>

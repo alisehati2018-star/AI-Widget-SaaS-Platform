@@ -1583,7 +1583,8 @@ async def get_feature_flags(
     pool = await get_pg_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            "SELECT key, enabled, description, updated_at FROM feature_flags ORDER BY key"
+            "SELECT key, enabled, description, updated_at, updated_by "
+            "FROM feature_flags ORDER BY key"
         )
     return {
         "flags": [
@@ -1592,6 +1593,7 @@ async def get_feature_flags(
                 "enabled": r["enabled"],
                 "description": r["description"],
                 "updated_at": r["updated_at"].isoformat() if r["updated_at"] else None,
+                "updated_by": r["updated_by"],
             }
             for r in rows
         ]
@@ -1609,17 +1611,22 @@ async def set_feature_flag(
     if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
     enabled = bool(payload.get("enabled", False))
+    from .admin_auth import admin_current_principal
+
+    principal = await admin_current_principal(authorization, vitrin_access)
+    actor = principal.email if principal else "operator"
     pool = await get_pg_pool()
     async with pool.acquire() as conn:
         updated = await conn.fetchval(
-            "UPDATE feature_flags SET enabled = $1, updated_at = now() "
-            "WHERE key = $2 RETURNING key",
+            "UPDATE feature_flags SET enabled = $1, updated_at = now(), updated_by = $2 "
+            "WHERE key = $3 RETURNING key",
             enabled,
+            actor,
             key,
         )
     if updated is None:
         return error_response(404, "not_found", "No such flag.")
-    await audit(pool, actor="operator", action="flag.set", detail={"key": key, "enabled": enabled})
+    await audit(pool, actor=actor, action="flag.set", detail={"key": key, "enabled": enabled})
     return {"key": key, "enabled": enabled}
 
 

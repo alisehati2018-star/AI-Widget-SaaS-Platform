@@ -17,13 +17,36 @@ interface WidgetDefaults {
   max_results: number;
 }
 
+/** srcdoc that embeds the REAL production loader (`/widget/v1.js`) exactly the
+ *  way a store would, inside a sandboxed iframe. The loader pulls the saved
+ *  platform defaults from /v1/widget/config, so what renders here is the
+ *  genuine widget — not a mock. */
+function previewDoc(origin: string, cfg: WidgetDefaults): string {
+  return `<!doctype html><html dir="rtl" lang="fa"><head><meta charset="utf-8">
+<style>body{margin:0;min-height:320px;background:#f7f7f9;font-family:sans-serif}</style>
+</head><body>
+<script src="${origin}/api/widget/v1.js"
+  data-acip-key="admin-preview"
+  data-acip-base="${origin}/api"
+  data-acip-color="${cfg.primary_color}"
+  data-acip-position="${cfg.position}"
+  data-acip-chat="${cfg.chat_enabled}"
+  data-acip-search="${cfg.search_enabled}"
+  data-acip-greeting="${cfg.greeting.replace(/"/g, "&quot;")}"
+  async><\/script>
+</body></html>`;
+}
+
 export default function AdminWidget() {
   const t = useTranslations("admin");
   const nav = useAdminNav();
   const [cfg, setCfg] = useState<WidgetDefaults | null>(null);
   const [saved, setSaved] = useState(false);
+  const [previewNonce, setPreviewNonce] = useState(0);
+  const [origin, setOrigin] = useState("");
 
   useEffect(() => {
+    setOrigin(window.location.origin);
     authFetch<{ defaults: WidgetDefaults }>("/admin/widget-defaults")
       .then((r) => setCfg(r.defaults))
       .catch(() => setCfg(null));
@@ -33,6 +56,8 @@ export default function AdminWidget() {
     if (!cfg) return;
     await authFetch("/admin/widget-defaults", { body: cfg });
     setSaved(true);
+    // The real preview reads the SAVED config — refresh it after every save.
+    setPreviewNonce((n) => n + 1);
   }
 
   function set<K extends keyof WidgetDefaults>(k: K, v: WidgetDefaults[K]) {
@@ -86,7 +111,30 @@ export default function AdminWidget() {
           <button className="btn btn-primary" onClick={() => void save()}>{t("widget.save")}</button>
         </div>
 
-        <div className="card">
+        <div className="card-stack">
+          <div className="card">
+            <div className="row-between" style={{ flexWrap: "wrap", gap: ".6rem" }}>
+              <h3 style={{ margin: 0 }}>{t("widget.livePreviewTitle")}</h3>
+              <button className="btn btn-ghost" onClick={() => setPreviewNonce((n) => n + 1)}>
+                {t("widget.reloadPreview")}
+              </button>
+            </div>
+            <p className="hint">{t("widget.livePreviewHint")}</p>
+            {origin ? (
+              <iframe
+                key={previewNonce}
+                title={t("widget.livePreviewTitle")}
+                sandbox="allow-scripts"
+                srcDoc={previewDoc(origin, cfg)}
+                style={{
+                  width: "100%", height: 340, border: "1px solid var(--border)",
+                  borderRadius: "var(--radius)", background: "#f7f7f9",
+                }}
+              />
+            ) : null}
+          </div>
+
+          <div className="card">
           <h3>{t("widget.previewTitle")}</h3>
           <p className="hint">{t("widget.previewHint")}</p>
           <div
@@ -124,6 +172,7 @@ export default function AdminWidget() {
                 <Icon name="chat" size={24} />
               </div>
             </div>
+          </div>
           </div>
         </div>
       </div>

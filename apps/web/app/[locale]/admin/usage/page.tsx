@@ -70,11 +70,11 @@ export default function AdminUsage() {
         <div className="row" style={{ flexWrap: "wrap", gap: ".6rem" }}>
           <Input value={tenant} onChange={(e) => setTenant(e.target.value)} placeholder={t("usage.filterTenant")} style={{ flex: 1, minWidth: 170 }} />
           <Input value={route} onChange={(e) => setRoute(e.target.value)} placeholder={t("usage.filterRoute")} style={{ flex: 1, minWidth: 150 }} dir="ltr" />
-          <select className="input" style={{ width: "auto" }} value={rung} onChange={(e) => setRung(e.target.value)}>
+          <select className="input" style={{ width: "auto" }} aria-label={t("usage.filterAllRungs")} value={rung} onChange={(e) => setRung(e.target.value)}>
             <option value="">{t("usage.filterAllRungs")}</option>
             {RUNGS.map((r) => <option key={r} value={r}>{r}</option>)}
           </select>
-          <select className="input" style={{ width: "auto" }} value={days} onChange={(e) => setDays(Number(e.target.value))}>
+          <select className="input" style={{ width: "auto" }} aria-label={t("usage.rangeDays", { days: formatNumber(days, locale) })} value={days} onChange={(e) => setDays(Number(e.target.value))}>
             {DAY_RANGES.map((d) => <option key={d} value={d}>{t("usage.rangeDays", { days: formatNumber(d, locale) })}</option>)}
           </select>
           <a className="btn btn-soft" href={csvHref} download>{t("usage.exportCsv")}</a>

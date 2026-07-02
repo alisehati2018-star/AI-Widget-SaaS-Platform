@@ -388,14 +388,22 @@
     "count": "{n} rules",
     "helpTitle": "How synonym rules work",
     "helpBody": "One rule per line. Comma-separated terms in a rule are treated as equivalent during search — e.g. a shopper searching \"laptop\" also matches products tagged \"notebook\" or \"لپ‌تاپ\".",
-    "helpExampleTitle": "Examples"
+    "helpExampleTitle": "Examples",
+    "editorPlaceholder": "laptop, notebook, لپ‌تاپ\nmobile, cellphone, موبایل",
+    "exampleRules": "laptop, notebook, لپ‌تاپ\nmobile, cellphone, موبایل\nsneaker, trainer, کتانی"
   },
   "flags": {
     "title": "Feature flags",
     "intro": "Toggle platform capabilities without a deploy.",
     "colFlag": "Flag",
-    "colDescription": "Description",
-    "colState": "State"
+    "colState": "State",
+    "colEffect": "Effect when on",
+    "colLastChanged": "Last changed",
+    "effectAssistant": "Shopping assistant (RAG chat) is available to stores; turning it off disables the widget chat tab and the chat APIs.",
+    "effectInsight": "The insight engine (demand gaps, funnel analysis) is computed and shown on dashboards.",
+    "effectLeads": "In-conversation lead capture (customer phone/email) is active.",
+    "effectAgentActions": "Money-moving agent actions (orders/payments/discounts) — off by default, only for fully hardened deployments.",
+    "hint": "Flag changes apply platform-wide immediately and are recorded in the audit log with the changer's name."
   },
   "audit": {
     "title": "Audit log",
@@ -481,7 +489,31 @@
     "live": "live",
     "tenantCountTitle": "Per-store document count",
     "tenantCountBtn": "Count documents",
-    "docsForTenant": "Indexed documents for this store"
+    "docsForTenant": "Indexed documents for this store",
+    "wizardTitle": "First-run index setup (wizard)",
+    "wizardHint": "The three standard deployment steps: create the index behind the read alias, optionally reindex from a previous index, and atomically switch the alias. Each step drives the same console APIs and lands in the operation log.",
+    "wizardStepEnsure": "Create/verify index",
+    "wizardStepEnsureHint": "If the read alias doesn't exist yet, a fresh versioned index is created and attached.",
+    "wizardStepReindex": "Reindex (optional)",
+    "wizardStepReindexHint": "Provide a source index to migrate data into a fresh index with zero downtime.",
+    "wizardStepAlias": "Switch alias",
+    "wizardStepAliasHint": "The read alias is atomically pointed at the final index.",
+    "wizardSourceLabel": "Source index (optional)",
+    "wizardSourceHint": "Leave empty to only create the index and alias.",
+    "wizardSourcePlaceholder": "acip-catalogue-000001",
+    "wizardRun": "Run wizard",
+    "wizardPending": "Pending",
+    "wizardRunning": "Running",
+    "wizardDone": "Done",
+    "wizardFailed": "Failed",
+    "wizardSkipped": "Skipped",
+    "wizardSkippedNoSource": "No source index given — reindex not needed.",
+    "wizardSkippedNoIndex": "No index available to attach the alias to.",
+    "logTitle": "Operation log",
+    "logEmpty": "No operations yet — wizard results and every action on this page are recorded here.",
+    "logOk": "OK",
+    "logFail": "Error",
+    "logHint": "This log is local to the session (most recent 100); the durable record of every operation lives in the audit log."
   },
   "agent": {
     "title": "Agent console",
@@ -493,7 +525,6 @@
     "send": "Send",
     "queryPlaceholder": "e.g. کفش ورزشی",
     "runSearch": "Run search",
-    "answer": "Answer",
     "rung": "Rung",
     "latency": "Latency",
     "cached": "cached",
@@ -506,7 +537,9 @@
     "indexedDocs": "Indexed documents",
     "docsLoading": "Checking…",
     "sessionTitle": "Session",
-    "sessionHint": "Each test uses a fresh session so it never mixes with a real shopper's conversation."
+    "sessionHint": "Each test uses a fresh session so it never mixes with a real shopper's conversation.",
+    "clearHistory": "Clear history",
+    "historyCount": "Messages in this conversation"
   },
   "widget": {
     "title": "Widget defaults",
@@ -523,7 +556,10 @@
     "save": "Save defaults",
     "saved": "Widget defaults saved.",
     "previewTitle": "Live preview",
-    "previewHint": "How the launcher looks with these defaults (a store can still override branding)."
+    "previewHint": "How the launcher looks with these defaults (a store can still override branding).",
+    "livePreviewTitle": "Real widget preview",
+    "livePreviewHint": "The exact `widget/v1.js` file stores embed is loaded here in a sandboxed iframe, reading the saved platform defaults — the preview refreshes after every save.",
+    "reloadPreview": "Reload"
   },
   "contact": {
     "title": "Contact inbox",

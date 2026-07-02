@@ -89,7 +89,7 @@ export default function AdminAnalytics() {
     <DashboardShell title={t("analytics.title")} nav={nav} requireAdmin loginHref="/admin/login">
       <div className="row-between" style={{ marginTop: "-1rem", marginBottom: "1.5rem", flexWrap: "wrap", gap: ".75rem" }}>
         <p style={{ margin: 0 }}>{t("analytics.intro")}</p>
-        <select className="input" style={{ maxWidth: 260 }} value={selected} onChange={(e) => setSelected(e.target.value)}>
+        <select className="input" style={{ maxWidth: 260 }} aria-label={t("common.tenant")} value={selected} onChange={(e) => setSelected(e.target.value)}>
           {tenants.length === 0 ? <option value="">{t("common.noTenants")}</option> : null}
           {tenants.map((tn) => <option key={tn.id} value={tn.id}>{tn.name}</option>)}
         </select>

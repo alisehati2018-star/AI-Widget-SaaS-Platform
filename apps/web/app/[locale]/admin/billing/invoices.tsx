@@ -67,7 +67,7 @@ export function InvoicesPanel() {
           placeholder={t("billing.invSearchPlaceholder")}
           style={{ flex: 1, minWidth: 220 }}
         />
-        <select className="input" style={{ width: "auto" }} value={status} onChange={(e) => { setStatus(e.target.value); setOffset(0); }}>
+        <select className="input" style={{ width: "auto" }} aria-label={t("billing.invAllStatuses")} value={status} onChange={(e) => { setStatus(e.target.value); setOffset(0); }}>
           <option value="">{t("billing.invAllStatuses")}</option>
           <option value="paid">{t("billing.invStatusPaid")}</option>
           <option value="void">{t("billing.invStatusVoid")}</option>

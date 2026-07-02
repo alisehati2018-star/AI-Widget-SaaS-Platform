@@ -85,12 +85,12 @@ export default function AdminUsers() {
             placeholder={t("users.searchPlaceholder")}
             style={{ flex: 1, minWidth: 220 }}
           />
-          <select className="input" style={{ width: "auto" }} value={role} onChange={(e) => { setRole(e.target.value); setOffset(0); }}>
+          <select className="input" style={{ width: "auto" }} aria-label={t("users.filterAllRoles")} value={role} onChange={(e) => { setRole(e.target.value); setOffset(0); }}>
             <option value="">{t("users.filterAllRoles")}</option>
             <option value="store_owner">{t("users.roleStoreOwner")}</option>
             <option value="store_staff">{t("users.roleStoreStaff")}</option>
           </select>
-          <select className="input" style={{ width: "auto" }} value={status} onChange={(e) => { setStatus(e.target.value); setOffset(0); }}>
+          <select className="input" style={{ width: "auto" }} aria-label={t("users.filterAllStatuses")} value={status} onChange={(e) => { setStatus(e.target.value); setOffset(0); }}>
             <option value="">{t("users.filterAllStatuses")}</option>
             <option value="active">{t("common.active")}</option>
             <option value="suspended">{t("users.statusSuspended")}</option>
@@ -119,6 +119,7 @@ export default function AdminUsers() {
                         <select
                           className="input"
                           style={{ width: "auto", padding: "0.4rem 0.6rem" }}
+                          aria-label={t("users.colRole")}
                           value={u.role}
                           disabled={!u.has_tenant}
                           onChange={(e) => void setUserRole(u, e.target.value)}

@@ -6,6 +6,7 @@ import { ApiError } from "@/lib/api";
 import { adminFetch as authFetch } from "@/lib/auth";
 import { DashboardShell, useAdminNav } from "@/components/shell";
 import { Alert, Badge, Field, Input, Spinner } from "@/components/ui";
+import { SetupWizard, type LogEntry } from "./wizard";
 
 interface Health {
   reachable: boolean;
@@ -58,6 +59,8 @@ export default function AdminElasticsearch() {
   const [tenantSel, setTenantSel] = useState("");
   const [tenantDocs, setTenantDocs] = useState<number | null>(null);
   const [countBusy, setCountBusy] = useState(false);
+  const [opLog, setOpLog] = useState<LogEntry[]>([]);
+  const appendLog = (e: LogEntry) => setOpLog((cur) => [e, ...cur].slice(0, 100));
 
   useEffect(() => {
     authFetch<{ tenants: TenantRow[] }>("/admin/tenants")
@@ -103,11 +106,14 @@ export default function AdminElasticsearch() {
     setNote(null);
     setErr(null);
     try {
-      await fn();
+      const r = await fn();
       setNote(ok);
+      appendLog({ at: new Date().toISOString(), step: ok, ok: true, detail: JSON.stringify(r ?? {}) });
       await reload();
     } catch (e) {
-      setErr(e instanceof ApiError ? e.message : t("elasticsearch.actionFailed"));
+      const msg = e instanceof ApiError ? e.message : t("elasticsearch.actionFailed");
+      setErr(msg);
+      appendLog({ at: new Date().toISOString(), step: ok, ok: false, detail: msg });
     }
   }
 
@@ -128,6 +134,8 @@ export default function AdminElasticsearch() {
       <p style={{ marginTop: "-1rem" }}>{t("elasticsearch.intro")}</p>
       {note ? <Alert kind="success">{note}</Alert> : null}
       {err ? <Alert kind="error">{err}</Alert> : null}
+
+      <SetupWizard onDone={reload} log={opLog} appendLog={appendLog} />
 
       <div className="card" style={{ marginBottom: "1.5rem" }}>
         <h3>{t("elasticsearch.clusterTitle")}</h3>
