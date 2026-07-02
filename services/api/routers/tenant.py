@@ -255,10 +255,14 @@ async def search_test(
     query = str(payload.get("query", "")).strip()
     if not query:
         return error_response(422, "invalid_request", "Field 'query' is required.")
+    try:
+        size = min(50, max(1, int(payload.get("size") or 10)))
+    except (TypeError, ValueError):
+        size = 10
     from ..runtime import get_search_service
 
     try:
-        result = await get_search_service().search(p.tenant_id, query, size=payload.get("size"))
+        result = await get_search_service().search(p.tenant_id, query, size=size)
     except Exception:  # noqa: BLE001 - ES down: degrade, don't crash
         return {"query": query, "results": [], "total": 0, "degraded": True}
     return {"query": query, **result, "degraded": False}

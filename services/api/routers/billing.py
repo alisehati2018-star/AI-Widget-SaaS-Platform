@@ -316,16 +316,20 @@ async def invoice_html(
         )
     if row is None:
         return error_response(404, "not_found", "No such invoice.")
+    import html as _html
+
     from fastapi.responses import HTMLResponse
 
     html = _INVOICE_HTML.format(
         number=row["number"],
         status_fa="پرداخت‌شده" if row["status"] == "paid" else "باطل‌شده",
-        store=row["store"],
+        # Store name and description are tenant-authored text — escape them so
+        # the printable page can never carry markup into a teammate's browser.
+        store=_html.escape(row["store"] or ""),
         date=row["created_at"].strftime("%Y-%m-%d") if row["created_at"] else "—",
-        description=row["description"],
+        description=_html.escape(row["description"] or ""),
         amount=f"{float(row['amount']):,.2f}",
-        currency=row["currency"],
+        currency=_html.escape(row["currency"] or ""),
     )
     return HTMLResponse(content=html)
 
