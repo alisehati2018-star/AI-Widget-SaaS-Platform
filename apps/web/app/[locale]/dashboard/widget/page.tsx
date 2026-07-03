@@ -123,7 +123,7 @@ export default function WidgetPage() {
         {!info ? <Spinner /> : (
           <>
             <p className="hint">{info.ready ? t("widget.embedReady") : t("widget.embedNotReady")}</p>
-            <pre className="input" style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontFamily: "monospace", fontSize: "0.82rem", opacity: info.ready ? 1 : 0.6 }}>
+            <pre className="input" dir="ltr" style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontFamily: "monospace", fontSize: "0.82rem", textAlign: "left", opacity: info.ready ? 1 : 0.6 }}>
 {info.snippet}
             </pre>
             <p className="hint">{t("widget.embedKeyHint")}</p>

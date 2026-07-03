@@ -161,7 +161,7 @@ def _mk_plan(client) -> str:
         "/admin/plans",
         headers={"x-admin-token": "integration-operator-token"},
         json={"code": code, "name": "PSP Plan", "price_monthly": 250000,
-              "credits_per_month": 1000},
+              "credits_per_month": 1000, "is_public": False},
     )
     assert r.status_code == 200, r.text
     return code

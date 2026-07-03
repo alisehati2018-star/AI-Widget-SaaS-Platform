@@ -161,7 +161,12 @@ async def checkout(
 
 
 @router.get("/tenant/billing/orders")
-async def my_orders(authorization: str | None = _AUTHZ, vitrin_access: str | None = _COOKIE):
+async def my_orders(
+    limit: int = 100,
+    offset: int = 0,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
     p = await _require_tenant(authorization, vitrin_access)
     if p is None:
         return error_response(401, "unauthenticated", "Sign in to your store account.")
@@ -172,8 +177,10 @@ async def my_orders(authorization: str | None = _AUTHZ, vitrin_access: str | Non
             "SELECT o.id, o.amount, o.currency, o.status, o.provider, o.created_at, "
             "o.paid_at, COALESCE(pl.name, '—') AS plan FROM orders o "
             "LEFT JOIN plans pl ON pl.id = o.plan_id "
-            "WHERE o.tenant_id = $1 ORDER BY o.created_at DESC LIMIT 100",
+            "WHERE o.tenant_id = $1 ORDER BY o.created_at DESC LIMIT $2 OFFSET $3",
             p.tenant_id,
+            max(1, min(200, limit)),
+            max(0, offset),
         )
     return {
         "orders": [
@@ -283,7 +290,12 @@ async def resume(authorization: str | None = _AUTHZ, vitrin_access: str | None =
 
 
 @router.get("/tenant/billing/invoices")
-async def invoices(authorization: str | None = _AUTHZ, vitrin_access: str | None = _COOKIE):
+async def invoices(
+    limit: int = 100,
+    offset: int = 0,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
     p = await _require_tenant(authorization, vitrin_access)
     if p is None:
         return error_response(401, "unauthenticated", "Sign in to your store account.")
@@ -292,8 +304,10 @@ async def invoices(authorization: str | None = _AUTHZ, vitrin_access: str | None
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             "SELECT number, description, amount, currency, status, created_at FROM invoices "
-            "WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 100",
+            "WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3",
             p.tenant_id,
+            max(1, min(200, limit)),
+            max(0, offset),
         )
     return {
         "invoices": [

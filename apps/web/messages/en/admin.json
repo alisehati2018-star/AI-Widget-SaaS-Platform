@@ -225,7 +225,9 @@
     "confirmDelete": "Delete plan “{name}” permanently? This cannot be undone.",
     "deletedNote": "Plan deleted.",
     "saveFailed": "Saving the plan failed.",
-    "deleteFailed": "Deleting the plan failed."
+    "deleteFailed": "Deleting the plan failed.",
+    "nameFa": "Persian name",
+    "descriptionFa": "Persian description (shown on pricing)"
   },
   "billing": {
     "title": "Billing",
@@ -526,7 +528,8 @@
     "logEmpty": "No operations yet — wizard results and every action on this page are recorded here.",
     "logOk": "OK",
     "logFail": "Error",
-    "logHint": "This log is local to the session (most recent 100); the durable record of every operation lives in the audit log."
+    "logHint": "This log is local to the session (most recent 100); the durable record of every operation lives in the audit log.",
+    "errorDetails": "Technical error details"
   },
   "agent": {
     "title": "Agent console",

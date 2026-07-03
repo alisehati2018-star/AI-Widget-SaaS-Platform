@@ -36,12 +36,30 @@ function readCookie(name: string): string | null {
 export interface PlanInfo {
   code: string;
   name: string;
+  name_fa: string | null;
   description: string | null;
+  description_fa: string | null;
   price_monthly: number;
   currency: string;
   credits_per_month: number;
   rate_limit_per_min: number;
   features: string[];
+  features_fa: string[];
+}
+
+export interface BillingMeta {
+  currency: string;
+  topup_credits_per_unit: number;
+}
+
+/** The plan fields in the viewer's locale (fa content falls back to base). */
+export function localizePlan(p: PlanInfo, locale: string) {
+  const fa = locale === "fa";
+  return {
+    name: (fa && p.name_fa) || p.name,
+    description: (fa && p.description_fa) || p.description,
+    features: fa && p.features_fa && p.features_fa.length ? p.features_fa : p.features,
+  };
 }
 
 export interface SessionUser {
@@ -78,7 +96,7 @@ export async function apiFetch<T = unknown>(
   return data as T;
 }
 
-export function getPlans(): Promise<{ plans: PlanInfo[] }> {
+export function getPlans(): Promise<{ plans: PlanInfo[]; billing: BillingMeta }> {
   return apiFetch("/plans");
 }
 
@@ -89,6 +107,8 @@ export interface TenantProfile {
   name: string;
   status: string;
   plan: string;
+  plan_code: string | null;
+  plan_fa: string | null;
   sub_status: string;
   current_period_end: string | null;
   tracking_enabled: boolean;

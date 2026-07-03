@@ -2,8 +2,8 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
-import { getPlans, type PlanInfo } from "@/lib/api";
-import { formatNumber } from "@/lib/datetime";
+import { getPlans, localizePlan, type PlanInfo } from "@/lib/api";
+import { formatCurrency, formatNumber } from "@/lib/datetime";
 import type { Locale } from "@/i18n/routing";
 import { Link } from "@/i18n/navigation";
 import { MarketingFooter, MarketingNav } from "@/components/marketing";
@@ -21,11 +21,13 @@ export default function PricingPage() {
       string,
       { name: string; description: string; features: string[] }
     >;
+    // The i18n fallback is already in the viewer's language.
+    const noFa = { name_fa: null, description_fa: null, features_fa: [] as string[] };
     const fallback: PlanInfo[] = [
-      { code: "free", ...fb.free, price_monthly: 0, currency: "USD", credits_per_month: 5000, rate_limit_per_min: 60 },
-      { code: "starter", ...fb.starter, price_monthly: 49, currency: "USD", credits_per_month: 50000, rate_limit_per_min: 120 },
-      { code: "pro", ...fb.pro, price_monthly: 149, currency: "USD", credits_per_month: 250000, rate_limit_per_min: 600 },
-      { code: "enterprise", ...fb.enterprise, price_monthly: 0, currency: "USD", credits_per_month: 0, rate_limit_per_min: 2000 },
+      { code: "free", ...fb.free, ...noFa, price_monthly: 0, currency: "USD", credits_per_month: 5000, rate_limit_per_min: 60 },
+      { code: "starter", ...fb.starter, ...noFa, price_monthly: 49, currency: "USD", credits_per_month: 50000, rate_limit_per_min: 120 },
+      { code: "pro", ...fb.pro, ...noFa, price_monthly: 149, currency: "USD", credits_per_month: 250000, rate_limit_per_min: 600 },
+      { code: "enterprise", ...fb.enterprise, ...noFa, price_monthly: 0, currency: "USD", credits_per_month: 0, rate_limit_per_min: 2000 },
     ];
     getPlans()
       .then((r) => setPlans(r.plans.length ? r.plans : fallback))
@@ -51,21 +53,22 @@ export default function PricingPage() {
               {plans.map((p) => {
                 const featured = p.code === "pro";
                 const custom = p.code === "enterprise";
+                const loc = localizePlan(p, locale);
                 return (
                   <div className={`card price-card${featured ? " featured" : ""}`} key={p.code}>
                     {featured ? <span className="badge badge-brand">{t("pricing.mostPopular")}</span> : null}
-                    <h3 style={{ marginTop: "0.6rem" }}>{p.name}</h3>
+                    <h3 style={{ marginTop: "0.6rem" }}>{loc.name}</h3>
                     <div className="price">
                       {custom
                         ? t("pricing.custom")
                         : p.price_monthly === 0
                           ? t("pricing.free")
-                          : `$${formatNumber(p.price_monthly, locale)}`}
+                          : formatCurrency(p.price_monthly, p.currency, locale)}
                       {!custom && p.price_monthly > 0 ? <small> {t("pricing.perMonth")}</small> : null}
                     </div>
-                    <p style={{ minHeight: "2.6rem", fontSize: "0.88rem" }}>{p.description}</p>
+                    <p style={{ minHeight: "2.6rem", fontSize: "0.88rem" }}>{loc.description}</p>
                     <ul className="feature-list">
-                      {p.features.map((f) => (
+                      {loc.features.map((f) => (
                         <li key={f}>{f}</li>
                       ))}
                     </ul>

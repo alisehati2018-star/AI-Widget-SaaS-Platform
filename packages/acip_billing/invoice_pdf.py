@@ -11,7 +11,11 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+# The repo ships Vazirmatn (OFL) for proper Persian shaping incl. ZWNJ.
+_REPO_FONT = str(Path(__file__).resolve().parents[2] / "assets" / "fonts" / "Vazirmatn-Regular.ttf")
+
 _FONT_CANDIDATES = (
+    _REPO_FONT,
     "/usr/share/fonts/truetype/vazirmatn/Vazirmatn-Regular.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
     "/usr/share/fonts/truetype/freefont/FreeSerif.ttf",

@@ -23,27 +23,39 @@ _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 @router.get("/plans")
 async def list_plans() -> dict[str, Any]:
     """Public plan catalogue for the pricing page (ordered, public plans only)."""
+    from acip_core.config import get_settings
+
     pool = await get_pg_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            "SELECT code, name, description, price_monthly, currency, credits_per_month, "
-            "rate_limit_per_min, features, sort_order FROM plans "
-            "WHERE is_public = TRUE ORDER BY sort_order ASC"
+            "SELECT code, name, name_fa, description, description_fa, price_monthly, "
+            "currency, credits_per_month, rate_limit_per_min, features, features_fa, "
+            "sort_order FROM plans WHERE is_public = TRUE ORDER BY sort_order ASC"
         )
+    s = get_settings()
     return {
         "plans": [
             {
                 "code": r["code"],
                 "name": r["name"],
+                "name_fa": r["name_fa"],
                 "description": r["description"],
+                "description_fa": r["description_fa"],
                 "price_monthly": float(r["price_monthly"]),
                 "currency": r["currency"],
                 "credits_per_month": float(r["credits_per_month"]),
                 "rate_limit_per_min": r["rate_limit_per_min"],
                 "features": r["features"],
+                "features_fa": r["features_fa"],
             }
             for r in rows
-        ]
+        ],
+        # Billing meta so clients price things (e.g. credit top-ups) from the
+        # SERVER's configuration instead of hardcoding a rate (audit W7).
+        "billing": {
+            "currency": s.billing_currency,
+            "topup_credits_per_unit": s.topup_credits_per_unit,
+        },
     }
 
 
