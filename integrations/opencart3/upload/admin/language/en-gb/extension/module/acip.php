@@ -16,6 +16,8 @@ $_['entry_api_url']       = 'ACIP API URL';
 $_['entry_widget_key']    = 'Widget API Key (storefront search + chat)';
 $_['entry_sync_key']      = 'Sync API Key (catalogue ingest)';
 $_['entry_replace_search']= 'Replace native search';
+$_['entry_export_token']  = 'Export token (delta sync)';
+$_['help_export_token']   = 'Any long random string. Paste the SAME value into the Vitrin dashboard (Settings > Connect store) so the platform can pull changed products periodically.';
 $_['entry_inject_widget'] = 'Inject widget on storefront';
 
 // Buttons / help

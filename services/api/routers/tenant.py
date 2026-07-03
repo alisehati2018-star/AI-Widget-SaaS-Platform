@@ -571,6 +571,8 @@ async def update_settings(
     allowed = {
         "logo_url", "primary_color", "store_url", "platform", "widget_greeting",
         "position", "chat_enabled", "search_enabled", "title", "placeholder",
+        # Store pull credentials for delta reconciliation (Phase 7).
+        "woo_consumer_key", "woo_consumer_secret", "oc_export_token",
     }
     patch = {k: v for k, v in payload.items() if k in allowed}
     pool = await get_pg_pool()

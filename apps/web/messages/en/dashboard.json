@@ -397,6 +397,11 @@
     "step3Verify": "Verify connection",
     "step3Done": "Connected ✓",
     "verifyQueued": "Check queued — the status updates after the worker runs.",
-    "verifyFailed": "Could not queue the check."
+    "verifyFailed": "Could not queue the check.",
+    "wooCk": "WooCommerce consumer key",
+    "wooCs": "WooCommerce consumer secret",
+    "ocToken": "OpenCart export token (same value as in the module settings)",
+    "pullHintWoo": "With this read-only key (WooCommerce → Settings → Advanced → REST API), Vitrin pulls changed products itself every 15 minutes — even if a webhook is lost.",
+    "pullHintOc": "The same token you entered in the store's ACIP module settings. Vitrin uses it to pull changed products every 15 minutes — even if a webhook is lost."
   }
 }

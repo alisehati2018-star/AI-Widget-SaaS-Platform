@@ -9,6 +9,7 @@ runs inside the sync Celery task via `asyncio.run`.
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC
 from typing import Any
 
 from acip_cache.data_version import bump_data_version
@@ -94,36 +95,122 @@ def bulk_import(tenant_id: str, source: str, products: list[dict]) -> int:
     return count
 
 
-@celery_app.task(name="acip.sync.reconcile_tenant")
-def reconcile_tenant(tenant_id: str, source: str = "rest") -> str:
-    """Periodic delta reconciliation hook (REQ-M3-002/012).
+async def _record_sync(tenant_id: str, source: str, status: str, watermark=None) -> None:
+    from acip_core.clients import get_pg_pool
 
-    The store-side `fetch_changed_since` fetch is provided per-connector when
-    a live store is configured (Phase 7). Until then the run itself is real:
-    it records its completion in ``sync_state`` so "sync now" on the dashboard
-    visibly transitions queued → ok.
-    """
-    log.info("task.reconcile", tenant_id=tenant_id, source=source)
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO sync_state (tenant_id, source, last_run_at, last_status, high_watermark) "
+            "VALUES ($1::uuid, $2, now(), $3, $4) "
+            "ON CONFLICT (tenant_id, source) "
+            "DO UPDATE SET last_run_at = now(), last_status = $3, "
+            "high_watermark = COALESCE($4, sync_state.high_watermark)",
+            tenant_id,
+            source,
+            status,
+            watermark,
+        )
 
-    async def _record():
-        from acip_core.clients import get_pg_pool
 
-        pool = await get_pg_pool()
-        async with pool.acquire() as conn:
-            await conn.execute(
-                "INSERT INTO sync_state (tenant_id, source, last_run_at, last_status) "
-                "VALUES ($1::uuid, $2, now(), 'ok') "
-                "ON CONFLICT (tenant_id, source) "
-                "DO UPDATE SET last_run_at = now(), last_status = 'ok'",
-                tenant_id,
-                source,
-            )
+def _parse_ts(value: str | None):
+    """ISO-8601 (incl. trailing Z) → aware datetime, or None."""
+    if not value:
+        return None
+    from datetime import datetime
 
     try:
-        _run(_record())
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+
+
+async def _reconcile_one(tenant_id: str, source: str) -> str:
+    """Pull everything the store reports changed since the watermark and
+    repair the index (M3: REQ-M3-002/012). Custom REST tenants push instead —
+    for them the run just records an 'ok' heartbeat."""
+    import json as _json
+
+    from acip_core.clients import get_pg_pool
+    from acip_sync.fetch import fetch_changed_since
+    from acip_sync.reconcile import reconcile
+
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT settings FROM tenants WHERE id = $1::uuid", tenant_id)
+        wm = await conn.fetchval(
+            "SELECT high_watermark FROM sync_state WHERE tenant_id = $1::uuid AND source = $2",
+            tenant_id,
+            source,
+        )
+    if row is None:
+        return "unknown_tenant"
+    settings = row["settings"] or {}
+    if isinstance(settings, str):
+        try:
+            settings = _json.loads(settings)
+        except ValueError:
+            settings = {}
+
+    since = wm.isoformat() if wm is not None else None
+    changed = fetch_changed_since(source, settings, since)
+    if changed is None:
+        # Nothing to pull (push-only integration or credentials not set yet).
+        await _record_sync(tenant_id, source, "ok")
+        return "ok"
+
+    try:
+        result = await reconcile(get_es_client(), tenant_id, source, changed, embed=_embed_text)
+    except Exception as exc:  # noqa: BLE001 - store/ES unreachable: record, don't crash
+        log.warning("task.reconcile_failed", tenant_id=tenant_id, source=source, error=str(exc))
+        await _record_sync(tenant_id, source, "error")
+        return "error"
+
+    if result.repaired:
+        await bump_data_version(get_redis(), tenant_id)
+    await _record_sync(tenant_id, source, "ok", _parse_ts(result.high_watermark))
+    log.info("task.reconcile_done", tenant_id=tenant_id, source=source, repaired=result.repaired)
+    return f"ok:{result.repaired}"
+
+
+async def _reconcile_all() -> str:
+    """Beat entrypoint: reconcile every active tenant with a connected store."""
+    from acip_core.clients import get_pg_pool
+
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT id, settings->>'platform' AS platform FROM tenants "
+            "WHERE status = 'active' AND settings->>'platform' IN ('opencart', 'woocommerce')"
+        )
+    done = 0
+    for r in rows:
+        try:
+            await _reconcile_one(str(r["id"]), str(r["platform"]))
+            done += 1
+        except Exception as exc:  # noqa: BLE001 - one bad tenant must not stop the sweep
+            log.warning("task.reconcile_tenant_failed", tenant_id=str(r["id"]), error=str(exc))
+    return f"swept:{done}/{len(rows)}"
+
+
+@celery_app.task(name="acip.sync.reconcile_tenant")
+def reconcile_tenant(tenant_id: str, source: str = "rest") -> str:
+    """Delta reconciliation (REQ-M3-002/012) — beat sweep or single-tenant run.
+
+    ``tenant_id="__all__"`` (the beat schedule) enumerates active tenants with
+    a connected OpenCart/WooCommerce store and reconciles each from its own
+    watermark. A concrete tenant id (dashboard "sync now") reconciles just that
+    store. Failures are recorded in ``sync_state`` — never raised into beat.
+    """
+    log.info("task.reconcile", tenant_id=tenant_id, source=source)
+    try:
+        if tenant_id == "__all__":
+            return _run(_reconcile_all())
+        return _run(_reconcile_one(tenant_id, source))
     except Exception as exc:  # noqa: BLE001 - PG down: log, don't crash the beat
         log.warning("task.reconcile_record_failed", error=str(exc))
-    return "scheduled"
+        return "failed"
 
 
 @celery_app.task(name="acip.embed.batch")

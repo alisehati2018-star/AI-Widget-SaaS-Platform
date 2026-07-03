@@ -47,7 +47,9 @@ async def reconcile(
         vector = None
         if embed is not None and product.title:
             try:
-                vector = await embed(f"{product.title}\n{product.description}")
+                # Same rich text as the webhook path: title + brand + categories
+                # + attributes + description, so repairs don't degrade semantics.
+                vector = await embed(product.embedding_text())
             except Exception:  # noqa: BLE001 - embedding optional during repair
                 vector = None
         await upsert_product(es, product, embedding=vector)

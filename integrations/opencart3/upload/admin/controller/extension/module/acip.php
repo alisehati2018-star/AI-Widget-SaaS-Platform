@@ -27,6 +27,7 @@ class ControllerExtensionModuleAcip extends Controller {
         $fields = array(
             'heading_title', 'text_edit', 'text_enabled', 'text_disabled',
             'entry_status', 'entry_api_url', 'entry_widget_key', 'entry_sync_key',
+            'entry_export_token', 'help_export_token',
             'entry_replace_search', 'entry_inject_widget', 'button_save', 'button_cancel',
             'button_bulk_import', 'help_bulk_import', 'button_test_connection',
         );
@@ -62,6 +63,7 @@ class ControllerExtensionModuleAcip extends Controller {
             'module_acip_api_url'        => '',
             'module_acip_widget_key'     => '',
             'module_acip_sync_key'       => '',
+            'module_acip_export_token'   => '',
             'module_acip_replace_search' => 1,
             'module_acip_inject_widget'  => 1,
         );
