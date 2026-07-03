@@ -1,0 +1,19 @@
+# Vitrin production reverse proxy (Phase 9).
+# Automatic HTTPS (Let's Encrypt) for both hostnames; HTTP → HTTPS redirect
+# is Caddy's default. The API also sets HSTS itself (HSTS_ENABLED=true).
+
+{
+    email {$ACME_EMAIL}
+}
+
+# Web app (marketing + dashboard + admin UI)
+{$DOMAIN} {
+    encode gzip
+    reverse_proxy web:3000
+}
+
+# API (widget loader, /v1/*, auth, admin API)
+{$API_DOMAIN} {
+    encode gzip
+    reverse_proxy api:8000
+}

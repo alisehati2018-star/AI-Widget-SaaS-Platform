@@ -448,7 +448,20 @@
     "sessionActive": "Connected",
     "operatorsTitle": "Platform operators",
     "operatorsBody": "Add more admins or manage operator access — no bootstrap token required.",
-    "operatorsLink": "Manage operators"
+    "operatorsLink": "Manage operators",
+    "totpTitle": "Two-factor auth (TOTP)",
+    "totpOn": "On",
+    "totpOff": "Off",
+    "totpBody": "When enabled, signing in to the admin panel requires the 6-digit code from your authenticator app (Google Authenticator, Aegis, …) in addition to the password.",
+    "totpEnroll": "Start enrollment",
+    "totpScanHint": "Add this key to your authenticator app (add account → enter key manually), then enter the current code to confirm.",
+    "totpSecret": "Secret key (Base32)",
+    "totpUri": "otpauth URI (for a QR code)",
+    "totpCode": "6-digit code",
+    "totpConfirm": "Confirm & enable",
+    "totpDisable": "Disable",
+    "totpEnabledNote": "Two-factor auth is on — sign-in now requires the app code.",
+    "totpDisabledNote": "Two-factor auth is off."
   },
   "elasticsearch": {
     "title": "Elasticsearch control",

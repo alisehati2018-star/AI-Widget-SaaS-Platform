@@ -448,7 +448,20 @@
     "sessionActive": "متصل",
     "operatorsTitle": "اپراتورهای پلتفرم",
     "operatorsBody": "ادمین‌های بیشتری اضافه کنید یا دسترسی اپراتورها را مدیریت کنید — بدون نیاز به توکن راه‌اندازی.",
-    "operatorsLink": "مدیریت اپراتورها"
+    "operatorsLink": "مدیریت اپراتورها",
+    "totpTitle": "ورود دومرحله‌ای (TOTP)",
+    "totpOn": "فعال",
+    "totpOff": "غیرفعال",
+    "totpBody": "با فعال‌سازی، ورود به پنل ادمین علاوه بر گذرواژه به کد ۶ رقمی اپ Authenticator (مثل Google Authenticator یا Aegis) نیاز دارد.",
+    "totpEnroll": "شروع فعال‌سازی",
+    "totpScanHint": "این کلید را در اپ Authenticator خود وارد کنید (افزودن حساب ← ورود دستی کلید) و سپس کد فعلی را برای تأیید بزنید.",
+    "totpSecret": "کلید مخفی (Base32)",
+    "totpUri": "آدرس otpauth (برای ساخت QR)",
+    "totpCode": "کد ۶ رقمی",
+    "totpConfirm": "تأیید و فعال‌سازی",
+    "totpDisable": "غیرفعال‌سازی",
+    "totpEnabledNote": "ورود دومرحله‌ای فعال شد — از این پس ورود به کد اپ نیاز دارد.",
+    "totpDisabledNote": "ورود دومرحله‌ای غیرفعال شد."
   },
   "elasticsearch": {
     "title": "کنترل الستیک‌سرچ",

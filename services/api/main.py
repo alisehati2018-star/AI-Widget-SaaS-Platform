@@ -77,6 +77,13 @@ def create_app() -> FastAPI:
     # Middleware (added inner→outer; CORS added last = outermost so it also
     # decorates error/preflight responses).
     app.add_middleware(TraceIdMiddleware)
+    if settings.admin_ip_allowlist_list:
+        # Operator plane (Phase 9): /admin/* only from the allowed networks.
+        from acip_core.middleware import AdminIpAllowlistMiddleware
+
+        app.add_middleware(
+            AdminIpAllowlistMiddleware, allowlist=settings.admin_ip_allowlist_list
+        )
     if settings.metrics_enabled:
         app.add_middleware(MetricsMiddleware)
     if settings.csrf_enabled:

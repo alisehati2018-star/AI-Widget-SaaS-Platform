@@ -1,0 +1,193 @@
+# Vitrin — production single-host topology (Phase 9, REQ-M1-002/003/009).
+#
+#   docker compose -f infra/docker-compose.prod.yml --env-file .env.production up -d
+#
+# Hardening posture vs the dev compose:
+#   * ONLY caddy publishes host ports (80/443) — datastores are internal-only.
+#   * Elasticsearch security ON (ELASTIC_PASSWORD required).
+#   * TLS terminates at caddy (automatic Let's Encrypt for DOMAIN/API_DOMAIN);
+#     the API runs with --proxy-headers so client IPs (rate limits, the
+#     /admin/* IP allowlist, session records) are the real ones.
+#   * COOKIE_SECURE=true, HSTS_ENABLED=true, CSRF on, ADMIN_IP_ALLOWLIST set.
+#   * Prometheus scrapes /metrics on the internal network (profile: monitoring).
+#
+# Secrets come from .env.production (never committed): see .env.production.example.
+
+name: vitrin-prod
+
+x-python-build: &python-build
+  build:
+    context: ..
+    dockerfile: infra/Dockerfile.python
+
+x-app-env: &app-env
+  ACIP_ENV: production
+  ES_HOST: http://elasticsearch:9200
+  ES_USERNAME: elastic
+  ES_PASSWORD: ${ELASTIC_PASSWORD:?set in .env.production}
+  PG_HOST: postgres
+  PG_PORT: "5432"
+  PG_DB: ${PG_DB:-acip}
+  PG_USER: ${PG_USER:-acip}
+  PG_PASSWORD: ${PG_PASSWORD:?set in .env.production}
+  REDIS_URL: redis://redis:6379/0
+  CELERY_BROKER_URL: redis://redis:6379/1
+  CELERY_RESULT_BACKEND: redis://redis:6379/2
+  AUTH_SECRET: ${AUTH_SECRET:?set in .env.production}
+  ADMIN_TOKEN: ${ADMIN_TOKEN:?set in .env.production}
+  ADMIN_IP_ALLOWLIST: ${ADMIN_IP_ALLOWLIST:-}
+  APP_BASE_URL: https://${DOMAIN:?set in .env.production}
+  WIDGET_BASE_URL: https://${API_DOMAIN:?set in .env.production}
+  CORS_ALLOW_ORIGINS: https://${DOMAIN}
+  COOKIE_SECURE: "true"
+  HSTS_ENABLED: "true"
+  CSRF_ENABLED: "true"
+  EMAIL_PROVIDER: ${EMAIL_PROVIDER:-smtp}
+  EMAIL_FROM: ${EMAIL_FROM:-Vitrin <no-reply@vitrin.ai>}
+  SMTP_HOST: ${SMTP_HOST:-}
+  SMTP_PORT: ${SMTP_PORT:-587}
+  SMTP_USER: ${SMTP_USER:-}
+  SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+  BILLING_PROVIDER: ${BILLING_PROVIDER:-manual}
+  BILLING_WEBHOOK_SECRET: ${BILLING_WEBHOOK_SECRET:-}
+  EMBEDDINGS_URL: ${EMBEDDINGS_URL:-http://embeddings:80}
+  LLM_URL: ${LLM_URL:-}
+  FRONTIER_ENABLED: ${FRONTIER_ENABLED:-false}
+
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.4.2
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=true
+      - xpack.security.http.ssl.enabled=false   # TLS terminates at caddy; ES stays internal
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD:?set in .env.production}
+      - "ES_JAVA_OPTS=${ES_JAVA_OPTS:--Xms4g -Xmx4g}"
+      - path.repo=/snapshots                     # snapshot repository for backups
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+      - es-snapshots:/snapshots
+    networks: [internal]
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: ${ES_MEM_LIMIT:-8g}
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/9200"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  postgres:
+    image: postgres:16
+    environment:
+      - POSTGRES_DB=${PG_DB:-acip}
+      - POSTGRES_USER=${PG_USER:-acip}
+      - POSTGRES_PASSWORD=${PG_PASSWORD:?set in .env.production}
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+      - ../db/migrations:/docker-entrypoint-initdb.d:ro
+    networks: [internal]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER:-acip} -d ${PG_DB:-acip}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    networks: [internal]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    <<: *python-build
+    command: >
+      python -m uvicorn api.main:app --host 0.0.0.0 --port 8000
+      --proxy-headers --forwarded-allow-ips=*
+      --workers ${API_WORKERS:-2}
+    environment: *app-env
+    networks: [internal]
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request as u; u.urlopen('http://localhost:8000/healthz', timeout=3)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  worker:
+    <<: *python-build
+    command: python -m celery -A worker.celery_app:celery_app worker --beat -l info --concurrency ${WORKER_CONCURRENCY:-4}
+    environment: *app-env
+    networks: [internal]
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ../apps/web
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_API_BASE=https://${API_DOMAIN}
+    networks: [internal]
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - DOMAIN=${DOMAIN}
+      - API_DOMAIN=${API_DOMAIN}
+      - ACME_EMAIL=${ACME_EMAIL:?set in .env.production}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [internal]
+    restart: unless-stopped
+    depends_on: [api, web]
+
+  prometheus:
+    image: prom/prometheus:latest
+    profiles: [monitoring]
+    command: ["--config.file=/etc/prometheus/prometheus.yml"]
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prom-data:/prometheus
+    networks: [internal]
+    restart: unless-stopped
+
+networks:
+  internal:
+
+volumes:
+  es-data:
+  es-snapshots:
+  pg-data:
+  redis-data:
+  caddy-data:
+  caddy-config:
+  prom-data:

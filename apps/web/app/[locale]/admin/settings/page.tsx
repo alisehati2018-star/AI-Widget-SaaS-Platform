@@ -7,6 +7,7 @@ import { adminFetch, useAdminSession } from "@/lib/auth";
 import { Link } from "@/i18n/navigation";
 import { DashboardShell, useAdminNav } from "@/components/shell";
 import { Alert, Badge, Field, Input, Spinner } from "@/components/ui";
+import { TotpCard } from "./totp-card";
 
 export default function AdminSettings() {
   const t = useTranslations("admin");
@@ -122,6 +123,8 @@ export default function AdminSettings() {
         </div>
 
         <div className="card-stack">
+          <TotpCard />
+
           <div className="card">
             <h3>{t("settings.securityTitle")}</h3>
             <ul className="feature-list">

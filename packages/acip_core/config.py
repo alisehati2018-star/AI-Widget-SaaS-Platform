@@ -137,6 +137,14 @@ class Settings(BaseSettings):
     csrf_enabled: bool = Field(default=True, alias="CSRF_ENABLED")
     # Per-IP rate limit (per minute) on unauthenticated auth endpoints.
     auth_ip_rate_per_min: int = Field(default=10, alias="AUTH_IP_RATE_PER_MIN")
+    # --- Phase 9: operator-plane hardening ---
+    # Comma-separated IPs/CIDRs allowed to reach /admin/* (empty = everyone).
+    # Behind a reverse proxy run uvicorn with --proxy-headers so IPs are real.
+    admin_ip_allowlist: str = Field(default="", alias="ADMIN_IP_ALLOWLIST")
+
+    @property
+    def admin_ip_allowlist_list(self) -> list[str]:
+        return [x.strip() for x in self.admin_ip_allowlist.split(",") if x.strip()]
 
     @property
     def cors_origins_list(self) -> list[str]:

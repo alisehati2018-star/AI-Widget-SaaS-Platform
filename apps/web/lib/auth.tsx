@@ -95,9 +95,13 @@ export function useSession(): SessionState & { reload: () => void } {
 // --------------------------------------------------------------------------- #
 // Platform-admin plane — separate identity, separate cookies, separate API.   #
 // --------------------------------------------------------------------------- #
-export async function adminLogin(email: string, password: string): Promise<SessionUser> {
+export async function adminLogin(
+  email: string,
+  password: string,
+  totpCode?: string,
+): Promise<SessionUser> {
   const r = await apiFetch<TokenResponse>("/admin/auth/login", {
-    body: { email, password },
+    body: totpCode ? { email, password, totp_code: totpCode } : { email, password },
     csrfCookie: ADMIN_CSRF_COOKIE,
   });
   return r.user;

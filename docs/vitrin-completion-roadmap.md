@@ -13,9 +13,9 @@
 | ۴ | Admin ES Console, Agent, Widget, QA | ✅ تأییدشده ([گزارش](../reports/phases/phase-04-admin-qa.md)) |
 | ۵ | Owner Dashboard (۱۷ صفحه) | ✅ تأییدشده ([گزارش](../reports/phases/phase-05-owner-dashboard.md)) |
 | ۶ | موتور هوشمند: ES + Sync + Inference | ✅ تأییدشده ([گزارش](../reports/phases/phase-06-engine.md)) |
-| ۷ | یکپارچه‌سازی OpenCart / WooCommerce | ✅ **تحویل‌شده — منتظر تأیید شما** ([گزارش](../reports/phases/phase-07-integrations.md)) |
-| ۸ | Dev Sign-off (تست نهایی ویندوز) | ⬜ |
-| ۹ | انتقال سرور + hardening (عملیاتی) | ⬜ |
+| ۷ | یکپارچه‌سازی OpenCart / WooCommerce | ✅ تأییدشده — بازبینی مجدد کامل ([گزارش](../reports/phases/phase-07-integrations.md)) |
+| ۸ | Dev Sign-off (تست نهایی ویندوز) | ✅ **تحویل‌شده** ([گزارش](../reports/dev-signoff.md)) — اقلام ES-دار سمت شما |
+| ۹ | انتقال سرور + hardening (عملیاتی) | ✅ **تحویل‌شده — منتظر تأیید شما** ([گزارش](../reports/phases/phase-09-hardening.md)) |
 | ۱۰ | PSP + Invoice PDF (عملیاتی) | ⬜ |
 | ۱۱ | Production Go-Live | ⬜ |
 
@@ -146,21 +146,29 @@
 - [x] Delta reconciliation — hook غیر no-op: `acip_sync/fetch.py` + `reconcile_tenant` واقعی (watermark + جاروی beat برای همهٔ tenantهای متصل + ثبت خطا در sync_state)
 - [x] `docs/integrations-fa.md`
 - [x] پذیرش: فروشگاه pilot (شبیه‌ساز `scripts/pilot_store.py` با ۸ محصول فارسی) → sync → دلتا فقط محصول ویرایش‌شده (۴ تست E2E پاس؛ جست‌وجوی ویجت روی ES زندهٔ شما)
-- [x] گزارش: `reports/phases/phase-07-integrations.md` + **تأیید شما** ⏸️
+- [x] گزارش: `reports/phases/phase-07-integrations.md` + **تأیید شما** ✅ (بازبینی مجدد: سریال‌سازی Celery/ایمنی ویزارد/عدم پیشروی watermark در خطا تأیید؛ نکتهٔ حذف در pull به مستند اضافه شد؛ ۱۱ تست سبز)
 
 ---
 
-## فاز ۸ — Dev Sign-off ⬜
+## فاز ۸ — Dev Sign-off ✅
 
-- [ ] چک‌لیست دستی ۲۰ صفحه ادمین + ۱۷ صفحه dashboard
-- [ ] integration tests با ES داکر + `check:all` + responsive + functional سبز
-- [ ] graceful 503 در `/v1/*` وقتی ES down
-- [ ] `reports/dev-signoff.md` — **فقط پس از تأیید متنی شما فاز عملیاتی شروع می‌شود**
+- [x] چک‌لیست صفحات: جاروی زندهٔ خودکار ۲۰ ادمین + ۱۶ داشبورد (`signoff-sweep.cjs`) — ۳۶/۳۶ سبز + نمونهٔ fa/RTL
+- [x] `check:all` + responsive + functional + a11y سبز · integration tests با ES داکر → سمت شما (دستورها در گزارش)
+- [x] graceful 503 در `/v1/*` وقتی ES down — curl زنده + تست خودکار
+- [x] `reports/dev-signoff.md` — فاز عملیاتی با دستور متنی شما («این سه تا فاز رو بصورت کامل انجام بده») آغاز شد
 
 ---
 
-## فاز ۹ — انتقال سرور (عملیاتی) ⬜
-- [ ] `docs/DEPLOYMENT-SERVER.md` · compose production · backup/restore تست‌شده · TLS + `COOKIE_SECURE` · MFA/TOTP ادمین · IP allowlist `/admin/*` · monitoring · load test
+## فاز ۹ — انتقال سرور (عملیاتی) ✅
+- [x] `docs/DEPLOYMENT-SERVER.md` (راهنمای کامل فارسی)
+- [x] compose production (`infra/docker-compose.prod.yml` + `Caddyfile` + `apps/web/Dockerfile` + `.env.production.example`)
+- [x] backup/restore تست‌شده (`infra/backup.sh` + `restore.sh` — چرخهٔ کامل روی PG واقعی: ۲۲ جدول/۱۵ migration/۵۱۴ tenant یکسان)
+- [x] TLS (Caddy خودکار) + `COOKIE_SECURE` + HSTS — در compose اجباری
+- [x] MFA/TOTP ادمین (RFC 6238 با stdlib + migration `0015` + UI + تأیید زندهٔ کامل)
+- [x] IP allowlist `/admin/*` (`ADMIN_IP_ALLOWLIST` — fail-closed؛ تأیید زندهٔ 403)
+- [x] monitoring (Prometheus داخلی + alerts در compose)
+- [x] load test (`scripts/load_test.py` — نمونه: healthz ۴۸۲rps/p95=87ms؛ اعداد search روی سرور شما با ES)
+- [x] گزارش: `reports/phases/phase-09-hardening.md` + **تأیید شما** ⏸️
 
 ## فاز ۱۰ — PSP (عملیاتی) ⬜
 - [ ] Stripe/ZarinPal + webhook production + Invoice PDF + UI checkout (sandbox روی staging)

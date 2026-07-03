@@ -14,6 +14,8 @@ export default function AdminLoginPage() {
   const { user, loading } = useAdminSession();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [totp, setTotp] = useState("");
+  const [needsTotp, setNeedsTotp] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -27,10 +29,16 @@ export default function AdminLoginPage() {
     setError(null);
     setBusy(true);
     try {
-      await adminLogin(email, password);
+      await adminLogin(email, password, needsTotp ? totp : undefined);
       router.replace("/admin");
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : tErrors("generic"));
+      if (err instanceof ApiError && err.code === "totp_required") {
+        // Second factor is on for this account: reveal the code field.
+        setNeedsTotp(true);
+        setError(null);
+      } else {
+        setError(err instanceof ApiError ? err.message : tErrors("generic"));
+      }
       setBusy(false);
     }
   }
@@ -55,6 +63,14 @@ export default function AdminLoginPage() {
             <Field label={t("shared.passwordLabel")}>
               <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t("shared.passwordPlaceholder")} required />
             </Field>
+            {needsTotp ? (
+              <Field label={t("adminLogin.totpLabel")}>
+                <Input dir="ltr" inputMode="numeric" autoComplete="one-time-code" maxLength={6}
+                  value={totp} onChange={(e) => setTotp(e.target.value)}
+                  placeholder="123456" required autoFocus />
+              </Field>
+            ) : null}
+            {needsTotp ? <p className="hint">{t("adminLogin.totpHint")}</p> : null}
             <button className="btn btn-primary btn-block btn-lg" disabled={busy}>
               {busy ? <Spinner /> : t("adminLogin.submit")}
             </button>
