@@ -52,6 +52,10 @@ class Settings(BaseSettings):
     # --- Phase 1: search / index / embedding tuning ---
     es_index_prefix: str = Field(default="acip", alias="ES_INDEX_PREFIX")
     catalogue_alias: str = Field(default="acip-products", alias="CATALOGUE_ALIAS")
+    # First-run convenience: the API ensures the catalogue index exists behind
+    # the read alias at startup (best-effort, never blocks). Disable in setups
+    # where index lifecycle is managed exclusively from the admin console.
+    es_bootstrap_on_startup: bool = Field(default=True, alias="ES_BOOTSTRAP_ON_STARTUP")
     embedding_model: str = Field(default="BAAI/bge-m3", alias="EMBEDDING_MODEL")
     embedding_dims: int = Field(default=1024, alias="EMBEDDING_DIMS")
     reranker_model: str = Field(default="BAAI/bge-reranker-v2-m3", alias="RERANKER_MODEL")

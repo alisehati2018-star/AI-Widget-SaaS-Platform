@@ -11,9 +11,9 @@
 | ۲ | Admin Revenue, Plans, Users, Inbox | ✅ تأییدشده ([گزارش](../reports/phases/phase-02-admin-revenue.md)) |
 | ۳ | Admin Observability و امنیت | ✅ تأییدشده ([گزارش](../reports/phases/phase-03-admin-observability.md)) |
 | ۴ | Admin ES Console, Agent, Widget, QA | ✅ تأییدشده ([گزارش](../reports/phases/phase-04-admin-qa.md)) |
-| ۵ | Owner Dashboard (۱۷ صفحه) | ✅ **تحویل‌شده — منتظر تأیید شما** ([گزارش](../reports/phases/phase-05-owner-dashboard.md)) |
-| ۶ | موتور هوشمند: ES + Sync + Inference | ⬜ منتظر تأیید فاز ۵ |
-| ۷ | یکپارچه‌سازی OpenCart / WooCommerce | ⬜ |
+| ۵ | Owner Dashboard (۱۷ صفحه) | ✅ تأییدشده ([گزارش](../reports/phases/phase-05-owner-dashboard.md)) |
+| ۶ | موتور هوشمند: ES + Sync + Inference | ✅ تأییدشده ([گزارش](../reports/phases/phase-06-engine.md)) |
+| ۷ | یکپارچه‌سازی OpenCart / WooCommerce | ✅ **تحویل‌شده — منتظر تأیید شما** ([گزارش](../reports/phases/phase-07-integrations.md)) |
 | ۸ | Dev Sign-off (تست نهایی ویندوز) | ⬜ |
 | ۹ | انتقال سرور + hardening (عملیاتی) | ⬜ |
 | ۱۰ | PSP + Invoice PDF (عملیاتی) | ⬜ |
@@ -124,29 +124,29 @@
 - [x] Backend: `GET /tenant/sync-status` + `POST /tenant/sync/trigger` (+ ثبت اجرای worker در sync_state)
 - [x] پذیرش: signup → onboarding ۴از۴ → widget embed روی localhost + degraded states (۲۴ چک زنده)
 - [x] گزارش: `reports/phases/phase-05-owner-dashboard.md`
-- [ ] **تأیید شما برای فاز ۶** ⏸️
+- [x] **تأیید شما برای فاز ۶** ✅
 
 ---
 
-## فاز ۶ — موتور هوشمند: ES + Sync + Inference ⬜
+## فاز ۶ — موتور هوشمند: ES + Sync + Inference ✅
 
-- [ ] bootstrap خودکار index + graceful degradation (503 با کد واضح)
-- [ ] `scripts/seed_catalog.py` — ۱۰۰ محصول فارسی + tenant demo + api_key
-- [ ] bulk sync نمونه + fixture
-- [ ] golden set eval — ۵۰ کوئری فارسی (KPI: NDCG@10 ≥ 0.80 · p95 < 150ms · zero-result < 5% · groundedness ≥ 95%)
-- [ ] پذیرش: `/v1/search` و `/v1/chat` پاسخ واقعی روی localhost + ثبت KPIها
-- [ ] گزارش: `reports/phases/phase-06-engine.md` + **تأیید شما**
+- [x] bootstrap خودکار index + graceful degradation (503 با کد واضح: `search_unavailable` / `index_not_ready` / `assistant_unavailable`)
+- [x] `scripts/seed_catalog.py` — ۱۰۰ محصول فارسی + tenant demo + api_key (+ `--dry-run` و `--no-embeddings`)
+- [x] bulk sync نمونه + fixture (`tests/fixtures/catalog_fa.json` + تست ingest در `tests/integration/test_engine.py`)
+- [x] golden set eval — ۵۰ کوئری فارسی (`eval/golden_set/golden_fa.jsonl`) + KPI runner (`run_eval --kpi`) + groundedness runner (`eval/groundedness.py`)
+- [ ] پذیرش: `/v1/search` و `/v1/chat` پاسخ واقعی روی localhost + ثبت KPIها (روی ویندوز شما با ES روشن — دستورها در گزارش فاز)
+- [x] گزارش: `reports/phases/phase-06-engine.md` + **تأیید شما** ✅ (پس از بازبینی مجدد با ۳ اصلاح)
 
 ---
 
-## فاز ۷ — یکپارچه‌سازی فروشگاه ⬜
+## فاز ۷ — یکپارچه‌سازی فروشگاه ✅
 
-- [ ] OpenCart 3 pilot: test connection + bulk + webhook با فروشگاه واقعی محلی
-- [ ] WooCommerce pilot
-- [ ] Delta reconciliation (hook غیر no-op در `acip_sync`)
-- [ ] `docs/integrations-fa.md`
-- [ ] پذیرش: فروشگاه pilot → sync → جست‌وجو در ویجت
-- [ ] گزارش: `reports/phases/phase-07-integrations.md` + **تأیید شما**
+- [x] OpenCart 3 pilot: test connection + bulk + webhook (+ endpoint خروجی `export` با توکن برای pull) — نصب روی فروشگاه واقعی سمت شما طبق `docs/integrations-fa.md`
+- [x] WooCommerce pilot (+ pull با REST API استاندارد Woo: consumer key/secret فقط‌خواندنی)
+- [x] Delta reconciliation — hook غیر no-op: `acip_sync/fetch.py` + `reconcile_tenant` واقعی (watermark + جاروی beat برای همهٔ tenantهای متصل + ثبت خطا در sync_state)
+- [x] `docs/integrations-fa.md`
+- [x] پذیرش: فروشگاه pilot (شبیه‌ساز `scripts/pilot_store.py` با ۸ محصول فارسی) → sync → دلتا فقط محصول ویرایش‌شده (۴ تست E2E پاس؛ جست‌وجوی ویجت روی ES زندهٔ شما)
+- [x] گزارش: `reports/phases/phase-07-integrations.md` + **تأیید شما** ⏸️
 
 ---
 

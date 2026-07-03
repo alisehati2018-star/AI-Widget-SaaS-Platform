@@ -61,12 +61,25 @@ def load_golden_set(path: Path) -> list[GoldenQuery]:
     return queries
 
 
+def _p95(values: list[float]) -> float:
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    idx = min(len(ordered) - 1, max(0, int(round(0.95 * len(ordered))) - 1))
+    return ordered[idx]
+
+
 def evaluate(golden: list[GoldenQuery], provider: ResultsProvider, k: int = 10) -> dict[str, float]:
+    import time
+
     ndcgs: list[float] = []
     precisions: list[float] = []
     counts: list[int] = []
+    latencies_ms: list[float] = []
     for q in golden:
+        started = time.perf_counter()
         ranked_ids = list(provider.search(q.query))
+        latencies_ms.append((time.perf_counter() - started) * 1000)
         counts.append(len(ranked_ids))
         ranked_grades = [float(q.grades.get(pid, 0)) for pid in ranked_ids]
         ideal_grades = [float(g) for g in q.grades.values()]
@@ -77,8 +90,31 @@ def evaluate(golden: list[GoldenQuery], provider: ResultsProvider, k: int = 10) 
         f"ndcg@{k}": sum(ndcgs) / n,
         f"precision@{k}": sum(precisions) / n,
         "zero_result_rate": zero_result_rate(counts),
+        "p95_latency_ms": _p95(latencies_ms),
         "num_queries": float(len(golden)),
     }
+
+
+# Headline KPI targets (blueprint §1/§18) checked by --kpi.
+KPI_TARGETS = {
+    "ndcg@10": (">=", 0.80),
+    "p95_latency_ms": ("<", 150.0),
+    "zero_result_rate": ("<", 0.05),
+}
+
+
+def kpi_report(results: dict[str, float]) -> tuple[str, bool]:
+    lines = ["", "KPI report:"]
+    all_ok = True
+    for metric, (op, target) in KPI_TARGETS.items():
+        value = results.get(metric)
+        if value is None:
+            continue
+        ok = value >= target if op == ">=" else value < target
+        all_ok = all_ok and ok
+        mark = "PASS" if ok else "FAIL"
+        lines.append(f"  {mark}  {metric} = {value:.4g}  (target {op} {target})")
+    return "\n".join(lines), all_ok
 
 
 def main() -> None:
@@ -89,6 +125,10 @@ def main() -> None:
         "--tenant",
         default=None,
         help="Tenant id to evaluate against a live ES cluster (M5). Omit for a dry run.",
+    )
+    parser.add_argument(
+        "--kpi", action="store_true",
+        help="Check results against the headline KPI targets (exit 1 on failure).",
     )
     args = parser.parse_args()
 
@@ -103,6 +143,11 @@ def main() -> None:
         provider = EmptyProvider()
     results = evaluate(golden, provider, k=args.k)
     print(json.dumps(results, indent=2, ensure_ascii=False))
+    if args.kpi:
+        report, ok = kpi_report(results)
+        print(report)
+        if not ok:
+            raise SystemExit(1)
 
 
 if __name__ == "__main__":

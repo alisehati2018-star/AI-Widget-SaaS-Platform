@@ -22,6 +22,9 @@ export function ConnectWizard() {
   const [platform, setPlatform] = useState("opencart");
   const [storeUrl, setStoreUrl] = useState("");
   const [savedUrl, setSavedUrl] = useState("");
+  const [wooCk, setWooCk] = useState("");
+  const [wooCs, setWooCs] = useState("");
+  const [ocToken, setOcToken] = useState("");
   const [hasSyncKey, setHasSyncKey] = useState(false);
   const [sync, setSync] = useState<SyncStatus | null>(null);
   const [busy, setBusy] = useState(false);
@@ -34,6 +37,9 @@ export function ConnectWizard() {
         setPlatform(p.settings.platform ?? "opencart");
         setStoreUrl(p.settings.store_url ?? "");
         setSavedUrl(p.settings.store_url ?? "");
+        setWooCk(p.settings.woo_consumer_key ?? "");
+        setWooCs(p.settings.woo_consumer_secret ?? "");
+        setOcToken(p.settings.oc_export_token ?? "");
       })
       .catch(() => {});
     authFetch<{ keys: KeyRow[] }>("/tenant/keys")
@@ -50,7 +56,13 @@ export function ConnectWizard() {
     try {
       await authFetch("/tenant/settings", {
         method: "PATCH",
-        body: { platform, store_url: storeUrl.trim() },
+        body: {
+          platform,
+          store_url: storeUrl.trim(),
+          woo_consumer_key: wooCk.trim(),
+          woo_consumer_secret: wooCs.trim(),
+          oc_export_token: ocToken.trim(),
+        },
       });
       setSavedUrl(storeUrl.trim());
       setNote(t("connect.step1Saved"));
@@ -107,6 +119,25 @@ export function ConnectWizard() {
             <Field label={t("catalog.storeUrl")}>
               <Input dir="ltr" value={storeUrl} onChange={(e) => setStoreUrl(e.target.value)} placeholder="https://shop.example.com" />
             </Field>
+            {platform === "woocommerce" ? (
+              <>
+                <Field label={t("connect.wooCk")}>
+                  <Input dir="ltr" value={wooCk} onChange={(e) => setWooCk(e.target.value)} placeholder="ck_..." />
+                </Field>
+                <Field label={t("connect.wooCs")}>
+                  <Input dir="ltr" type="password" value={wooCs} onChange={(e) => setWooCs(e.target.value)} placeholder="cs_..." />
+                </Field>
+                <p className="muted" style={{ fontSize: ".85rem" }}>{t("connect.pullHintWoo")}</p>
+              </>
+            ) : null}
+            {platform === "opencart" ? (
+              <>
+                <Field label={t("connect.ocToken")}>
+                  <Input dir="ltr" value={ocToken} onChange={(e) => setOcToken(e.target.value)} />
+                </Field>
+                <p className="muted" style={{ fontSize: ".85rem" }}>{t("connect.pullHintOc")}</p>
+              </>
+            ) : null}
             <button className="btn btn-primary" disabled={busy || !storeUrl.trim()}>
               {busy ? <Spinner /> : t("connect.step1Save")}
             </button>

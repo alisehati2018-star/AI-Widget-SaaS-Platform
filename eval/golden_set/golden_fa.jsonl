@@ -1,0 +1,50 @@
+{"query_id": "fa-001", "query": "گوشی سامسونگ", "category": "brand", "judgements": [{"product_id": "p-001", "grade": 3}, {"product_id": "p-002", "grade": 3}, {"product_id": "p-008", "grade": 3}, {"product_id": "p-012", "grade": 1}]}
+{"query_id": "fa-002", "query": "موبایل شیائومی", "category": "synonym-brand", "judgements": [{"product_id": "p-003", "grade": 3}, {"product_id": "p-004", "grade": 3}, {"product_id": "p-009", "grade": 3}]}
+{"query_id": "fa-003", "query": "گوشی آیفون", "category": "brand", "judgements": [{"product_id": "p-005", "grade": 3}, {"product_id": "p-006", "grade": 3}, {"product_id": "p-011", "grade": 1}]}
+{"query_id": "fa-004", "query": "گوشی ارزان", "category": "intent-price", "judgements": [{"product_id": "p-007", "grade": 2}, {"product_id": "p-008", "grade": 3}, {"product_id": "p-004", "grade": 2}]}
+{"query_id": "fa-005", "query": "گوشی سامسونگ ۱۲۸ گیگ", "category": "attribute", "judgements": [{"product_id": "p-001", "grade": 3}, {"product_id": "p-008", "grade": 1}]}
+{"query_id": "fa-006", "query": "آیفون ۱۳", "category": "model", "judgements": [{"product_id": "p-005", "grade": 3}, {"product_id": "p-011", "grade": 2}]}
+{"query_id": "fa-007", "query": "قاب گوشی آیفون", "category": "accessory", "judgements": [{"product_id": "p-011", "grade": 3}]}
+{"query_id": "fa-008", "query": "گلس سامسونگ", "category": "accessory", "judgements": [{"product_id": "p-012", "grade": 3}]}
+{"query_id": "fa-009", "query": "ردمی نوت", "category": "model", "judgements": [{"product_id": "p-003", "grade": 3}]}
+{"query_id": "fa-010", "query": "گوشی مناسب سالمند", "category": "intent", "judgements": [{"product_id": "p-007", "grade": 3}]}
+{"query_id": "fa-011", "query": "لپ تاپ ایسوس", "category": "brand", "judgements": [{"product_id": "p-013", "grade": 3}, {"product_id": "p-014", "grade": 3}]}
+{"query_id": "fa-012", "query": "لپتاپ گیمینگ", "category": "spelling-intent", "judgements": [{"product_id": "p-014", "grade": 3}, {"product_id": "p-018", "grade": 1}]}
+{"query_id": "fa-013", "query": "مک بوک", "category": "brand", "judgements": [{"product_id": "p-017", "grade": 3}, {"product_id": "p-018", "grade": 3}]}
+{"query_id": "fa-014", "query": "لپ تاپ دانشجویی ارزان", "category": "intent", "judgements": [{"product_id": "p-015", "grade": 3}, {"product_id": "p-020", "grade": 2}]}
+{"query_id": "fa-015", "query": "لپ تاپ لنوو", "category": "brand", "judgements": [{"product_id": "p-015", "grade": 3}, {"product_id": "p-016", "grade": 3}]}
+{"query_id": "fa-016", "query": "کوله لپ تاپ", "category": "accessory", "judgements": [{"product_id": "p-021", "grade": 3}]}
+{"query_id": "fa-017", "query": "نوت بوک اپل", "category": "synonym-brand", "judgements": [{"product_id": "p-017", "grade": 3}, {"product_id": "p-018", "grade": 3}]}
+{"query_id": "fa-018", "query": "کفش نایکی", "category": "brand", "judgements": [{"product_id": "p-023", "grade": 3}, {"product_id": "p-024", "grade": 3}, {"product_id": "p-029", "grade": 2}, {"product_id": "p-032", "grade": 1}]}
+{"query_id": "fa-019", "query": "کتانی مردانه", "category": "synonym", "judgements": [{"product_id": "p-023", "grade": 2}, {"product_id": "p-024", "grade": 2}, {"product_id": "p-027", "grade": 2}, {"product_id": "p-028", "grade": 3}]}
+{"query_id": "fa-020", "query": "کفش ورزشی زنانه", "category": "category", "judgements": [{"product_id": "p-025", "grade": 3}, {"product_id": "p-026", "grade": 3}]}
+{"query_id": "fa-021", "query": "کفش آدیداس زنانه", "category": "brand", "judgements": [{"product_id": "p-025", "grade": 3}, {"product_id": "p-026", "grade": 3}]}
+{"query_id": "fa-022", "query": "کفش دویدن", "category": "intent", "judgements": [{"product_id": "p-024", "grade": 3}, {"product_id": "p-023", "grade": 2}]}
+{"query_id": "fa-023", "query": "کفش کوهنوردی ضدآب", "category": "attribute", "judgements": [{"product_id": "p-030", "grade": 3}]}
+{"query_id": "fa-024", "query": "nike کفش", "category": "latin-brand", "judgements": [{"product_id": "p-023", "grade": 3}, {"product_id": "p-024", "grade": 3}, {"product_id": "p-029", "grade": 2}]}
+{"query_id": "fa-025", "query": "دمپایی زنانه", "category": "category", "judgements": [{"product_id": "p-031", "grade": 3}]}
+{"query_id": "fa-026", "query": "تلویزیون سامسونگ", "category": "brand", "judgements": [{"product_id": "p-033", "grade": 3}, {"product_id": "p-034", "grade": 3}, {"product_id": "p-049", "grade": 1}]}
+{"query_id": "fa-027", "query": "تلویزیون ۵۵ اینچ", "category": "attribute", "judgements": [{"product_id": "p-033", "grade": 3}, {"product_id": "p-035", "grade": 3}, {"product_id": "p-037", "grade": 3}]}
+{"query_id": "fa-028", "query": "تلویزیون OLED", "category": "attribute", "judgements": [{"product_id": "p-035", "grade": 3}]}
+{"query_id": "fa-029", "query": "تی وی ارزان", "category": "synonym-price", "judgements": [{"product_id": "p-038", "grade": 3}, {"product_id": "p-036", "grade": 2}]}
+{"query_id": "fa-030", "query": "براکت دیواری تلویزیون", "category": "accessory", "judgements": [{"product_id": "p-039", "grade": 3}]}
+{"query_id": "fa-031", "query": "هدفون بی سیم", "category": "category", "judgements": [{"product_id": "p-041", "grade": 3}, {"product_id": "p-042", "grade": 3}, {"product_id": "p-050", "grade": 3}, {"product_id": "p-043", "grade": 2}]}
+{"query_id": "fa-032", "query": "ایرپاد پرو", "category": "model", "judgements": [{"product_id": "p-042", "grade": 3}]}
+{"query_id": "fa-033", "query": "هندزفری بلوتوث ارزان", "category": "intent-price", "judgements": [{"product_id": "p-043", "grade": 3}, {"product_id": "p-047", "grade": 2}]}
+{"query_id": "fa-034", "query": "اسپیکر ضدآب", "category": "attribute", "judgements": [{"product_id": "p-045", "grade": 3}, {"product_id": "p-046", "grade": 1}]}
+{"query_id": "fa-035", "query": "هدفون نویز کنسلینگ", "category": "attribute", "judgements": [{"product_id": "p-041", "grade": 3}, {"product_id": "p-042", "grade": 3}]}
+{"query_id": "fa-036", "query": "هدست گیمینگ", "category": "synonym", "judgements": [{"product_id": "p-044", "grade": 3}]}
+{"query_id": "fa-037", "query": "ساعت هوشمند اپل", "category": "brand", "judgements": [{"product_id": "p-051", "grade": 3}, {"product_id": "p-057", "grade": 1}]}
+{"query_id": "fa-038", "query": "اپل واچ", "category": "model", "judgements": [{"product_id": "p-051", "grade": 3}, {"product_id": "p-057", "grade": 2}]}
+{"query_id": "fa-039", "query": "مچ بند شیائومی", "category": "category", "judgements": [{"product_id": "p-054", "grade": 3}, {"product_id": "p-053", "grade": 2}]}
+{"query_id": "fa-040", "query": "ساعت هوشمند بچه گانه", "category": "intent", "judgements": [{"product_id": "p-058", "grade": 3}]}
+{"query_id": "fa-041", "query": "پیراهن مردانه", "category": "category", "judgements": [{"product_id": "p-059", "grade": 3}, {"product_id": "p-060", "grade": 3}]}
+{"query_id": "fa-042", "query": "تیشرت مشکی", "category": "spelling-attr", "judgements": [{"product_id": "p-061", "grade": 3}]}
+{"query_id": "fa-043", "query": "شلوار جین", "category": "category", "judgements": [{"product_id": "p-062", "grade": 3}]}
+{"query_id": "fa-044", "query": "مانتو بهاره", "category": "category", "judgements": [{"product_id": "p-064", "grade": 3}]}
+{"query_id": "fa-045", "query": "کاپشن زمستانی مردانه", "category": "category", "judgements": [{"product_id": "p-065", "grade": 3}]}
+{"query_id": "fa-046", "query": "جاروبرقی بوش", "category": "brand", "judgements": [{"product_id": "p-069", "grade": 3}, {"product_id": "p-070", "grade": 1}]}
+{"query_id": "fa-047", "query": "ماشین لباسشویی", "category": "category", "judgements": [{"product_id": "p-071", "grade": 3}]}
+{"query_id": "fa-048", "query": "کرم ضد آفتاب", "category": "category", "judgements": [{"product_id": "p-079", "grade": 3}]}
+{"query_id": "fa-049", "query": "شامپو ضد ریزش", "category": "category", "judgements": [{"product_id": "p-081", "grade": 3}, {"product_id": "p-082", "grade": 1}]}
+{"query_id": "fa-050", "query": "کتاب اتم های عادت", "category": "title", "judgements": [{"product_id": "p-095", "grade": 3}]}

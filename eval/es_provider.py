@@ -16,9 +16,15 @@ from acip_search.retrieval import SearchService
 
 
 class ESResultsProvider:
-    """Synchronous `search(query)->[product_id]` adapter over the async service."""
+    """Synchronous `search(query)->[product_id]` adapter over the async service.
+
+    Holds ONE event loop for its whole lifetime: the async ES/Redis clients bind
+    their connection pools to the first running loop, so a fresh ``asyncio.run``
+    per query would fail with "Event loop is closed" from the second query on.
+    """
 
     def __init__(self, tenant_id: str, size: int = 10) -> None:
+        self._loop = asyncio.new_event_loop()
         redis = get_redis()
         self._tenant_id = tenant_id
         self._size = size
@@ -29,5 +35,7 @@ class ESResultsProvider:
         )
 
     def search(self, query: str) -> Sequence[str]:
-        result = asyncio.run(self._svc.search(self._tenant_id, query, size=self._size))
+        result = self._loop.run_until_complete(
+            self._svc.search(self._tenant_id, query, size=self._size)
+        )
         return [r.get("product_id") for r in result["results"] if r.get("product_id")]

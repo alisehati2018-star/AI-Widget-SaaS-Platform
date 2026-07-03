@@ -99,10 +99,12 @@ export default function WidgetPage() {
   // hit the live public API; without it the widget still mounts with defaults.
   function testDoc(): string {
     const origin = window.location.origin;
-    const key = testKey.trim() || "dashboard-preview";
+    // API keys are URL-safe tokens; strip anything else so the pasted value
+    // can never break out of the srcdoc markup.
+    const key = testKey.trim().replace(/[^A-Za-z0-9_-]/g, "") || "dashboard-preview";
     return `<!doctype html><html dir="rtl" lang="fa"><head><meta charset="utf-8">
 <style>body{margin:0;min-height:340px;background:#f7f7f9}</style></head><body>
-<script src="${origin}/api/widget/v1.js" data-acip-key="${key.replace(/"/g, "")}"
+<script src="${origin}/api/widget/v1.js" data-acip-key="${key}"
   data-acip-base="${origin}/api" async><\/script></body></html>`;
   }
 
