@@ -4,7 +4,12 @@
  *
  * Registered on the `catalog/view/common/footer/before` event to inject the
  * single-line ACIP widget loader on every storefront page, and exposes a JSON
- * search endpoint the (OCMOD-patched) search page can call.
+ * search endpoint the (OCMOD-patched) search page can call. Also handles the
+ * order-sync events: OpenCart routes every order mutation — storefront
+ * checkout, the admin "Add History" button, 3rd-party payment callbacks —
+ * through `catalog/model/checkout/order.php`, so hooking it here (rather than
+ * on an admin-side model) reaches every order regardless of which side
+ * changed it.
  */
 class ControllerExtensionModuleAcip extends Controller {
 
@@ -133,10 +138,11 @@ class ControllerExtensionModuleAcip extends Controller {
         );
     }
 
-    /** Event: a storefront order was placed / its status changed (checkout
-     *  confirmation calls `catalog/model/checkout/order::addHistory`, distinct
-     *  from the admin-side `addOrderHistory` — both are registered so every
-     *  order reaches ACIP regardless of which side changed it). */
+    /** Event: `addOrderHistory` fired — a new order's initial status was set,
+     *  or an existing order's status changed (from checkout, the admin "Add
+     *  History" button, or a payment callback). Always an upsert: cancelled/
+     *  refunded is a status value, not a removal (`onOrderDelete` handles
+     *  actual deletion). */
     public function onOrderChange($route, $args, $output) {
         if (!$this->config->get('module_acip_status')
             || !$this->config->get('module_acip_sync_orders')) {
@@ -151,6 +157,20 @@ class ControllerExtensionModuleAcip extends Controller {
             $this->registry->set('acip', new Acip($this->registry));
             $this->registry->get('acip')->syncOrder($order, 'upsert');
         }
+    }
+
+    /** Event: `deleteOrder` fired — the order record itself was removed. */
+    public function onOrderDelete($route, $args, $output) {
+        if (!$this->config->get('module_acip_status')
+            || !$this->config->get('module_acip_sync_orders')) {
+            return;
+        }
+        $order_id = is_array($args) && isset($args[0]) ? (int)$args[0] : 0;
+        if (!$order_id) {
+            return;
+        }
+        $this->registry->set('acip', new Acip($this->registry));
+        $this->registry->get('acip')->syncOrder(array('order_id' => $order_id), 'delete');
     }
 
     /** Canonical payload for one order (same shape as the admin model). */

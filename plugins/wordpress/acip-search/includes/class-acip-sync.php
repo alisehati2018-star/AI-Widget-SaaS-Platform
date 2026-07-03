@@ -30,11 +30,18 @@ class ACIP_Sync {
         add_action('before_delete_post', array($this, 'on_delete'), 10, 1);
 
         // Order sync (independent toggle — catalogue sync can run without it).
+        // Deletion is hooked both ways since it depends on the store's order
+        // storage engine: classic (orders are `shop_order` posts) uses
+        // wp_trash_post/before_delete_post; HPOS (WooCommerce's custom order
+        // tables, default since 8.2) fires its own woocommerce_trash_order /
+        // woocommerce_delete_order regardless of post storage.
         if (!empty($options['sync_orders'])) {
             add_action('woocommerce_new_order', array($this, 'on_order_change'), 10, 1);
             add_action('woocommerce_order_status_changed', array($this, 'on_order_change'), 10, 1);
             add_action('wp_trash_post', array($this, 'on_order_delete'), 10, 1);
             add_action('before_delete_post', array($this, 'on_order_delete'), 10, 1);
+            add_action('woocommerce_trash_order', array($this, 'on_order_delete_hpos'), 10, 1);
+            add_action('woocommerce_delete_order', array($this, 'on_order_delete_hpos'), 10, 1);
             add_action('wp_ajax_acip_bulk_import_orders', array($this, 'ajax_bulk_import_orders'));
         }
 
@@ -131,12 +138,17 @@ class ACIP_Sync {
         $this->client->sync_order($this->to_canonical_order($order), 'upsert');
     }
 
-    /** The order's post was trashed/deleted (not just status-changed) → tombstone. */
+    /** The order's post was trashed/deleted (classic/CPT storage) → tombstone. */
     public function on_order_delete($post_id) {
         if (get_post_type($post_id) !== 'shop_order') {
             return;
         }
         $this->client->sync_order(array('id' => (int) $post_id), 'delete');
+    }
+
+    /** The order was trashed/deleted under HPOS (custom order tables) → tombstone. */
+    public function on_order_delete_hpos($order_id) {
+        $this->client->sync_order(array('id' => (int) $order_id), 'delete');
     }
 
     /** Map a WC_Order to the ACIP canonical order payload. */

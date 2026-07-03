@@ -2,9 +2,12 @@
 /**
  * ACIP admin module controller (OpenCart 3.x).
  *
- * Settings page + product-change event registration. Stores api_url, the
- * widget key (storefront search/chat) and the sync key (catalogue ingest),
- * and registers admin events so product add/edit/delete are pushed to ACIP.
+ * Settings page + event registration. Stores api_url, the widget key
+ * (storefront search/chat) and the sync key (catalogue + order ingest), and
+ * registers the admin-side product add/edit/delete events. Order events are
+ * registered here (install/uninstall) but handled by the catalog controller
+ * — OpenCart routes every order mutation, including the admin "Add History"
+ * button, through `catalog/model/checkout/order.php`.
  */
 class ControllerExtensionModuleAcip extends Controller {
     private $error = array();
@@ -157,15 +160,18 @@ class ControllerExtensionModuleAcip extends Controller {
         $this->model_setting_event->addEvent('acip_product_delete',
             'admin/model/catalog/product/deleteProduct/after',
             'extension/module/acip/onProductDelete');
-        // Order sync: admin-side status changes AND storefront checkout
-        // confirmation both call an `addHistory`-family method, but on
-        // different models — register both so every order reaches ACIP.
-        $this->model_setting_event->addEvent('acip_order_admin',
-            'admin/model/sale/order/addOrderHistory/after',
+        // Order sync: OpenCart routes EVERY order mutation — storefront
+        // checkout, the admin "Add History" button, and 3rd-party payment
+        // callbacks alike — through catalog/model/checkout/order.php (the
+        // admin panel calls it via its own internal `api/order` proxy, it has
+        // no separate order model of its own). One event on that model
+        // therefore covers both admin and storefront changes.
+        $this->model_setting_event->addEvent('acip_order_history',
+            'catalog/model/checkout/order/addOrderHistory/after',
             'extension/module/acip/onOrderChange');
-        $this->model_setting_event->addEvent('acip_order_storefront',
-            'catalog/model/checkout/order/addHistory/after',
-            'extension/module/acip/onOrderChange');
+        $this->model_setting_event->addEvent('acip_order_delete',
+            'catalog/model/checkout/order/deleteOrder/after',
+            'extension/module/acip/onOrderDelete');
         // Storefront: inject the widget loader into the rendered footer.
         $this->model_setting_event->addEvent('acip_widget_footer',
             'catalog/view/common/footer/after',
@@ -177,8 +183,8 @@ class ControllerExtensionModuleAcip extends Controller {
         $this->model_setting_event->deleteEventByCode('acip_product_edit');
         $this->model_setting_event->deleteEventByCode('acip_product_add');
         $this->model_setting_event->deleteEventByCode('acip_product_delete');
-        $this->model_setting_event->deleteEventByCode('acip_order_admin');
-        $this->model_setting_event->deleteEventByCode('acip_order_storefront');
+        $this->model_setting_event->deleteEventByCode('acip_order_history');
+        $this->model_setting_event->deleteEventByCode('acip_order_delete');
         $this->model_setting_event->deleteEventByCode('acip_widget_footer');
     }
 
@@ -213,24 +219,6 @@ class ControllerExtensionModuleAcip extends Controller {
         }
         $this->registry->set('acip', new Acip($this->registry));
         $this->registry->get('acip')->syncProduct(array('product_id' => $product_id), 'delete');
-    }
-
-    /** Event: an order was added/its status changed (admin side) → upsert. */
-    public function onOrderChange($route, $args, $output) {
-        if (!$this->config->get('module_acip_status')
-            || !$this->config->get('module_acip_sync_orders')) {
-            return;
-        }
-        $order_id = is_array($args) && isset($args[0]) ? (int)$args[0] : 0;
-        if (!$order_id) {
-            return;
-        }
-        $this->load->model('extension/module/acip');
-        $order = $this->model_extension_module_acip->getOrder($order_id);
-        if ($order) {
-            $this->registry->set('acip', new Acip($this->registry));
-            $this->registry->get('acip')->syncOrder($order, 'upsert');
-        }
     }
 
     private function validate() {
