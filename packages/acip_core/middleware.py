@@ -137,3 +137,54 @@ class CsrfMiddleware(BaseHTTPMiddleware):
                     },
                 )
         return await call_next(request)
+
+
+class AdminIpAllowlistMiddleware(BaseHTTPMiddleware):
+    """Restrict the operator plane (``/admin/*``) to an IP allowlist (SE-3).
+
+    ``allowlist`` is a list of IPs/CIDRs (e.g. ``["203.0.113.7", "10.0.0.0/8"]``).
+    An empty list disables the check. Behind a reverse proxy, run uvicorn with
+    ``--proxy-headers --forwarded-allow-ips`` so ``request.client`` carries the
+    real client address (the production compose does this).
+    """
+
+    def __init__(self, app, *, allowlist: list[str]) -> None:
+        super().__init__(app)
+        import ipaddress
+
+        self._networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network | None] = []
+        for item in allowlist:
+            item = item.strip()
+            if not item:
+                continue
+            try:
+                self._networks.append(ipaddress.ip_network(item, strict=False))
+            except ValueError:
+                # A typo in the allowlist must fail CLOSED for /admin, not open.
+                self._networks.append(None)
+
+    async def dispatch(self, request: Request, call_next):
+        if not self._networks or not request.url.path.startswith("/admin"):
+            return await call_next(request)
+        import ipaddress
+
+        host = request.client.host if request.client else None
+        allowed = False
+        if host:
+            try:
+                addr = ipaddress.ip_address(host)
+                allowed = any(net is not None and addr in net for net in self._networks)
+            except ValueError:
+                allowed = False
+        if not allowed:
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "error": {
+                        "code": "ip_not_allowed",
+                        "message": "The admin panel is not accessible from your network.",
+                        "request_id": trace_id_var.get(),
+                    }
+                },
+            )
+        return await call_next(request)

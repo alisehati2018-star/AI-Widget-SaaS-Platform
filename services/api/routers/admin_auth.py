@@ -33,6 +33,7 @@ from acip_auth import (
 )
 from acip_auth.models import AuthPrincipal
 from acip_auth.tokens import ExpiredTokenError, TokenError
+from acip_auth.totp import generate_totp_secret, otpauth_uri, verify_totp, verify_totp_step
 from acip_core.audit import audit
 from acip_core.clients import get_pg_pool, get_redis
 from acip_core.config import get_settings
@@ -155,7 +156,8 @@ async def login(payload: dict[str, Any], request: Request, response: Response):
     pool = await get_pg_pool()
     async with pool.acquire() as conn:
         admin = await conn.fetchrow(
-            "SELECT id, email, password_hash, full_name, status, failed_logins, locked_until "
+            "SELECT id, email, password_hash, full_name, status, failed_logins, locked_until, "
+            "totp_secret, totp_enabled, totp_last_step "
             "FROM admin_users WHERE lower(email) = $1",
             email,
         )
@@ -181,6 +183,37 @@ async def login(payload: dict[str, Any], request: Request, response: Response):
                 admin["id"],
             )
             return generic
+
+        # Second factor (Phase 9 hardening): once enabled, the password alone
+        # never signs an admin in. A missing code gets a distinct machine code
+        # so the login form can reveal the TOTP field; a WRONG code counts as
+        # a failed attempt (same lockout ladder as a wrong password).
+        if admin["totp_enabled"]:
+            totp = str(payload.get("totp_code", "")).strip()
+            if not totp:
+                return error_response(
+                    401, "totp_required", "Enter the 6-digit code from your authenticator app."
+                )
+            step = verify_totp_step(str(admin["totp_secret"]), totp)
+            # Replay guard: a code at or before the last accepted step is dead,
+            # even inside the clock-skew window (a sniffed code can't be reused).
+            if step is None or step <= int(admin["totp_last_step"]):
+                attempts = int(admin["failed_logins"]) + 1
+                lock = (
+                    _now() + timedelta(minutes=s.login_lockout_minutes)
+                    if attempts >= s.login_max_attempts
+                    else None
+                )
+                await conn.execute(
+                    "UPDATE admin_users SET failed_logins = $1, locked_until = $2 WHERE id = $3",
+                    attempts,
+                    lock,
+                    admin["id"],
+                )
+                return error_response(401, "invalid_totp", "The 6-digit code is not valid.")
+            await conn.execute(
+                "UPDATE admin_users SET totp_last_step = $1 WHERE id = $2", step, admin["id"]
+            )
 
         async with conn.transaction():
             new_hash = hash_password(password) if needs_rehash(admin["password_hash"]) else None
@@ -399,6 +432,129 @@ async def change_email(
             detail={"new_email": new_email},
         )
     return {"status": "email_changed", "email": new_email}
+
+
+# --------------------------------------------------------------------------- #
+# TOTP two-factor auth (Phase 9 hardening)                                      #
+# --------------------------------------------------------------------------- #
+@router.get("/totp")
+async def totp_status(
+    authorization: str | None = _AUTHZ, vitrin_admin_access: str | None = _ACCESS_COOKIE
+):
+    principal = await admin_current_principal(authorization, vitrin_admin_access)
+    if principal is None:
+        return error_response(401, "unauthenticated", "A valid access token is required.")
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        enabled = await conn.fetchval(
+            "SELECT totp_enabled FROM admin_users WHERE id = $1::uuid", principal.user_id
+        )
+    return {"totp_enabled": bool(enabled)}
+
+
+@router.post("/totp/enroll")
+async def totp_enroll(
+    payload: dict[str, Any],
+    authorization: str | None = _AUTHZ,
+    vitrin_admin_access: str | None = _ACCESS_COOKIE,
+):
+    """Start enrollment: store a fresh secret (NOT yet enforced) and return it
+    with the otpauth:// URI. Enforcement begins only after /totp/confirm."""
+    principal = await admin_current_principal(authorization, vitrin_admin_access)
+    if principal is None:
+        return error_response(401, "unauthenticated", "A valid access token is required.")
+    current = str(payload.get("current_password", ""))
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT email, password_hash, totp_enabled FROM admin_users WHERE id = $1::uuid",
+            principal.user_id,
+        )
+        if row is None or not verify_password(current, row["password_hash"]):
+            return error_response(403, "invalid_password", "Your current password is incorrect.")
+        if row["totp_enabled"]:
+            return error_response(409, "totp_already_enabled", "Two-factor auth is already on.")
+        secret = generate_totp_secret()
+        await conn.execute(
+            "UPDATE admin_users SET totp_secret = $1 WHERE id = $2::uuid",
+            secret,
+            principal.user_id,
+        )
+    return {
+        "secret": secret,
+        "otpauth_uri": otpauth_uri(secret, str(row["email"])),
+        "status": "pending_confirmation",
+    }
+
+
+@router.post("/totp/confirm")
+async def totp_confirm(
+    payload: dict[str, Any],
+    authorization: str | None = _AUTHZ,
+    vitrin_admin_access: str | None = _ACCESS_COOKIE,
+):
+    """Turn enforcement on after the admin proves the authenticator works."""
+    principal = await admin_current_principal(authorization, vitrin_admin_access)
+    if principal is None:
+        return error_response(401, "unauthenticated", "A valid access token is required.")
+    code = str(payload.get("totp_code", "")).strip()
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT email, totp_secret, totp_enabled FROM admin_users WHERE id = $1::uuid",
+            principal.user_id,
+        )
+        if row is None or not row["totp_secret"]:
+            return error_response(409, "totp_not_enrolled", "Start enrollment first.")
+        if row["totp_enabled"]:
+            return error_response(409, "totp_already_enabled", "Two-factor auth is already on.")
+        step = verify_totp_step(str(row["totp_secret"]), code)
+        if step is None:
+            return error_response(401, "invalid_totp", "The 6-digit code is not valid.")
+        # Record the confirmation step too, so this exact code can't be
+        # replayed as the first login code.
+        await conn.execute(
+            "UPDATE admin_users SET totp_enabled = TRUE, totp_last_step = $1 WHERE id = $2::uuid",
+            step,
+            principal.user_id,
+        )
+    await audit(pool, actor=str(row["email"]), action="admin_auth.totp_enabled", detail={})
+    return {"status": "totp_enabled"}
+
+
+@router.post("/totp/disable")
+async def totp_disable(
+    payload: dict[str, Any],
+    authorization: str | None = _AUTHZ,
+    vitrin_admin_access: str | None = _ACCESS_COOKIE,
+):
+    """Turn 2FA off — requires the password AND a live code (a stolen session
+    alone can't weaken the account)."""
+    principal = await admin_current_principal(authorization, vitrin_admin_access)
+    if principal is None:
+        return error_response(401, "unauthenticated", "A valid access token is required.")
+    current = str(payload.get("current_password", ""))
+    code = str(payload.get("totp_code", "")).strip()
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT email, password_hash, totp_secret, totp_enabled "
+            "FROM admin_users WHERE id = $1::uuid",
+            principal.user_id,
+        )
+        if row is None or not row["totp_enabled"]:
+            return error_response(409, "totp_not_enabled", "Two-factor auth is not on.")
+        if not verify_password(current, row["password_hash"]):
+            return error_response(403, "invalid_password", "Your current password is incorrect.")
+        if not verify_totp(str(row["totp_secret"]), code):
+            return error_response(401, "invalid_totp", "The 6-digit code is not valid.")
+        await conn.execute(
+            "UPDATE admin_users SET totp_enabled = FALSE, totp_secret = NULL "
+            "WHERE id = $1::uuid",
+            principal.user_id,
+        )
+    await audit(pool, actor=str(row["email"]), action="admin_auth.totp_disabled", detail={})
+    return {"status": "totp_disabled"}
 
 
 @router.post("/bootstrap")

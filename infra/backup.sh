@@ -29,5 +29,20 @@ if command -v redis-cli >/dev/null 2>&1; then
     echo "[backup] redis snapshot skipped (not reachable)"
 fi
 
-echo "[backup] Elasticsearch snapshot: deferred (run via ES snapshot API once connected)."
+# Elasticsearch snapshot (Phase 9): set ES_URL (+ optional ES_USER/ES_PASSWORD)
+# to snapshot the catalogue into the 'vitrin' repository (path.repo must be
+# configured — the production compose mounts /snapshots for this).
+if [ -n "${ES_URL:-}" ]; then
+  AUTH=()
+  [ -n "${ES_PASSWORD:-}" ] && AUTH=(-u "${ES_USER:-elastic}:${ES_PASSWORD}")
+  curl -fsS "${AUTH[@]}" -X PUT "${ES_URL%/}/_snapshot/vitrin" \
+    -H 'Content-Type: application/json' \
+    -d '{"type": "fs", "settings": {"location": "/snapshots"}}' >/dev/null \
+    && echo "[backup] es snapshot repo OK" || echo "[backup] es snapshot repo failed"
+  curl -fsS "${AUTH[@]}" -X PUT \
+    "${ES_URL%/}/_snapshot/vitrin/snap-${STAMP}?wait_for_completion=true" >/dev/null \
+    && echo "[backup] es snapshot snap-${STAMP} OK" || echo "[backup] es snapshot failed"
+else
+  echo "[backup] Elasticsearch snapshot skipped (set ES_URL to enable)."
+fi
 echo "[backup] done -> ${PG_OUT}"

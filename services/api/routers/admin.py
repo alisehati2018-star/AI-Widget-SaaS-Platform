@@ -1977,7 +1977,8 @@ async def list_plans(
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             "SELECT id, code, name, description, price_monthly, currency, credits_per_month, "
-            "monthly_credit_cap, rate_limit_per_min, is_public, sort_order, features "
+            "monthly_credit_cap, rate_limit_per_min, is_public, sort_order, features, "
+            "name_fa, description_fa, features_fa "
             "FROM plans ORDER BY sort_order ASC, price_monthly ASC"
         )
     return {
@@ -1995,6 +1996,9 @@ async def list_plans(
                 "is_public": r["is_public"],
                 "sort_order": r["sort_order"],
                 "features": r["features"],
+                "name_fa": r["name_fa"],
+                "description_fa": r["description_fa"],
+                "features_fa": r["features_fa"],
             }
             for r in rows
         ]
@@ -2014,7 +2018,9 @@ async def update_plan(
         return _forbidden()
     columns = {
         "name": str,
+        "name_fa": str,
         "description": str,
+        "description_fa": str,
         "price_monthly": float,
         "currency": str,
         "credits_per_month": float,
@@ -2072,7 +2078,9 @@ async def create_plan(
     if not name:
         return error_response(422, "invalid_request", "Field 'name' is required.")
     optional = {
+        "name_fa": (str, None),
         "description": (str, None),
+        "description_fa": (str, None),
         "price_monthly": (float, 0.0),
         "currency": (str, "USD"),
         "credits_per_month": (float, 0.0),
@@ -2095,10 +2103,12 @@ async def create_plan(
         if await conn.fetchval("SELECT 1 FROM plans WHERE code = $1", code):
             return error_response(409, "code_taken", "A plan with this code already exists.")
         plan_id = await conn.fetchval(
-            "INSERT INTO plans (code, name, description, price_monthly, currency, "
-            "credits_per_month, monthly_credit_cap, rate_limit_per_min, is_public, sort_order) "
-            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id",
-            code, name, values["description"], values["price_monthly"], values["currency"],
+            "INSERT INTO plans (code, name, name_fa, description, description_fa, "
+            "price_monthly, currency, credits_per_month, monthly_credit_cap, "
+            "rate_limit_per_min, is_public, sort_order) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id",
+            code, name, values["name_fa"], values["description"], values["description_fa"],
+            values["price_monthly"], values["currency"],
             values["credits_per_month"], values["monthly_credit_cap"],
             values["rate_limit_per_min"], values["is_public"], values["sort_order"],
         )

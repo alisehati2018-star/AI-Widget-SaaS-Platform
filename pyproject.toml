@@ -17,6 +17,8 @@ dependencies = [
     "opentelemetry-api>=1.42",
     "opentelemetry-sdk>=1.42",
     "opentelemetry-instrumentation-fastapi>=0.63b1",
+    "fpdf2>=2.8",
+    "uharfbuzz>=0.39",
 ]
 
 [project.optional-dependencies]

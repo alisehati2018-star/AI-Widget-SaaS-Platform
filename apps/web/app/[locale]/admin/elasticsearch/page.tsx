@@ -140,7 +140,15 @@ export default function AdminElasticsearch() {
       <div className="card" style={{ marginBottom: "1.5rem" }}>
         <h3>{t("elasticsearch.clusterTitle")}</h3>
         {loading ? <Spinner /> : !health?.reachable ? (
-          <Alert kind="error">{t("elasticsearch.unreachable")}{health?.error ? `: ${health.error}` : ""}</Alert>
+          <Alert kind="error">
+            {t("elasticsearch.unreachable")}
+            {health?.error ? (
+              <details style={{ marginTop: ".4rem" }}>
+                <summary style={{ cursor: "pointer" }}>{t("elasticsearch.errorDetails")}</summary>
+                <code dir="ltr" style={{ display: "block", textAlign: "left", fontSize: ".78rem", marginTop: ".3rem", overflowWrap: "anywhere" }}>{health.error}</code>
+              </details>
+            ) : null}
+          </Alert>
         ) : (
           <div className="stat-grid">
             <div className="stat"><span className="stat-label">{t("elasticsearch.status")}</span>

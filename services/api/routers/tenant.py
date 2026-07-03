@@ -66,7 +66,9 @@ async def profile(authorization: str | None = _AUTHZ, vitrin_access: str | None 
     async with pool.acquire() as conn:
         t = await conn.fetchrow(
             "SELECT t.slug, t.name, t.status, t.tracking_enabled, t.settings, "
-            "COALESCE(pl.name, '—') AS plan, COALESCE(s.status, 'none') AS sub_status, "
+            "COALESCE(pl.name, '—') AS plan, pl.code AS plan_code, "
+            "COALESCE(pl.name_fa, pl.name, '—') AS plan_fa, "
+            "COALESCE(s.status, 'none') AS sub_status, "
             "s.current_period_end "
             "FROM tenants t "
             "LEFT JOIN subscriptions s ON s.tenant_id = t.id "
@@ -87,6 +89,8 @@ async def profile(authorization: str | None = _AUTHZ, vitrin_access: str | None 
         "name": t["name"],
         "status": t["status"],
         "plan": t["plan"],
+        "plan_code": t["plan_code"],
+        "plan_fa": t["plan_fa"],
         "sub_status": t["sub_status"],
         "current_period_end": period_end.isoformat() if period_end else None,
         "tracking_enabled": t["tracking_enabled"],

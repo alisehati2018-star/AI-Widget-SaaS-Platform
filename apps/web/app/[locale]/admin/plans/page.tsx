@@ -11,6 +11,8 @@ interface Plan {
   id: string;
   code: string;
   name: string;
+  name_fa: string | null;
+  description_fa: string | null;
   price_monthly: number;
   currency: string;
   credits_per_month: number;
@@ -20,7 +22,7 @@ interface Plan {
 }
 
 const EMPTY: Plan = {
-  id: "", code: "", name: "", price_monthly: 0, currency: "USD",
+  id: "", code: "", name: "", name_fa: "", description_fa: "", price_monthly: 0, currency: "USD",
   credits_per_month: 0, monthly_credit_cap: 100000, rate_limit_per_min: 120, is_public: true,
 };
 
@@ -71,6 +73,8 @@ export default function AdminPlans() {
     try {
       const body = {
         name: editing.name.trim(),
+        name_fa: (editing.name_fa ?? "").trim(),
+        description_fa: (editing.description_fa ?? "").trim(),
         price_monthly: editing.price_monthly,
         credits_per_month: editing.credits_per_month,
         monthly_credit_cap: editing.monthly_credit_cap,
@@ -167,6 +171,12 @@ export default function AdminPlans() {
               ) : null}
               <Field label={t("plans.name")}>
                 <Input value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
+              </Field>
+              <Field label={t("plans.nameFa")}>
+                <Input value={editing.name_fa ?? ""} onChange={(e) => setEditing({ ...editing, name_fa: e.target.value })} />
+              </Field>
+              <Field label={t("plans.descriptionFa")}>
+                <Input value={editing.description_fa ?? ""} onChange={(e) => setEditing({ ...editing, description_fa: e.target.value })} />
               </Field>
               <Field label={t("plans.price")}>
                 <Input type="number" value={editing.price_monthly} onChange={(e) => setEditing({ ...editing, price_monthly: parseFloat(e.target.value) || 0 })} />

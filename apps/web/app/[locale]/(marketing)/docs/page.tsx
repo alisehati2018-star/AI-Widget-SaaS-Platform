@@ -27,11 +27,10 @@ export default function DocsPage() {
           <div className="card card-glow" style={{ marginBottom: "1.5rem" }}>
             <h3>{t("docs.snippetTitle")}</h3>
             <p className="hint">{t("docs.snippetHint")}</p>
-            <pre className="code-block">{`<script
-  src="https://cdn.vitrin.ai/widget.js"
-  data-tenant="your-store"
-  data-key="YOUR_WIDGET_KEY"
-  defer></script>`}</pre>
+            <pre className="code-block" dir="ltr" style={{ textAlign: "left" }}>{`<script src="https://api.yourdomain.com/widget/v1.js"
+        data-acip-key="YOUR_WIDGET_KEY"
+        data-acip-base="https://api.yourdomain.com" async></script>`}</pre>
+            <p className="hint">{t("docs.snippetDashboardHint")}</p>
           </div>
 
           {sections.map((s, i) => (

@@ -2,21 +2,14 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, getPlans, type MyOrder, type PlanInfo, type TenantProfile } from "@/lib/api";
+import { ApiError, getPlans, localizePlan, type BillingMeta, type MyOrder, type PlanInfo, type TenantProfile } from "@/lib/api";
 import { authFetch } from "@/lib/auth";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/datetime";
 import type { Locale } from "@/i18n/routing";
 import { DashboardShell, useOwnerNav } from "@/components/shell";
+import { InvoicesCard, type Invoice } from "./invoices-card";
 import { Alert, Badge, Spinner } from "@/components/ui";
 
-interface Invoice {
-  number: number;
-  description: string;
-  amount: number;
-  currency: string;
-  status: string;
-  created_at: string | null;
-}
 interface Preview {
   base_price: number;
   proration_credit: number;
@@ -25,11 +18,7 @@ interface Preview {
   plan_name: string;
 }
 
-const TOPUP_OPTIONS = [
-  { credits: 50000, price: 50 },
-  { credits: 100000, price: 100 },
-  { credits: 250000, price: 250 },
-];
+const TOPUP_CREDIT_CHOICES = [50000, 100000, 250000];
 
 export default function BillingPage() {
   const t = useTranslations("billing");
@@ -37,6 +26,7 @@ export default function BillingPage() {
   const locale = useLocale() as Locale;
   const nav = useOwnerNav();
   const [plans, setPlans] = useState<PlanInfo[]>([]);
+  const [billingMeta, setBillingMeta] = useState<BillingMeta | null>(null);
   const [profile, setProfile] = useState<TenantProfile | null>(null);
   const [orders, setOrders] = useState<MyOrder[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -52,9 +42,22 @@ export default function BillingPage() {
   }, []);
 
   useEffect(() => {
-    getPlans().then((r) => setPlans(r.plans)).catch(() => setPlans([]));
+    getPlans()
+      .then((r) => { setPlans(r.plans); setBillingMeta(r.billing ?? null); })
+      .catch(() => setPlans([]));
     reload();
-  }, [reload]);
+    // Returning from the payment gateway: surface the outcome once.
+    const params = new URLSearchParams(window.location.search);
+    const payment = params.get("payment");
+    if (payment === "success") setNote(t("paymentSuccess"));
+    else if (payment === "failed") setError(t("paymentFailed"));
+    if (payment) {
+      params.delete("payment");
+      params.delete("ref");
+      const rest = params.toString();
+      window.history.replaceState({}, "", window.location.pathname + (rest ? `?${rest}` : ""));
+    }
+  }, [reload, t]);
 
   const [preview, setPreview] = useState<(Preview & { code: string }) | null>(null);
 
@@ -130,7 +133,7 @@ export default function BillingPage() {
           <div>
             <small className="faint">{t("currentPlan")}</small>
             <h3 style={{ margin: "0.2rem 0" }}>
-              {profile?.plan ?? "—"}{" "}
+              {(locale === "fa" ? profile?.plan_fa : profile?.plan) ?? profile?.plan ?? "—"}{" "}
               <Badge tone={profile?.sub_status === "active" ? "success" : profile?.sub_status === "past_due" ? "warning" : undefined}>
                 {profile?.sub_status ?? "—"}
               </Badge>
@@ -192,23 +195,27 @@ export default function BillingPage() {
       <h3>{t("choosePlan")}</h3>
       <div className="pricing-grid" style={{ marginBottom: "2rem" }}>
         {plans.filter((p) => p.code !== "free").map((p) => {
-          const current = profile?.plan?.toLowerCase() === p.name.toLowerCase();
+          const current = profile?.plan_code
+            ? profile.plan_code === p.code
+            : profile?.plan?.toLowerCase() === p.name.toLowerCase();
+          const custom = p.code === "enterprise";
+          const loc = localizePlan(p, locale);
           return (
             <div className={`card price-card${p.code === "pro" ? " featured" : ""}`} key={p.code}>
-              <h4 style={{ margin: 0 }}>{p.name}</h4>
-              <div className="price">
-                {p.code === "enterprise" ? t("contactSales") : `$${formatNumber(p.price_monthly, locale)}`}
+              <h4 style={{ margin: 0 }}>{loc.name}</h4>
+              <div className="price" style={custom ? { fontSize: "1.05rem", lineHeight: 2.2 } : undefined}>
+                {custom ? t("contactSales") : formatCurrency(p.price_monthly, p.currency, locale)}
               </div>
               <ul className="feature-list">
-                {p.features.slice(0, 3).map((f) => <li key={f}>{f}</li>)}
+                {loc.features.slice(0, 3).map((f) => <li key={f}>{f}</li>)}
               </ul>
               <button
                 className={`btn ${p.code === "pro" ? "btn-primary" : "btn-ghost"} btn-block`}
                 style={{ marginTop: "auto" }}
-                disabled={current || pending === p.code || p.code === "enterprise"}
+                disabled={current || pending === p.code || custom}
                 onClick={() => void choose(p.code)}
               >
-                {current ? t("current") : p.code === "enterprise" ? t("contactSales") : pending === p.code ? <Spinner /> : t("buy", { plan: p.name })}
+                {current ? t("current") : custom ? t("contactSales") : pending === p.code ? <Spinner /> : t("buy", { plan: loc.name })}
               </button>
             </div>
           );
@@ -220,11 +227,15 @@ export default function BillingPage() {
         <p className="hint">{t("topupHint")}</p>
         <div className="row" style={{ flexWrap: "wrap", alignItems: "center" }}>
           <select className="input" style={{ maxWidth: 240 }} value={topupCredits} onChange={(e) => setTopupCredits(Number(e.target.value))}>
-            {TOPUP_OPTIONS.map((o) => (
-              <option key={o.credits} value={o.credits}>
-                {t("topupOption", { credits: formatNumber(o.credits, locale), price: formatNumber(o.price, locale) })}
-              </option>
-            ))}
+            {TOPUP_CREDIT_CHOICES.map((credits) => {
+              const rate = billingMeta?.topup_credits_per_unit ?? 1000;
+              const price = Math.round((credits / Math.max(1, rate)) * 100) / 100;
+              return (
+                <option key={credits} value={credits}>
+                  {t("topupOption", { credits: formatNumber(credits, locale), price: formatNumber(price, locale) })}
+                </option>
+              );
+            })}
           </select>
           <button className="btn btn-primary" disabled={pending === "topup"} onClick={() => void buyTopup()}>
             {pending === "topup" ? <Spinner /> : t("buyCredits")}
@@ -232,37 +243,7 @@ export default function BillingPage() {
         </div>
       </div>
 
-      <div className="card" style={{ marginBottom: "1.5rem" }}>
-        <h3>{t("invoices")}</h3>
-        {invoices.length === 0 ? (
-          <p className="muted">{t("invoicesEmpty")}</p>
-        ) : (
-          <table className="table">
-            <thead><tr><th>{t("colNumber")}</th><th>{t("colDescription")}</th><th>{t("colAmount")}</th><th>{t("colStatus")}</th><th>{t("colDate")}</th><th></th></tr></thead>
-            <tbody>
-              {invoices.map((inv) => (
-                <tr key={inv.number}>
-                  <td>#{formatNumber(inv.number, locale)}</td>
-                  <td>{inv.description}</td>
-                  <td>{formatCurrency(inv.amount, inv.currency, locale)}</td>
-                  <td><Badge tone="success">{inv.status}</Badge></td>
-                  <td className="muted">{formatDate(inv.created_at, locale)}</td>
-                  <td>
-                    <a
-                      className="btn btn-ghost"
-                      href={`/api/tenant/billing/invoices/${inv.number}/html`}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      {t("invoiceDownload")}
-                    </a>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+      <InvoicesCard invoices={invoices} />
 
       <div className="card">
         <h3>{t("orders")}</h3>

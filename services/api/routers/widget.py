@@ -78,7 +78,10 @@ async def widget_config(x_api_key: str | None = _KEY) -> Any:
     config = _platform_defaults()
     redis = get_redis()
     if redis is not None:
-        raw = await redis.get(_WIDGET_DEFAULTS_KEY)
+        try:
+            raw = await redis.get(_WIDGET_DEFAULTS_KEY)
+        except Exception:  # noqa: BLE001 - cache outage must not break the widget
+            raw = None
         if raw:
             try:
                 config.update(json.loads(raw))

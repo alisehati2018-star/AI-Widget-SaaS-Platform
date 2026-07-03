@@ -38,5 +38,8 @@
   "previewHint": "The remaining credit of your current period is deducted automatically.",
   "previewConfirmBtn": "Confirm and continue",
   "previewCancel": "Cancel",
-  "invoiceDownload": "Download HTML"
+  "invoiceDownload": "Download HTML",
+  "paymentSuccess": "Payment completed — your plan/credits are active.",
+  "paymentFailed": "The payment failed or was cancelled. Nothing was activated; you can try again.",
+  "invoicePdf": "PDF"
 }
