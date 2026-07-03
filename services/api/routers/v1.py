@@ -21,6 +21,7 @@ from fastapi.responses import StreamingResponse
 
 from ..deps import API_KEY_HEADER, KeyScope, principal_allowed, resolve_principal
 from ..runtime import get_assistant, get_rate_limiter, get_search_service
+from ..schemas import BulkSyncRequest, ChatRequest, SearchRequest, parse
 
 router = APIRouter(prefix="/v1", tags=["v1"])
 
@@ -66,16 +67,16 @@ async def search(payload: dict[str, Any], x_api_key: str | None = _KEY):
     principal, rejected = await _guard(x_api_key, KeyScope.WIDGET)
     if rejected is not None:
         return rejected
-    query = str(payload.get("query", "")).strip()
-    if not query:
-        return error_response(422, "invalid_request", "Field 'query' is required.")
+    req, invalid = parse(SearchRequest, payload)
+    if invalid is not None or req is None:
+        return invalid
     svc = get_search_service()
     try:
         result = await svc.search(
             principal.tenant_id,
-            query,
-            filters=payload.get("filters"),
-            size=payload.get("size"),
+            req.query.strip(),
+            filters=req.filters,
+            size=req.size,
         )
     except _ESTransportError:
         return _search_unavailable()
@@ -133,14 +134,13 @@ async def sync_bulk(payload: dict[str, Any], x_api_key: str | None = _KEY):
     principal, rejected = await _guard(x_api_key, KeyScope.SYNC)
     if rejected is not None:
         return rejected
-    source = str(payload.get("source", "rest"))
-    products = payload.get("products", [])
-    if not isinstance(products, list):
-        return error_response(422, "invalid_request", "Field 'products' must be a list.")
+    req, invalid = parse(BulkSyncRequest, payload)
+    if invalid is not None or req is None:
+        return invalid
     from worker.tasks import bulk_import
 
-    bulk_import.delay(principal.tenant_id, source, products)
-    return {"status": "accepted", "count": len(products)}
+    bulk_import.delay(principal.tenant_id, req.source, req.products)
+    return {"status": "accepted", "count": len(req.products)}
 
 
 @router.post("/chat")
@@ -150,10 +150,13 @@ async def chat(payload: dict[str, Any], x_api_key: str | None = _KEY):
     principal, rejected = await _guard(x_api_key, KeyScope.WIDGET)
     if rejected is not None:
         return rejected
-    message = str(payload.get("message", "")).strip()
+    req, invalid = parse(ChatRequest, payload)
+    if invalid is not None or req is None:
+        return invalid
+    message = req.message.strip()
     if not message:
         return error_response(422, "invalid_request", "Field 'message' is required.")
-    session_id = str(payload.get("session_id") or uuid.uuid4().hex)
+    session_id = req.session_id or uuid.uuid4().hex
     assistant = get_assistant()
     try:
         result = await assistant.answer(principal.tenant_id, session_id, message)
@@ -188,10 +191,13 @@ async def chat_stream(payload: dict[str, Any], x_api_key: str | None = _KEY):
     principal, rejected = await _guard(x_api_key, KeyScope.WIDGET)
     if rejected is not None:
         return rejected
-    message = str(payload.get("message", "")).strip()
+    req, invalid = parse(ChatRequest, payload)
+    if invalid is not None or req is None:
+        return invalid
+    message = req.message.strip()
     if not message:
         return error_response(422, "invalid_request", "Field 'message' is required.")
-    session_id = str(payload.get("session_id") or uuid.uuid4().hex)
+    session_id = req.session_id or uuid.uuid4().hex
     try:
         result = await get_assistant().answer(principal.tenant_id, session_id, message)
     except _ESTransportError:

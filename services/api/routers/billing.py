@@ -32,6 +32,7 @@ from acip_core.errors import error_response
 from acip_notify import invoice_email, send_email
 from fastapi import APIRouter, Cookie, Header, Request
 
+from ..schemas import CheckoutRequest, TopupRequest, parse
 from .tenant import _require_tenant
 
 
@@ -119,9 +120,10 @@ async def checkout(
     if p.role != Role.STORE_OWNER:
         return error_response(403, "forbidden", "Only the store owner can purchase a plan.")
     assert p.tenant_id is not None
-    plan_code = str(payload.get("plan_code", "")).strip()
-    if not plan_code:
-        return error_response(422, "invalid_request", "Field 'plan_code' is required.")
+    req, invalid = parse(CheckoutRequest, payload)
+    if invalid is not None or req is None:
+        return invalid
+    plan_code = req.plan_code.strip()
 
     s = get_settings()
     pool = await get_pg_pool()
@@ -228,12 +230,10 @@ async def topup(
     if p.role != Role.STORE_OWNER:
         return error_response(403, "forbidden", "Only the store owner can buy credits.")
     assert p.tenant_id is not None
-    try:
-        credits = float(payload.get("credits", 0))
-    except (TypeError, ValueError):
-        credits = 0
-    if credits <= 0:
-        return error_response(422, "invalid_request", "Field 'credits' must be positive.")
+    req, invalid = parse(TopupRequest, payload)
+    if invalid is not None or req is None:
+        return invalid
+    credits = req.credits
     s = get_settings()
     pool = await get_pg_pool()
     if s.email_verification_required:
