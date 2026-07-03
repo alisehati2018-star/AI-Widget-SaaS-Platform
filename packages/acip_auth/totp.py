@@ -36,16 +36,29 @@ def totp_code(secret: str, at: float | None = None) -> str:
 
 def verify_totp(secret: str, code: str, *, window: int = 1, at: float | None = None) -> bool:
     """Constant-time check of the code against ±`window` time steps (clock skew)."""
+    return verify_totp_step(secret, code, window=window, at=at) is not None
+
+
+def verify_totp_step(
+    secret: str, code: str, *, window: int = 1, at: float | None = None
+) -> int | None:
+    """Like ``verify_totp`` but returns the absolute time step that matched.
+
+    Callers persist the matched step and reject codes at or before it — a
+    sniffed code can then never be replayed, even inside the skew window.
+    """
     code = code.strip().replace(" ", "")
     if not code.isdigit() or len(code) != DIGITS:
-        return False
+        return None
     now = time.time() if at is None else at
-    ok = False
-    for step in range(-window, window + 1):
-        expected = totp_code(secret, at=now + step * STEP_SECONDS)
+    matched: int | None = None
+    for offset in range(-window, window + 1):
+        ts = now + offset * STEP_SECONDS
+        expected = totp_code(secret, at=ts)
         # No early exit: check every step so timing doesn't leak which matched.
-        ok = hmac.compare_digest(expected, code) or ok
-    return ok
+        if hmac.compare_digest(expected, code):
+            matched = int(ts // STEP_SECONDS)
+    return matched
 
 
 def otpauth_uri(secret: str, email: str, issuer: str = "Vitrin Admin") -> str:

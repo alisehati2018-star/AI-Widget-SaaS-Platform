@@ -14,10 +14,10 @@
 | ۵ | Owner Dashboard (۱۷ صفحه) | ✅ تأییدشده ([گزارش](../reports/phases/phase-05-owner-dashboard.md)) |
 | ۶ | موتور هوشمند: ES + Sync + Inference | ✅ تأییدشده ([گزارش](../reports/phases/phase-06-engine.md)) |
 | ۷ | یکپارچه‌سازی OpenCart / WooCommerce | ✅ تأییدشده — بازبینی مجدد کامل ([گزارش](../reports/phases/phase-07-integrations.md)) |
-| ۸ | Dev Sign-off (تست نهایی ویندوز) | ✅ **تحویل‌شده** ([گزارش](../reports/dev-signoff.md)) — اقلام ES-دار سمت شما |
-| ۹ | انتقال سرور + hardening (عملیاتی) | ✅ **تحویل‌شده — منتظر تأیید شما** ([گزارش](../reports/phases/phase-09-hardening.md)) |
-| ۱۰ | PSP + Invoice PDF (عملیاتی) | ⬜ |
-| ۱۱ | Production Go-Live | ⬜ |
+| ۸ | Dev Sign-off (تست نهایی ویندوز) | ✅ تأییدشده — بازبینی مجدد ([گزارش](../reports/dev-signoff.md)) — اقلام ES-دار سمت شما |
+| ۹ | انتقال سرور + hardening (عملیاتی) | ✅ تأییدشده — بازبینی مجدد با ۳ اصلاح ([گزارش](../reports/phases/phase-09-hardening.md)) |
+| ۱۰ | PSP + Invoice PDF (عملیاتی) | ✅ **تحویل‌شده** ([گزارش](../reports/phases/phase-10-psp.md)) |
+| ۱۱ | Production Go-Live | ✅ **تحویل‌شده — Go-Live نهایی منتظر تأیید متنی شما** ([گزارش](../reports/production-readiness.md)) |
 
 ---
 
@@ -170,8 +170,15 @@
 - [x] load test (`scripts/load_test.py` — نمونه: healthz ۴۸۲rps/p95=87ms؛ اعداد search روی سرور شما با ES)
 - [x] گزارش: `reports/phases/phase-09-hardening.md` + **تأیید شما** ⏸️
 
-## فاز ۱۰ — PSP (عملیاتی) ⬜
-- [ ] Stripe/ZarinPal + webhook production + Invoice PDF + UI checkout (sandbox روی staging)
+## فاز ۱۰ — PSP (عملیاتی) ✅
+- [x] زرین‌پال v4 (request/StartPay/callback با **verify سمت سرور**؛ sandbox با یک env) + مسیر manual پابرجا + webhook امضادار قبلی
+- [x] Invoice PDF فارسی سمت سرور (fpdf2 + uharfbuzz، فونت auto-discover) + endpoint دانلود + fallback تمیز به HTML
+- [x] UI checkout: redirect به درگاه + بنر نتیجهٔ پرداخت + دکمهٔ PDF (i18n کامل)
+- [x] تست‌ها: ۵ hermetic + ۳ E2E با درگاه جعلی (پرداخت موفق/انصراف/idempotency) — همه پاس
+- [ ] تراکنش sandbox روی staging با merchant زرین‌پال شما (اعتبارنامه سمت شما — دستورها در گزارش)
+- [x] گزارش: `reports/phases/phase-10-psp.md`
 
-## فاز ۱۱ — Go-Live ⬜
-- [ ] `reports/production-readiness.md` + SLO/DR runbook + تأیید نهایی شما
+## فاز ۱۱ — Go-Live ✅
+- [x] `reports/production-readiness.md` (نقشهٔ هدف→شواهد + ۶ قلم باز اجرایی + ریسک‌ها)
+- [x] runbook SLO/DR: `docs/RUNBOOK-SLO-DR.md` (SLOها، playbook رخدادها، DR با RPO/RTO، تشدید)
+- [ ] **تأیید متنی نهایی شما برای Go-Live** ⏸️ (پس از بستن اقلام باز بند ۳ گزارش آمادگی)

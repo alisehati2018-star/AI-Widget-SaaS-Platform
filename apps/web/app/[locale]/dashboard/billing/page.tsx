@@ -7,16 +7,9 @@ import { authFetch } from "@/lib/auth";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/datetime";
 import type { Locale } from "@/i18n/routing";
 import { DashboardShell, useOwnerNav } from "@/components/shell";
+import { InvoicesCard, type Invoice } from "./invoices-card";
 import { Alert, Badge, Spinner } from "@/components/ui";
 
-interface Invoice {
-  number: number;
-  description: string;
-  amount: number;
-  currency: string;
-  status: string;
-  created_at: string | null;
-}
 interface Preview {
   base_price: number;
   proration_credit: number;
@@ -54,7 +47,18 @@ export default function BillingPage() {
   useEffect(() => {
     getPlans().then((r) => setPlans(r.plans)).catch(() => setPlans([]));
     reload();
-  }, [reload]);
+    // Returning from the payment gateway: surface the outcome once.
+    const params = new URLSearchParams(window.location.search);
+    const payment = params.get("payment");
+    if (payment === "success") setNote(t("paymentSuccess"));
+    else if (payment === "failed") setError(t("paymentFailed"));
+    if (payment) {
+      params.delete("payment");
+      params.delete("ref");
+      const rest = params.toString();
+      window.history.replaceState({}, "", window.location.pathname + (rest ? `?${rest}` : ""));
+    }
+  }, [reload, t]);
 
   const [preview, setPreview] = useState<(Preview & { code: string }) | null>(null);
 
@@ -232,37 +236,7 @@ export default function BillingPage() {
         </div>
       </div>
 
-      <div className="card" style={{ marginBottom: "1.5rem" }}>
-        <h3>{t("invoices")}</h3>
-        {invoices.length === 0 ? (
-          <p className="muted">{t("invoicesEmpty")}</p>
-        ) : (
-          <table className="table">
-            <thead><tr><th>{t("colNumber")}</th><th>{t("colDescription")}</th><th>{t("colAmount")}</th><th>{t("colStatus")}</th><th>{t("colDate")}</th><th></th></tr></thead>
-            <tbody>
-              {invoices.map((inv) => (
-                <tr key={inv.number}>
-                  <td>#{formatNumber(inv.number, locale)}</td>
-                  <td>{inv.description}</td>
-                  <td>{formatCurrency(inv.amount, inv.currency, locale)}</td>
-                  <td><Badge tone="success">{inv.status}</Badge></td>
-                  <td className="muted">{formatDate(inv.created_at, locale)}</td>
-                  <td>
-                    <a
-                      className="btn btn-ghost"
-                      href={`/api/tenant/billing/invoices/${inv.number}/html`}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      {t("invoiceDownload")}
-                    </a>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+      <InvoicesCard invoices={invoices} />
 
       <div className="card">
         <h3>{t("orders")}</h3>

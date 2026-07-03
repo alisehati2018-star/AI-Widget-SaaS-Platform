@@ -29,6 +29,19 @@ def test_verify_accepts_adjacent_window_and_rejects_garbage():
     assert not verify_totp(_RFC_SECRET, "abcdef", at=at)    # not digits
 
 
+def test_verify_step_returns_matched_step_for_replay_guard():
+    from acip_auth.totp import verify_totp_step
+
+    at = 1111111109.0
+    code = totp_code(_RFC_SECRET, at=at)
+    step = verify_totp_step(_RFC_SECRET, code, at=at)
+    assert step == int(at // 30)
+    # Same code presented one step later still matches (skew) — SAME step id,
+    # so a caller persisting the step rejects it as a replay.
+    assert verify_totp_step(_RFC_SECRET, code, at=at + 30) == step
+    assert verify_totp_step(_RFC_SECRET, "999999", at=at) is None or code == "999999"
+
+
 def test_generated_secret_roundtrips():
     secret = generate_totp_secret()
     assert len(secret) == 32  # 160 bits base32

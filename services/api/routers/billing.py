@@ -35,6 +35,50 @@ from fastapi import APIRouter, Cookie, Header, Request
 from .tenant import _require_tenant
 
 
+def _zarinpal():
+    """The configured ZarinPal provider, or None (manual mode)."""
+    s = get_settings()
+    if s.billing_provider != "zarinpal" or not s.zarinpal_merchant_id:
+        return None
+    from acip_billing.psp import ZarinPalProvider
+
+    api_origin = (s.widget_base_url or s.app_base_url).rstrip("/")
+    return ZarinPalProvider(
+        s.zarinpal_merchant_id,
+        f"{api_origin}/billing/callback",
+        base_url=s.zarinpal_base_url,
+    )
+
+
+async def _start_hosted_payment(pool, order: dict, description: str, email: str):
+    """Attach a hosted-payment redirect to a pending order (ZarinPal).
+
+    On PSP failure the order stays pending and a stable 502 is returned —
+    the shopper can retry; nothing was activated.
+    """
+    from acip_billing.psp import PspError
+
+    psp = _zarinpal()
+    if psp is None:
+        order["next"] = "awaiting_confirmation"
+        return order
+    try:
+        payment = await psp.request_payment(
+            float(order["amount"]), description, email=email or None
+        )
+    except PspError as exc:
+        return error_response(502, "psp_unavailable", f"Payment gateway error: {exc}")
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE orders SET provider_ref = $1 WHERE id = $2::uuid",
+            payment["authority"],
+            order["order_id"],
+        )
+    order["next"] = "redirect"
+    order["redirect_url"] = payment["redirect_url"]
+    return order
+
+
 async def _email_invoice(pool, result: dict) -> None:
     """Send the paid invoice receipt to the tenant's owner (best-effort)."""
     if not result.get("invoice_number"):
@@ -105,17 +149,15 @@ async def checkout(
     )
 
     # The manual provider has no external redirect: the order awaits operator
-    # confirmation. Real providers return a hosted-payment redirect URL here.
+    # confirmation. ZarinPal returns a hosted-payment redirect URL.
     if s.billing_provider == "manual":
         order["next"] = "awaiting_confirmation"
         order["instructions"] = (
             "Your order is pending. Complete payment per your invoice; access "
             "activates once the platform confirms receipt."
         )
-    else:
-        order["next"] = "redirect"
-        order["redirect_url"] = ""  # populated by the concrete provider integration
-    return order
+        return order
+    return await _start_hosted_payment(pool, order, f"Vitrin plan: {plan_code}", p.email)
 
 
 @router.get("/tenant/billing/orders")
@@ -204,8 +246,10 @@ async def topup(
         tenant_id=p.tenant_id,
         detail={"credits": credits, "order_id": order["order_id"]},
     )
-    order["next"] = "awaiting_confirmation" if s.billing_provider == "manual" else "redirect"
-    return order
+    if s.billing_provider == "manual":
+        order["next"] = "awaiting_confirmation"
+        return order
+    return await _start_hosted_payment(pool, order, f"Vitrin credits: {credits:g}", p.email)
 
 
 @router.post("/tenant/billing/cancel")
@@ -332,6 +376,120 @@ async def invoice_html(
         currency=_html.escape(row["currency"] or ""),
     )
     return HTMLResponse(content=html)
+
+
+@router.get("/billing/callback")
+async def zarinpal_callback(Authority: str = "", Status: str = ""):  # noqa: N803 - ZarinPal's casing
+    """ZarinPal return URL. The redirect alone activates NOTHING: the order is
+    looked up by its stored authority and the payment is verified server-side
+    (amount included) before it is marked paid. The shopper is then bounced
+    back to the dashboard billing page with a status flag."""
+    from fastapi.responses import RedirectResponse
+
+    s = get_settings()
+    back = f"{s.app_base_url.rstrip('/')}/dashboard/billing"
+    if not Authority:
+        return RedirectResponse(f"{back}?payment=failed", status_code=302)
+
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        order = await conn.fetchrow(
+            "SELECT id, tenant_id, amount, status FROM orders "
+            "WHERE provider_ref = $1 AND provider = 'zarinpal' "
+            "ORDER BY created_at DESC LIMIT 1",
+            Authority,
+        )
+    if order is None:
+        return RedirectResponse(f"{back}?payment=failed", status_code=302)
+    if order["status"] == "paid":  # replayed callback: already settled
+        return RedirectResponse(f"{back}?payment=success", status_code=302)
+
+    psp = _zarinpal()
+    verified = None
+    if psp is not None and Status == "OK":
+        from acip_billing.psp import PspError
+
+        try:
+            verified = await psp.verify(Authority, float(order["amount"]))
+        except PspError:
+            verified = None
+    if verified is None:
+        async with pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE orders SET status = 'failed' WHERE id = $1 AND status = 'pending'",
+                order["id"],
+            )
+        await audit(
+            pool,
+            actor="zarinpal",
+            action="billing.payment_failed",
+            tenant_id=str(order["tenant_id"]),
+            detail={"authority": Authority, "status": Status},
+        )
+        return RedirectResponse(f"{back}?payment=failed", status_code=302)
+
+    result = await mark_order_paid(
+        pool, str(order["id"]), period_days=s.subscription_period_days
+    )
+    if result is not None and not result.get("already"):
+        await _email_invoice(pool, result)
+    await audit(
+        pool,
+        actor="zarinpal",
+        action="billing.paid",
+        tenant_id=str(order["tenant_id"]),
+        detail={"authority": Authority, "ref_id": verified["ref_id"], "via": "callback"},
+    )
+    return RedirectResponse(f"{back}?payment=success&ref={verified['ref_id']}", status_code=302)
+
+
+@router.get("/tenant/billing/invoices/{number}/pdf")
+async def invoice_pdf(
+    number: int, authorization: str | None = _AUTHZ, vitrin_access: str | None = _COOKIE
+):
+    """The invoice as a downloadable PDF (server-rendered, Persian-shaped).
+    Falls back with a clear 503 when no PDF font/engine is available — the
+    printable HTML route always works."""
+    p = await _require_tenant(authorization, vitrin_access)
+    if p is None:
+        return error_response(401, "unauthenticated", "Sign in to your store account.")
+    assert p.tenant_id is not None
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT i.number, i.description, i.amount, i.currency, i.status, i.created_at, "
+            "t.name AS store FROM invoices i JOIN tenants t ON t.id = i.tenant_id "
+            "WHERE i.tenant_id = $1 AND i.number = $2",
+            p.tenant_id,
+            number,
+        )
+    if row is None:
+        return error_response(404, "not_found", "No such invoice.")
+    from acip_billing.invoice_pdf import render_invoice_pdf
+
+    pdf = render_invoice_pdf(
+        number=row["number"],
+        store=row["store"] or "",
+        date=row["created_at"].strftime("%Y-%m-%d") if row["created_at"] else "—",
+        description=row["description"] or "",
+        amount=f"{float(row['amount']):,.2f}",
+        currency=row["currency"] or "",
+        status_fa="پرداخت‌شده" if row["status"] == "paid" else "باطل‌شده",
+        font_path=get_settings().invoice_font_path or None,
+    )
+    if pdf is None:
+        return error_response(
+            503, "pdf_unavailable",
+            "PDF rendering is not available on this server (no Persian font/engine); "
+            "use the printable HTML invoice instead.",
+        )
+    from fastapi.responses import Response
+
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="invoice-{number}.pdf"'},
+    )
 
 
 @router.post("/billing/webhook")

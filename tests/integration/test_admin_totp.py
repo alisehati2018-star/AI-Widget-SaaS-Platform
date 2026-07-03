@@ -65,12 +65,17 @@ def test_totp_full_lifecycle(live_client):
     )
     assert r.status_code == 200, r.text
 
-    # Password alone → totp_required; wrong code → invalid; right code → in.
+    # Password alone → totp_required; wrong code → invalid.
     r = _login(live_client, email, password)
     assert r.status_code == 401 and r.json()["error"]["code"] == "totp_required"
     r = _login(live_client, email, password, totp_code="123456")
     assert r.status_code == 401
+
+    # Replay guard: the code consumed at confirmation is DEAD for login.
     r = _login(live_client, email, password, totp_code=totp_code(secret))
+    assert r.status_code == 401, "confirmation code must not be replayable"
+    # The NEXT step's code (skew window accepts +1) signs in.
+    r = _login(live_client, email, password, totp_code=totp_code(secret, at=time.time() + 30))
     assert r.status_code == 200, r.text
     bearer = {"authorization": f"Bearer {r.json()['access_token']}"}
     assert live_client.get("/admin/auth/totp", headers=bearer).json() == {"totp_enabled": True}

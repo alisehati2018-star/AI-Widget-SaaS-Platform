@@ -38,5 +38,8 @@
   "previewHint": "اعتبار باقی‌ماندهٔ دورهٔ فعلی به‌صورت خودکار از مبلغ کم شده است.",
   "previewConfirmBtn": "تأیید و ادامهٔ خرید",
   "previewCancel": "انصراف",
-  "invoiceDownload": "دانلود HTML"
+  "invoiceDownload": "دانلود HTML",
+  "paymentSuccess": "پرداخت با موفقیت انجام شد — پلن/اعتبار شما فعال است.",
+  "paymentFailed": "پرداخت ناموفق بود یا لغو شد. مبلغی فعال نشده است؛ می‌توانید دوباره تلاش کنید.",
+  "invoicePdf": "PDF"
 }

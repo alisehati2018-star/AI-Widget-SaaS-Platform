@@ -100,6 +100,15 @@ class Settings(BaseSettings):
     # rejects all webhooks (fail closed) — only the manual/admin path works then.
     billing_webhook_secret: str = Field(default="", alias="BILLING_WEBHOOK_SECRET")
     subscription_period_days: int = Field(default=30, alias="SUBSCRIPTION_PERIOD_DAYS")
+    # --- Phase 10: real PSP (ZarinPal) + PDF invoices ---
+    # billing_provider="zarinpal" + a merchant id activates hosted checkout.
+    # Sandbox: point ZARINPAL_BASE_URL at https://sandbox.zarinpal.com.
+    zarinpal_merchant_id: str = Field(default="", alias="ZARINPAL_MERCHANT_ID")
+    zarinpal_base_url: str = Field(
+        default="https://payment.zarinpal.com", alias="ZARINPAL_BASE_URL"
+    )
+    # TTF used for PDF invoices (Persian-capable). Empty = auto-discover.
+    invoice_font_path: str = Field(default="", alias="INVOICE_FONT_PATH")
     # Credit top-up pricing: how many AI credits one currency unit buys.
     topup_credits_per_unit: int = Field(default=1000, alias="TOPUP_CREDITS_PER_UNIT")
     billing_currency: str = Field(default="USD", alias="BILLING_CURRENCY")
