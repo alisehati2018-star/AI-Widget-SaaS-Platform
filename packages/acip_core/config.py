@@ -52,6 +52,7 @@ class Settings(BaseSettings):
     # --- Phase 1: search / index / embedding tuning ---
     es_index_prefix: str = Field(default="acip", alias="ES_INDEX_PREFIX")
     catalogue_alias: str = Field(default="acip-products", alias="CATALOGUE_ALIAS")
+    orders_alias: str = Field(default="acip-orders", alias="ORDERS_ALIAS")
     # First-run convenience: the API ensures the catalogue index exists behind
     # the read alias at startup (best-effort, never blocks). Disable in setups
     # where index lifecycle is managed exclusively from the admin console.

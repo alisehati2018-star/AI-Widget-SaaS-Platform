@@ -21,7 +21,7 @@ from fastapi.responses import StreamingResponse
 
 from ..deps import API_KEY_HEADER, KeyScope, principal_allowed, resolve_principal
 from ..runtime import get_assistant, get_rate_limiter, get_search_service
-from ..schemas import BulkSyncRequest, ChatRequest, SearchRequest, parse
+from ..schemas import BulkOrderSyncRequest, BulkSyncRequest, ChatRequest, SearchRequest, parse
 
 router = APIRouter(prefix="/v1", tags=["v1"])
 
@@ -141,6 +141,45 @@ async def sync_bulk(payload: dict[str, Any], x_api_key: str | None = _KEY):
 
     bulk_import.delay(principal.tenant_id, req.source, req.products)
     return {"status": "accepted", "count": len(req.products)}
+
+
+@router.post("/sync/order/webhook")
+async def sync_order_webhook(
+    request: Request,
+    source: str = "rest",
+    x_api_key: str | None = _KEY,
+):
+    """Real-time order push: order created / status changed / cancelled.
+
+    Same auth + delivery model as the product webhook (sync-scoped key,
+    fire-and-forget to the worker, idempotent by order id + external version).
+    """
+    principal, rejected = await _guard(x_api_key, KeyScope.SYNC)
+    if rejected is not None:
+        return rejected
+    payload = await request.json()
+    from acip_sync.orders import parse_order_event
+
+    event_type, order_id, raw = parse_order_event(source, payload)
+    from worker.tasks import process_order_webhook_event
+
+    process_order_webhook_event.delay(principal.tenant_id, source, event_type, order_id, raw)
+    return {"status": "accepted", "order_id": order_id, "type": event_type}
+
+
+@router.post("/sync/order/bulk")
+async def sync_order_bulk(payload: dict[str, Any], x_api_key: str | None = _KEY):
+    """Initial order-history backfill (bulk import), sync-scoped key."""
+    principal, rejected = await _guard(x_api_key, KeyScope.SYNC)
+    if rejected is not None:
+        return rejected
+    req, invalid = parse(BulkOrderSyncRequest, payload)
+    if invalid is not None or req is None:
+        return invalid
+    from worker.tasks import bulk_import_orders
+
+    bulk_import_orders.delay(principal.tenant_id, req.source, req.orders)
+    return {"status": "accepted", "count": len(req.orders)}
 
 
 @router.post("/chat")

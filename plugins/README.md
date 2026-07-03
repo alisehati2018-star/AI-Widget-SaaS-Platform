@@ -1,16 +1,46 @@
-# Store plugins (M8 — Phase 1 subset)
+# ACIP store plugins (M8 — full CMS-native modules)
 
-Phase 1 ships the **pilot subset** of M8: connectors that (a) replace the
-store's native search with ACIP `/v1/search` and (b) post change webhooks to
-`/v1/sync/webhook`. The full embeddable widget, white-label, and citation cards
-are Phase 2 (M8 full).
+Production-ready, CMS-native modules that connect a merchant's storefront to
+ACIP: hybrid search, the grounded assistant widget, and catalogue **and order**
+sync to Elasticsearch — all authenticated with the tenant's own ACIP API keys
+(the same keys and plan/credit quota used everywhere else on the platform).
 
-| Plugin | Platform | Phase-1 responsibility |
+| Folder | Platform | Type |
 |---|---|---|
-| `opencart/` | OpenCart | Replace native search; product/inventory change webhooks (REQ-M8-002, REQ-M3-007) |
-| `woocommerce/` | WordPress / WooCommerce | Replace native search; product/order webhooks (REQ-M8-003, REQ-M3-008) |
+| [`opencart3/`](opencart3/) | OpenCart 3.x | Module + OCMOD (admin settings, test-connection, event-registered product **and order** sync + widget injection, bulk import, optional search override, `en-gb` + `fa` admin languages) |
+| [`wordpress/acip-search/`](wordpress/acip-search/) | WordPress / WooCommerce (latest) | Plugin (settings page with test-connection, enqueued assets, real-time + bulk product **and order** sync, widget injection, search replacement, clean uninstall, `fa_IR` translation) |
 
-Both call the ACIP API with a tenant-scoped `x-api-key` (widget scope for
-search; sync scope for webhooks). These are integration scaffolds intended to be
-packaged for their platforms during pilot onboarding; they are not exercised by
-the Python test suite.
+Both follow their platform's real packaging conventions end to end — OpenCart's
+`admin/`, `catalog/`, `system/` tree and language files; WordPress's
+`includes/`, `assets/`, `languages/`, `uninstall.php`, and directory-listing
+guards — so each can be uploaded and installed as-is on a fresh store, then
+configured entirely from that store's own admin panel.
+
+## Authentication & security
+
+Every call from a module to ACIP is authenticated with a tenant-scoped API key
+generated from **Dashboard → API Keys** (`/dashboard/keys`) — the same screen
+that issues every other ACIP key, so usage is metered and billed against the
+tenant's own plan/credit quota, exactly as with any other integration:
+
+- **widget key** — least privilege: storefront search + chat only. Safe to ship
+  to the browser (it cannot sync, import, or delete anything).
+- **sync key** — catalogue + order ingest (webhook + bulk). Server-side only;
+  never exposed to the storefront.
+
+On top of key-scoped auth, every webhook call is **HMAC-signed** (SHA-256, a
+per-tenant secret set in the module) and verified server-side before any data
+is written, and every response uses the platform's stable
+`{"error": {"code", "message", "request_id"}}` envelope. See
+**[`docs/api-reference-fa.md`](../docs/api-reference-fa.md)** for the complete
+API contract (auth, all endpoints, product **and order** payload shapes, error
+codes) and **[`docs/integrations-fa.md`](../docs/integrations-fa.md)** for the
+step-by-step install/connect walkthrough.
+
+The single-line widget embed both modules inject:
+
+```html
+<script src="https://api.acip.example/widget/v1.js"
+        data-acip-key="acip_widget_xxx"
+        data-acip-base="https://api.acip.example" async></script>
+```
