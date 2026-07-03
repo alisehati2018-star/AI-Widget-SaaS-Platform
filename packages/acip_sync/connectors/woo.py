@@ -22,8 +22,10 @@ class WooConnector(Connector):
         return hmac.compare_digest(digest, signature)
 
     def parse(self, payload: dict) -> WebhookEvent:
-        # Woo sends the full product object; a delete arrives with status/action hints.
-        action = str(payload.get("action") or payload.get("status") or "").lower()
-        etype = EventType.DELETE if action in ("delete", "trash") else EventType.UPSERT
-        product_id = str(payload.get("id") or "")
-        return WebhookEvent(type=etype, source=self.source, product_id=product_id, raw=payload)
+        # The ACIP plugin wraps its push exactly like the OpenCart connector:
+        # {"event": "upsert"|"delete", "product": {...}}.
+        event = str(payload.get("event", "upsert")).lower()
+        etype = EventType.DELETE if "delete" in event else EventType.UPSERT
+        product = payload.get("product", payload)
+        product_id = str(product.get("id") or product.get("product_id") or "")
+        return WebhookEvent(type=etype, source=self.source, product_id=product_id, raw=product)

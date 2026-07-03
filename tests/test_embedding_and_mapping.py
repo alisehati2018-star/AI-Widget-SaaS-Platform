@@ -7,6 +7,7 @@ import math
 from acip_embedding.client import truncate_mrl
 from acip_search.analyzer import ANALYSIS_SETTINGS
 from acip_search.mapping import catalogue_mapping
+from acip_search.order_mapping import order_mapping
 
 
 def test_mrl_truncates_and_renormalizes():
@@ -52,3 +53,13 @@ def test_mapping_uses_diskbbq_and_dims():
     assert m["properties"]["tenant_id"]["type"] == "keyword"
     # Suggest sub-field for autocomplete.
     assert m["properties"]["title"]["fields"]["suggest"]["type"] == "search_as_you_type"
+
+
+def test_order_mapping_isolates_by_tenant_and_nests_items():
+    m = order_mapping()
+    assert m["dynamic"] == "strict"
+    assert m["properties"]["tenant_id"]["type"] == "keyword"
+    assert m["properties"]["items"]["type"] == "nested"
+    assert m["properties"]["items"]["properties"]["quantity"]["type"] == "integer"
+    # No dense vector — orders are a structured/BM25-lite surface, not semantic search.
+    assert "embedding" not in m["properties"]

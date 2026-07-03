@@ -1,0 +1,230 @@
+<?php
+/**
+ * ACIP admin module controller (OpenCart 3.x).
+ *
+ * Settings page + event registration. Stores api_url, the widget key
+ * (storefront search/chat) and the sync key (catalogue + order ingest), and
+ * registers the admin-side product add/edit/delete events. Order events are
+ * registered here (install/uninstall) but handled by the catalog controller
+ * — OpenCart routes every order mutation, including the admin "Add History"
+ * button, through `catalog/model/checkout/order.php`.
+ */
+class ControllerExtensionModuleAcip extends Controller {
+    private $error = array();
+
+    public function index() {
+        $this->load->language('extension/module/acip');
+        $this->document->setTitle($this->language->get('heading_title'));
+        $this->load->model('setting/setting');
+
+        if (($this->request->server['REQUEST_METHOD'] == 'POST') && $this->validate()) {
+            $this->model_setting_setting->editSetting('module_acip', $this->request->post);
+            $this->session->data['success'] = $this->language->get('text_success');
+            $this->response->redirect($this->url->link(
+                'marketplace/extension',
+                'user_token=' . $this->session->data['user_token'] . '&type=module',
+                true
+            ));
+        }
+
+        $fields = array(
+            'heading_title', 'text_edit', 'text_enabled', 'text_disabled',
+            'entry_status', 'entry_api_url', 'entry_widget_key', 'entry_sync_key',
+            'entry_export_token', 'help_export_token',
+            'entry_replace_search', 'entry_inject_widget', 'entry_sync_orders',
+            'help_sync_orders', 'button_save', 'button_cancel',
+            'button_bulk_import', 'help_bulk_import', 'button_bulk_import_orders',
+            'help_bulk_import_orders', 'button_test_connection',
+        );
+        foreach ($fields as $f) {
+            $data[$f] = $this->language->get($f);
+        }
+
+        $data['error_warning'] = isset($this->error['warning']) ? $this->error['warning'] : '';
+        $data['breadcrumbs'] = array();
+        $data['breadcrumbs'][] = array(
+            'text' => $this->language->get('text_home'),
+            'href' => $this->url->link('common/dashboard',
+                'user_token=' . $this->session->data['user_token'], true),
+        );
+        $data['breadcrumbs'][] = array(
+            'text' => $this->language->get('heading_title'),
+            'href' => $this->url->link('extension/module/acip',
+                'user_token=' . $this->session->data['user_token'], true),
+        );
+
+        $data['action'] = $this->url->link('extension/module/acip',
+            'user_token=' . $this->session->data['user_token'], true);
+        $data['cancel'] = $this->url->link('marketplace/extension',
+            'user_token=' . $this->session->data['user_token'] . '&type=module', true);
+        $data['bulk_import'] = $this->url->link('extension/module/acip.bulkImport',
+            'user_token=' . $this->session->data['user_token'], true);
+        $data['bulk_import_orders'] = $this->url->link('extension/module/acip.bulkImportOrders',
+            'user_token=' . $this->session->data['user_token'], true);
+        $data['test_connection'] = $this->url->link('extension/module/acip.testConnection',
+            'user_token=' . $this->session->data['user_token'], true);
+
+        // Bind each setting, defaulting where unset.
+        $settings = array(
+            'module_acip_status'         => 0,
+            'module_acip_api_url'        => '',
+            'module_acip_widget_key'     => '',
+            'module_acip_sync_key'       => '',
+            'module_acip_export_token'   => '',
+            'module_acip_replace_search' => 1,
+            'module_acip_inject_widget'  => 1,
+            'module_acip_sync_orders'    => 1,
+        );
+        foreach ($settings as $key => $default) {
+            if (isset($this->request->post[$key])) {
+                $data[$key] = $this->request->post[$key];
+            } else {
+                $data[$key] = $this->config->get($key) !== null
+                    ? $this->config->get($key) : $default;
+            }
+        }
+
+        $data['header'] = $this->load->controller('common/header');
+        $data['column_left'] = $this->load->controller('common/column_left');
+        $data['footer'] = $this->load->controller('common/footer');
+
+        $this->response->setOutput($this->load->view('extension/module/acip', $data));
+    }
+
+    /** Push the whole catalogue to ACIP in one click. */
+    public function bulkImport() {
+        $this->load->model('extension/module/acip');
+        $json = array();
+        try {
+            $products = $this->model_extension_module_acip->getAllProducts();
+            $this->registry->set('acip', new Acip($this->registry));
+            $resp = $this->registry->get('acip')->bulkImport($products);
+            $json['success'] = true;
+            $json['count'] = count($products);
+        } catch (Exception $e) {
+            $json['error'] = $e->getMessage();
+        }
+        $this->response->addHeader('Content-Type: application/json');
+        $this->response->setOutput(json_encode($json));
+    }
+
+    /** Push recent order history to ACIP in one click. */
+    public function bulkImportOrders() {
+        $this->load->model('extension/module/acip');
+        $json = array();
+        try {
+            $orders = $this->model_extension_module_acip->getAllOrders();
+            $this->registry->set('acip', new Acip($this->registry));
+            $resp = $this->registry->get('acip')->bulkImportOrders($orders);
+            $json['success'] = true;
+            $json['count'] = count($orders);
+        } catch (Exception $e) {
+            $json['error'] = $e->getMessage();
+        }
+        $this->response->addHeader('Content-Type: application/json');
+        $this->response->setOutput(json_encode($json));
+    }
+
+    /** AJAX: verify the configured API URL is reachable (uses live posted
+     *  values, not just the saved config, so the button works before saving). */
+    public function testConnection() {
+        $this->load->language('extension/module/acip');
+        $registry = clone $this->registry;
+        $config = clone $this->config;
+        $config->set('module_acip_api_url', $this->request->post['module_acip_api_url'] ?? '');
+        $config->set('module_acip_widget_key', $this->request->post['module_acip_widget_key'] ?? '');
+        $config->set('module_acip_sync_key', $this->request->post['module_acip_sync_key'] ?? '');
+        $registry->set('config', $config);
+
+        $acip = new Acip($registry);
+        $result = $acip->ping();
+        $json = $result + array(
+            'message' => $result['ok']
+                ? $this->language->get('text_test_success')
+                : $this->language->get('text_test_failed'),
+        );
+        $this->response->addHeader('Content-Type: application/json');
+        $this->response->setOutput(json_encode($json));
+    }
+
+    /** Register product-change + storefront widget events on install.
+     *  OC3 action routes use a slash before the method (extension/module/acip/method). */
+    public function install() {
+        $this->load->model('setting/event');
+        $this->model_setting_event->addEvent('acip_product_edit',
+            'admin/model/catalog/product/editProduct/after',
+            'extension/module/acip/onProductChange');
+        $this->model_setting_event->addEvent('acip_product_add',
+            'admin/model/catalog/product/addProduct/after',
+            'extension/module/acip/onProductChange');
+        $this->model_setting_event->addEvent('acip_product_delete',
+            'admin/model/catalog/product/deleteProduct/after',
+            'extension/module/acip/onProductDelete');
+        // Order sync: OpenCart routes EVERY order mutation — storefront
+        // checkout, the admin "Add History" button, and 3rd-party payment
+        // callbacks alike — through catalog/model/checkout/order.php (the
+        // admin panel calls it via its own internal `api/order` proxy, it has
+        // no separate order model of its own). One event on that model
+        // therefore covers both admin and storefront changes.
+        $this->model_setting_event->addEvent('acip_order_history',
+            'catalog/model/checkout/order/addOrderHistory/after',
+            'extension/module/acip/onOrderChange');
+        $this->model_setting_event->addEvent('acip_order_delete',
+            'catalog/model/checkout/order/deleteOrder/after',
+            'extension/module/acip/onOrderDelete');
+        // Storefront: inject the widget loader into the rendered footer.
+        $this->model_setting_event->addEvent('acip_widget_footer',
+            'catalog/view/common/footer/after',
+            'extension/module/acip/injectWidget');
+    }
+
+    public function uninstall() {
+        $this->load->model('setting/event');
+        $this->model_setting_event->deleteEventByCode('acip_product_edit');
+        $this->model_setting_event->deleteEventByCode('acip_product_add');
+        $this->model_setting_event->deleteEventByCode('acip_product_delete');
+        $this->model_setting_event->deleteEventByCode('acip_order_history');
+        $this->model_setting_event->deleteEventByCode('acip_order_delete');
+        $this->model_setting_event->deleteEventByCode('acip_widget_footer');
+    }
+
+    /** Event: a product was added/edited → upsert into ACIP. */
+    public function onProductChange($route, $args, $output) {
+        if (!$this->config->get('module_acip_status')) {
+            return;
+        }
+        $product_id = is_array($args) && isset($args[0]) ? (int)$args[0] : 0;
+        if (!$product_id && isset($output)) {
+            $product_id = (int)$output;
+        }
+        if (!$product_id) {
+            return;
+        }
+        $this->load->model('extension/module/acip');
+        $product = $this->model_extension_module_acip->getProduct($product_id);
+        if ($product) {
+            $this->registry->set('acip', new Acip($this->registry));
+            $this->registry->get('acip')->syncProduct($product, 'upsert');
+        }
+    }
+
+    /** Event: a product was deleted → tombstone in ACIP. */
+    public function onProductDelete($route, $args, $output) {
+        if (!$this->config->get('module_acip_status')) {
+            return;
+        }
+        $product_id = is_array($args) && isset($args[0]) ? (int)$args[0] : 0;
+        if (!$product_id) {
+            return;
+        }
+        $this->registry->set('acip', new Acip($this->registry));
+        $this->registry->get('acip')->syncProduct(array('product_id' => $product_id), 'delete');
+    }
+
+    private function validate() {
+        if (!$this->user->hasPermission('modify', 'extension/module/acip')) {
+            $this->error['warning'] = $this->language->get('error_permission');
+        }
+        return !$this->error;
+    }
+}

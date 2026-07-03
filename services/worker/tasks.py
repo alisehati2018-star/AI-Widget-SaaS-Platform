@@ -19,6 +19,8 @@ from acip_embedding import get_embedding_client
 from acip_sync.dlq import park
 from acip_sync.ingest import tombstone_product, upsert_product
 from acip_sync.normalize import normalize_product
+from acip_sync.order_ingest import tombstone_order, upsert_order
+from acip_sync.orders import normalize_order
 from celery.exceptions import MaxRetriesExceededError, Retry
 
 from .celery_app import celery_app
@@ -92,6 +94,49 @@ def bulk_import(tenant_id: str, source: str, products: list[dict]) -> int:
         except Exception as exc:  # noqa: BLE001
             _run(park(get_redis(), tenant_id, {"source": source, "raw": raw}, str(exc)))
     log.info("task.bulk_import", tenant_id=tenant_id, imported=count)
+    return count
+
+
+async def _apply_order_upsert(tenant_id: str, source: str, raw: dict) -> None:
+    es = get_es_client()
+    order = normalize_order(tenant_id, source, raw)
+    await upsert_order(es, order)
+
+
+@celery_app.task(name="acip.sync.process_order_webhook_event", bind=True, max_retries=3)
+def process_order_webhook_event(
+    self, tenant_id: str, source: str, event_type: str, order_id: str, raw: dict[str, Any]
+) -> str:
+    """Real-time order push (order add / status change / cancel)."""
+    try:
+        if event_type == "delete":
+            _run(tombstone_order(get_es_client(), tenant_id, order_id))
+        else:
+            _run(_apply_order_upsert(tenant_id, source, raw))
+        return "ok"
+    except Retry:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        log.warning("task.order_webhook_failed", error=str(exc), order_id=order_id)
+        try:
+            raise self.retry(countdown=2**self.request.retries, exc=exc)
+        except MaxRetriesExceededError:
+            event = {"source": source, "order_id": order_id, "raw": raw}
+            _run(park(get_redis(), tenant_id, event, str(exc)))
+            return "deadlettered"
+
+
+@celery_app.task(name="acip.sync.bulk_import_orders")
+def bulk_import_orders(tenant_id: str, source: str, orders: list[dict]) -> int:
+    """Initial order-history backfill."""
+    count = 0
+    for raw in orders:
+        try:
+            _run(_apply_order_upsert(tenant_id, source, raw))
+            count += 1
+        except Exception as exc:  # noqa: BLE001
+            _run(park(get_redis(), tenant_id, {"source": source, "raw": raw}, str(exc)))
+    log.info("task.bulk_import_orders", tenant_id=tenant_id, imported=count)
     return count
 
 

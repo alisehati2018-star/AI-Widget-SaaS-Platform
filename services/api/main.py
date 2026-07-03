@@ -49,6 +49,15 @@ async def _bootstrap_search_index(log) -> None:
     except Exception as exc:  # noqa: BLE001 - degradation path, by design
         log.warning("es.bootstrap_skipped", error=str(exc))
 
+    try:
+        import acip_search.orders_index as oi
+        from acip_core.clients import get_es_client
+
+        result = await oi.ensure_orders_index(get_es_client())
+        log.info("es.orders_bootstrap", status=result.get("status"), index=result.get("index"))
+    except Exception as exc:  # noqa: BLE001 - degradation path, by design
+        log.warning("es.orders_bootstrap_skipped", error=str(exc))
+
 
 def create_app() -> FastAPI:
     settings = get_settings()
