@@ -15,12 +15,19 @@ from ..config import get_settings
 _pool: asyncpg.Pool | None = None
 
 
+def _encode_json(value) -> str:
+    # ensure_ascii=False keeps Persian text as UTF-8 instead of \uXXXX escapes —
+    # smaller payloads, and it survives databases whose server encoding cannot
+    # translate Unicode escapes (e.g. a legacy SQL_ASCII dev cluster).
+    return json.dumps(value, ensure_ascii=False)
+
+
 async def _init_connection(conn: asyncpg.Connection) -> None:
     """Decode json/jsonb columns into Python objects (asyncpg returns raw text
     otherwise — GP-1). Applies to settings, audit detail, plan features, etc."""
     for typename in ("json", "jsonb"):
         await conn.set_type_codec(
-            typename, encoder=json.dumps, decoder=json.loads, schema="pg_catalog"
+            typename, encoder=_encode_json, decoder=json.loads, schema="pg_catalog"
         )
 
 
