@@ -12,6 +12,8 @@ from functools import lru_cache
 from acip_assistant.memory import SessionMemory
 from acip_assistant.rag import RagAssistant
 from acip_billing.ledger import record_charge
+from acip_billing.pricing import charge_for_turn
+from acip_billing.wallet import WalletBudgetGuard
 from acip_cache.data_version import current_data_version
 from acip_cache.l1 import L1ExactCache
 from acip_cache.l2 import L2SemanticCache
@@ -20,10 +22,8 @@ from acip_core.clients import get_es_client, get_pg_pool, get_redis
 from acip_core.config import get_settings
 from acip_core.ratelimit import RateLimiter
 from acip_embedding import get_embedding_client
-from acip_gateway.budget import BudgetGuard
-from acip_gateway.failover import Endpoint, ProviderChain
-from acip_gateway.llm_client import LLMClient
-from acip_gateway.router import GatewayRouter
+from acip_gateway.registry import DynamicProviderChain, ProviderRegistry
+from acip_gateway.router import GatewayRouter, TurnResult
 from acip_search.retrieval import SearchService
 
 
@@ -55,27 +55,29 @@ def get_search_service() -> SearchService:
 
 
 @lru_cache
-def get_provider_chain() -> ProviderChain:
-    """Process-wide provider chain (frontier → local), reused by the analyst."""
-    return _provider_chain()
+def get_provider_registry() -> ProviderRegistry:
+    """Process-wide registry over ai_providers/ai_models/ai_routes/pricing."""
+    return ProviderRegistry(get_pg_pool)
 
 
-def _provider_chain() -> ProviderChain:
-    """Frontier (optional) → local. The chain MUST end at a local endpoint."""
-    s = get_settings()
-    endpoints: list[Endpoint] = []
-    if s.frontier_enabled and s.frontier_url:
-        endpoints.append(
-            Endpoint(
-                client=LLMClient(s.frontier_url, provider="frontier", api_key=s.frontier_api_key),
-                model=s.frontier_model or s.llm_model,
-                is_local=False,
-            )
-        )
-    endpoints.append(
-        Endpoint(client=LLMClient(s.llm_url, provider="local"), model=s.llm_model, is_local=True)
+@lru_cache
+def get_provider_chain() -> DynamicProviderChain:
+    """Chain for the admin analyst ('analyst' route, falls back to env)."""
+    return DynamicProviderChain(get_provider_registry(), task="analyst")
+
+
+async def _pricer(rung: str, result: TurnResult) -> tuple[float, float]:
+    """(credits, provider_cost_usd) for a finished turn — token-based when the
+    served model has a price sheet, legacy flat multipliers otherwise."""
+    registry = get_provider_registry()
+    cfg = await registry.pricing()
+    price = None
+    if result.provider and result.model:
+        price = await registry.price_for(result.provider, result.model)
+    return charge_for_turn(
+        rung, cfg=cfg, price=price,
+        tokens_in=result.tokens_in, tokens_out=result.tokens_out,
     )
-    return ProviderChain(endpoints)
 
 
 @lru_cache
@@ -101,9 +103,10 @@ def get_assistant() -> RagAssistant:
     router = GatewayRouter(
         l1=L1ExactCache(redis),
         l2=L2SemanticCache(redis),
-        budget=BudgetGuard(redis, default_cap=s.budget_default_cap),
-        providers=_provider_chain(),
+        budget=WalletBudgetGuard(redis, get_pg_pool, default_cap=s.budget_default_cap),
+        providers=DynamicProviderChain(get_provider_registry(), task="chat"),
         meter=_meter,
+        pricer=_pricer,
     )
     return RagAssistant(
         router,

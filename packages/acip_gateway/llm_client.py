@@ -35,6 +35,10 @@ class LLMClient:
         self._api_key = api_key
         self._timeout = timeout
 
+    @property
+    def provider_name(self) -> str:
+        return self._provider
+
     def _headers(self) -> dict[str, str]:
         h = {"Content-Type": "application/json"}
         if self._api_key:

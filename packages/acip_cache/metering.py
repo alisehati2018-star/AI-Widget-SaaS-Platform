@@ -24,6 +24,9 @@ async def record_usage(
     cache_outcome: str = "miss",
     latency_ms: int | None = None,
     cost: float = 0.0,
+    provider: str = "",
+    model: str = "",
+    provider_cost: float = 0.0,
     **_ignored,
 ) -> None:
     if pg_pool is None:
@@ -34,8 +37,8 @@ async def record_usage(
                 """
                 INSERT INTO usage_events
                     (tenant_id, route, rung, tokens_in, tokens_out,
-                     cache_outcome, latency_ms, cost)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                     cache_outcome, latency_ms, cost, provider, model, provider_cost)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
                 """,
                 tenant_id,
                 route,
@@ -45,6 +48,9 @@ async def record_usage(
                 cache_outcome,
                 latency_ms,
                 cost,
+                provider or None,
+                model or None,
+                provider_cost,
             )
     except Exception as exc:  # noqa: BLE001 - metering is best-effort
         log.warning("metering.failed", error=str(exc))

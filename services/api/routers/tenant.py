@@ -99,6 +99,7 @@ async def profile(authorization: str | None = _AUTHZ, vitrin_access: str | None 
         "credits": {
             "spent": usage["used"],
             "granted": usage["granted"],
+            "balance": status.get("balance", 0.0),
             "cap": status.get("cap"),
             "within_plan": status.get("within_plan", True),
         },
@@ -792,6 +793,7 @@ async def credits(authorization: str | None = _AUTHZ, vitrin_access: str | None 
     return {
         "used": usage["used"],
         "granted": usage["granted"],
+        "balance": status.get("balance", 0.0),
         "cap": status.get("cap"),
         "within_plan": status.get("within_plan", True),
         "ledger": [

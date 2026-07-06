@@ -160,3 +160,75 @@ async def test_router_budget_local_only_never_frontier():
     # A "hard" query would normally hit frontier; budget forces local.
     res = await router.answer_turn("t1", "مقایسه کن", retrieve=_retrieve, build_messages=_msgs)
     assert res.rung is Rung.LOCAL and res.answer == "local"
+
+
+# --- token-based pricing wiring ---
+
+async def test_router_uses_injected_pricer_and_records_provider_model():
+    r = FakeRedis()
+    seen: dict = {}
+
+    async def meter(tenant_id, **kwargs):
+        seen.update(kwargs)
+
+    async def pricer(rung, result):
+        return (42.0, 0.01)
+
+    router = GatewayRouter(
+        budget=BudgetGuard(r),
+        providers=ProviderChain([
+            Endpoint(FakeLLM("f", provider="acme"), "acme-1", is_local=False),
+            Endpoint(FakeLLM("local"), "local-model", is_local=True),
+        ]),
+        meter=meter,
+        pricer=pricer,
+    )
+    res = await router.answer_turn("t1", "مقایسه کن این دو را", retrieve=_retrieve,
+                                   build_messages=_msgs)
+    assert res.provider == "acme" and res.model == "acme-1"
+    assert seen["cost"] == 42.0
+    assert seen["provider_cost"] == 0.01
+    assert seen["provider"] == "acme" and seen["model"] == "acme-1"
+
+
+async def test_router_reclassifies_to_local_when_frontier_fails_over():
+    """A frontier-preferred turn answered by the local endpoint must be
+    charged/recorded as LOCAL, never as a frontier (paid) turn."""
+    r = FakeRedis()
+    seen: dict = {}
+
+    async def meter(tenant_id, **kwargs):
+        seen.update(kwargs)
+
+    router = GatewayRouter(
+        budget=BudgetGuard(r),
+        providers=ProviderChain([
+            Endpoint(FakeLLM("local-answer", provider="local"), "local-model", is_local=True),
+        ]),
+        meter=meter,
+    )
+    res = await router.answer_turn("t1", "مقایسه کن این دو را", retrieve=_retrieve,
+                                   build_messages=_msgs)
+    assert res.rung is Rung.LOCAL
+    assert seen["rung"] == "local"
+
+
+async def test_router_pricer_failure_falls_back_to_flat_rung_cost():
+    r = FakeRedis()
+    seen: dict = {}
+
+    async def meter(tenant_id, **kwargs):
+        seen.update(kwargs)
+
+    async def broken_pricer(rung, result):
+        raise RuntimeError("boom")
+
+    router = GatewayRouter(
+        budget=BudgetGuard(r),
+        providers=ProviderChain([Endpoint(FakeLLM("f"), "m", is_local=True)]),
+        meter=meter,
+        pricer=broken_pricer,
+    )
+    res = await router.answer_turn("t1", "یک سوال معمولی", retrieve=_retrieve, build_messages=_msgs)
+    assert res.answer == "f"
+    assert seen["cost"] == 0.1  # RUNG_COST[LOCAL] fallback

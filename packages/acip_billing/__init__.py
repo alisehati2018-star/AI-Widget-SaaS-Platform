@@ -7,6 +7,15 @@ price (blueprint §8.1).
 """
 
 from .ledger import balance, plan_status, record_charge, usage_summary
+from .pricing import (
+    FALLBACK_RUNG_CREDITS,
+    ModelPrice,
+    PricingConfig,
+    charge_for_turn,
+    credits_from_cost,
+    parse_pricing_row,
+    provider_cost_usd,
+)
 from .subscription import (
     activate_plan,
     create_order,
@@ -19,6 +28,13 @@ from .subscription import (
 )
 
 __all__ = [
+    "ModelPrice",
+    "PricingConfig",
+    "FALLBACK_RUNG_CREDITS",
+    "charge_for_turn",
+    "credits_from_cost",
+    "provider_cost_usd",
+    "parse_pricing_row",
     "record_charge",
     "balance",
     "plan_status",

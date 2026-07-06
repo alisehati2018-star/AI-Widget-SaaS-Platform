@@ -370,6 +370,7 @@ async def tenant_detail(
         "credits": {
             "used": usage["used"],
             "granted": usage["granted"],
+            "balance": status.get("balance", 0.0),
             "cap": status.get("cap"),
             "within_plan": status.get("within_plan", True),
         },

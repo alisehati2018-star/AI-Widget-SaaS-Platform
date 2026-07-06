@@ -327,6 +327,7 @@
   },
   "credits": {
     "intro": "AI credits power search, the assistant, and analytics.",
+    "balance": "Wallet balance",
     "used": "Used",
     "granted": "Granted",
     "cap": "Monthly cap",
