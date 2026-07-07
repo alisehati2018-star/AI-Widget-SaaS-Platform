@@ -52,14 +52,14 @@ def test_detect_no_lead():
 def test_admin_authorized_requires_configured_token(monkeypatch):
     from acip_core.config import get_settings
 
-    from services.api.routers import admin
+    from services.api.routers import admin_common
 
     get_settings.cache_clear()
     monkeypatch.setenv("ADMIN_TOKEN", "secret-op-token")
     get_settings.cache_clear()
-    assert admin._authorized("secret-op-token") is True
-    assert admin._authorized("wrong") is False
-    assert admin._authorized(None) is False
+    assert admin_common._authorized("secret-op-token") is True
+    assert admin_common._authorized("wrong") is False
+    assert admin_common._authorized(None) is False
     get_settings.cache_clear()
 
 

@@ -12,7 +12,7 @@ from __future__ import annotations
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Protocol
 
 from acip_cache.l1 import L1ExactCache
 from acip_cache.l2 import L2SemanticCache
@@ -20,9 +20,17 @@ from acip_core.logging import get_logger
 
 from .budget import RUNG_COST, BudgetGuard, Rung
 from .classifier import Tier, classify
-from .failover import ProviderChain
+from .llm_client import LLMResponse
 
 log = get_logger("gateway.router")
+
+class GenerationProvider(Protocol):
+    """Anything that can serve a chat turn (static or DB-backed chain)."""
+
+    async def generate(
+        self, messages: list[dict], *, prefer_local: bool = False, max_tokens: int = 512
+    ) -> LLMResponse: ...
+
 
 RetrieveFn = Callable[[str, str], Awaitable[list[dict[str, Any]]]]
 BuildMessagesFn = Callable[[str, list[dict[str, Any]]], list[dict]]
@@ -40,6 +48,12 @@ class TurnResult:
     tokens_in: int = 0
     tokens_out: int = 0
     latency_ms: int = 0
+    provider: str = ""
+    model: str = ""
+
+
+# (credits_charged, provider_cost_usd) for a finished turn.
+PricerFn = Callable[[str, "TurnResult"], Awaitable[tuple[float, float]]]
 
 
 class GatewayRouter:
@@ -49,19 +63,31 @@ class GatewayRouter:
         l1: L1ExactCache | None = None,
         l2: L2SemanticCache | None = None,
         budget: BudgetGuard | None = None,
-        providers: ProviderChain | None = None,
+        providers: GenerationProvider | None = None,
         meter: Callable[..., Awaitable[None]] | None = None,
+        pricer: PricerFn | None = None,
     ) -> None:
         self._l1 = l1
         self._l2 = l2
         self._budget = budget
         self._providers = providers
         self._meter = meter
+        self._pricer = pricer
 
     async def _record(
         self, tenant_id: str, rung: Rung, result: TurnResult, cache_outcome: str
     ) -> None:
-        cost = RUNG_COST.get(rung, 0.0)
+        # Token-based pricing when a pricer is wired (credits + provider COGS);
+        # legacy flat per-rung multipliers otherwise.
+        provider_cost = 0.0
+        if self._pricer is not None:
+            try:
+                cost, provider_cost = await self._pricer(rung.value, result)
+            except Exception:  # noqa: BLE001 - pricing must never break the turn
+                log.warning("router.pricer_failed", rung=rung.value)
+                cost = RUNG_COST.get(rung, 0.0)
+        else:
+            cost = RUNG_COST.get(rung, 0.0)
         if self._budget is not None:
             await self._budget.charge(tenant_id, cost)
         if self._meter is not None:
@@ -74,6 +100,9 @@ class GatewayRouter:
                 cache_outcome=cache_outcome,
                 latency_ms=result.latency_ms,
                 cost=cost,
+                provider=result.provider,
+                model=result.model,
+                provider_cost=provider_cost,
             )
 
     async def answer_turn(
@@ -158,8 +187,14 @@ class GatewayRouter:
             await self._record(tenant_id, Rung.SEARCH, r, "degraded")
             return r
 
+        # The endpoint that actually answered determines the rung's true cost
+        # class: a frontier-preferred turn that failed over to the local
+        # endpoint is a LOCAL turn — the tenant must not pay frontier credits.
+        if resp.provider == "local":
+            rung = Rung.LOCAL
         r = TurnResult(answer=answer, rung=rung, tier=tier, citations=docs[:5],
-                       tokens_in=tokens_in, tokens_out=tokens_out, latency_ms=_elapsed())
+                       tokens_in=tokens_in, tokens_out=tokens_out, latency_ms=_elapsed(),
+                       provider=resp.provider, model=resp.model)
         await self._record(tenant_id, rung, r, "miss")
         await self._store(tenant_id, query, data_version, query_vector, r)
         return r

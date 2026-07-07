@@ -27,6 +27,9 @@ jobs:
       - name: Lint (ruff)
         run: ruff check .
 
+      - name: File-size gate (no oversized modules)
+        run: python scripts/check_backend_size.py
+
       - name: Type-check (mypy)
         run: mypy packages services eval scripts
 

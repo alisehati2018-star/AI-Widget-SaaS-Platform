@@ -8,17 +8,12 @@ import { useAdminResource as useResource } from "@/lib/hooks/useResource";
 import type { Locale } from "@/i18n/routing";
 import { DashboardShell, useAdminNav } from "@/components/shell";
 import { Badge, Spinner } from "@/components/ui";
+import { ProvidersCard } from "./providers-card";
+import { RoutesCard } from "./routes-card";
+import { PricingCard } from "./pricing-card";
+import { FinanceCard } from "./finance-card";
+import type { AiProvider, FinanceData, GatewayStatus, PricingData, RoutesData } from "./types";
 
-interface Models {
-  embeddings_url: string;
-  reranker_url: string;
-  llm_url: string;
-  llm_model: string;
-  frontier_enabled: boolean;
-  frontier_model: string | null;
-  rerank_enabled: boolean;
-  by_rung: { rung: string; count: number }[];
-}
 interface PingInfo { configured: boolean; reachable: boolean; latency_ms: number | null }
 type PingMap = Record<"embeddings" | "reranker" | "llm", PingInfo>;
 
@@ -26,7 +21,11 @@ export default function AdminModels() {
   const t = useTranslations("admin");
   const locale = useLocale() as Locale;
   const nav = useAdminNav();
-  const { data } = useResource<Models>("/admin/models");
+  const { data } = useResource<GatewayStatus>("/admin/models");
+  const providersRes = useResource<{ providers: AiProvider[] }>("/admin/ai/providers");
+  const routesRes = useResource<RoutesData>("/admin/ai/routes");
+  const pricingRes = useResource<PricingData>("/admin/ai/pricing");
+  const financeRes = useResource<FinanceData>("/admin/ai/finance?days=30");
   const [ping, setPing] = useState<PingMap | null>(null);
   const [pinging, setPinging] = useState(false);
 
@@ -71,8 +70,28 @@ export default function AdminModels() {
           {pinging ? <Spinner /> : t("models.pingAll")}
         </button>
       </div>
+
+      {financeRes.data ? <FinanceCard finance={financeRes.data} /> : null}
+
+      {providersRes.data ? (
+        <ProvidersCard providers={providersRes.data.providers} reload={providersRes.reload} />
+      ) : null}
+
+      {routesRes.data && providersRes.data ? (
+        <RoutesCard
+          routes={routesRes.data}
+          providers={providersRes.data.providers}
+          reload={routesRes.reload}
+        />
+      ) : null}
+
+      {pricingRes.data ? (
+        <PricingCard pricing={pricingRes.data} reload={() => { pricingRes.reload(); financeRes.reload(); }} />
+      ) : null}
+
       <div className="card" style={{ margin: "1rem 0 1.5rem" }}>
         <h3>{t("models.configTitle")}</h3>
+        <p className="hint">{t("models.envConfigHint")}</p>
         <table className="table">
           <tbody>
             <tr>

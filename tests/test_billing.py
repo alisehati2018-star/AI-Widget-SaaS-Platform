@@ -22,6 +22,7 @@ from acip_billing import (
     set_cancel,
     usage_summary,
 )
+from acip_billing.ledger import balance, plan_status
 from acip_billing.subscription import _proration_credit
 
 
@@ -35,6 +36,10 @@ async def test_subscription_helpers_safe_without_pool():
     assert await process_renewals(None) == {"downgraded": 0, "past_due": 0}
     assert await list_past_due(None) == []
     assert await usage_summary(None, "t1") == {"used": 0.0, "granted": 0.0}
+    assert await balance(None, "t1") == 0.0
+    assert await plan_status(None, "t1") == {
+        "spent": 0.0, "cap": None, "within_plan": True, "balance": 0.0,
+    }
 
 
 def test_proration_credit_math():

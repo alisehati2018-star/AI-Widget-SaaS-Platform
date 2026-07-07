@@ -198,3 +198,20 @@
       payload افزونه هماهنگ شد (event/product envelope، نه فیلدهای تخت).
 - [x] `docs/api-reference-fa.md` — مرجع کامل API: احراز هویت/امنیت کلید (و
       اتصال آن به پلن مستأجر)، تمام endpointها، و شکل دقیق داده برای محصول و سفارش.
+
+---
+
+## تکمیل مدیریت کردیت، چند-ارائه‌دهندگی هوش مصنوعی و سودآوری ✅
+- [x] تحلیل کامل + مقایسه با OpenRouter/LiteLLM/Portkey:
+      `reports/ai-billing-providers-analysis-fa.md`.
+- [x] Migration `0018` — `ai_providers`/`ai_models`/`ai_routes`/`pricing_settings`
+      + ستون‌های `provider`/`model`/`provider_cost` روی `usage_events`.
+- [x] موتور قیمت‌گذاری مبتنی بر توکن (`acip_billing/pricing.py`) — هزینهٔ واقعی
+      ارائه‌دهنده → سود پلتفرم → کردیت، با fallback کامل به رفتار قبلی.
+- [x] Registry پویا (`acip_gateway/registry.py`) — چند ارائه‌دهنده/مدل، مسیریابی
+      per-task قابل‌تغییر بدون ری‌استارت، همیشه با ترمینال محلی.
+- [x] `WalletBudgetGuard` — کیف‌پول واقعی مستأجر اکنون در مسیر درخواست اعمال
+      می‌شود (نه فقط نمایشی)؛ رفع باگ سقف ماهانه که در واقع «همیشگی» بود.
+- [x] `/admin/ai/*` (providers, models, routes, pricing, finance) + پنل ادمین
+      (`/admin/models`: کارت‌های ارائه‌دهنده/مسیریابی/قیمت‌گذاری/سود).
+- [x] ۲۹ تست واحد جدید؛ `ruff`/`mypy`/`pytest`/`tsc`/`check:all`/`next build` سبز.

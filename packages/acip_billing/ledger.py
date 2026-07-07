@@ -47,9 +47,16 @@ async def balance(pg_pool, tenant_id: str) -> float:
 
 
 async def plan_status(pg_pool, tenant_id: str) -> dict[str, Any]:
-    """Compare spend against the tenant plan's monthly credit cap."""
+    """Compare THIS MONTH's spend against the plan's monthly credit cap, and
+    report the all-time wallet balance (grants − spend) alongside.
+
+    The cap is a calendar-month consumption window (it resets naturally on the
+    1st); the wallet is the running prepaid balance the tenant actually owns.
+    """
     if pg_pool is None:
-        return {"spent": 0.0, "cap": None, "within_plan": True}
+        return {"spent": 0.0, "cap": None, "within_plan": True, "balance": 0.0}
+    cap = None
+    spent = 0.0
     try:
         async with pg_pool.acquire() as conn:
             cap = await conn.fetchval(
@@ -57,11 +64,25 @@ async def plan_status(pg_pool, tenant_id: str) -> dict[str, Any]:
                 "JOIN plans p ON p.id = t.plan_id WHERE t.id = $1",
                 tenant_id,
             )
+            spent = float(
+                await conn.fetchval(
+                    "SELECT COALESCE(-sum(delta) FILTER (WHERE delta < 0), 0) "
+                    "FROM credit_ledger WHERE tenant_id = $1 "
+                    "AND created_at >= date_trunc('month', now())",
+                    tenant_id,
+                )
+                or 0.0
+            )
     except Exception:  # noqa: BLE001
-        cap = None
-    spent = -(await balance(pg_pool, tenant_id))
+        pass
+    wallet = await balance(pg_pool, tenant_id)
     within = cap is None or spent <= float(cap)
-    return {"spent": spent, "cap": float(cap) if cap is not None else None, "within_plan": within}
+    return {
+        "spent": spent,
+        "cap": float(cap) if cap is not None else None,
+        "within_plan": within,
+        "balance": wallet,
+    }
 
 
 async def usage_summary(pg_pool, tenant_id: str) -> dict[str, float]:

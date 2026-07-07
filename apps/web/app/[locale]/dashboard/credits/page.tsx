@@ -16,6 +16,7 @@ interface LedgerEntry {
 interface CreditsResp {
   used: number;
   granted: number;
+  balance: number;
   cap: number | null;
   within_plan: boolean;
   ledger: LedgerEntry[];
@@ -35,6 +36,7 @@ export default function CreditsPage() {
     <DashboardShell title={t("nav.credits")} nav={nav}>
       <p style={{ marginTop: "-1rem" }}>{t("credits.intro")}</p>
       <div className="stat-grid" style={{ marginBottom: "2rem" }}>
+        <Stat label={t("credits.balance")} value={num(data?.balance)} />
         <Stat label={t("credits.used")} value={num(data?.used)} />
         <Stat label={t("credits.granted")} value={num(data?.granted)} />
         <Stat label={t("credits.cap")} value={num(data?.cap)} />

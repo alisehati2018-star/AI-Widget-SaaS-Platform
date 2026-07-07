@@ -1,6 +1,5 @@
 # Prometheus scrape config for the PRODUCTION compose (Phase 9).
-# Only services that actually exist in docker-compose.prod.yml are scraped —
-# the dev prometheus.yml also targets the (not-deployed) gateway skeleton.
+# Only services that actually exist in docker-compose.prod.yml are scraped.
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
