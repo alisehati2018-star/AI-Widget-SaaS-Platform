@@ -22,11 +22,14 @@ from .admin_common import (
     _AUTHZ,
     _COOKIE,
     _admin_ok,
+    _admin_write_rate_ok,
     _forbidden,
     _key_rows,
     _not_found,
     _valid_uuid,
 )
+
+_RATE_LIMITED = ("rate_limited", "Too many mutations for this tenant. Slow down and retry.")
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -163,6 +166,8 @@ async def adjust_tenant_credits(
         return _forbidden()
     if not _valid_uuid(tenant_id):
         return _not_found()
+    if not await _admin_write_rate_ok(tenant_id):
+        return error_response(429, *_RATE_LIMITED)
     try:
         delta = float(payload.get("delta", 0))
     except (TypeError, ValueError):
@@ -206,6 +211,8 @@ async def change_tenant_plan(
         return _forbidden()
     if not _valid_uuid(tenant_id):
         return _not_found()
+    if not await _admin_write_rate_ok(tenant_id):
+        return error_response(429, *_RATE_LIMITED)
     plan_code = str(payload.get("plan_code", "")).strip()
     if not plan_code:
         return error_response(422, "invalid_request", "Field 'plan_code' is required.")
@@ -269,6 +276,8 @@ async def set_tenant_status(
     """Suspend or re-activate a tenant."""
     if not await _admin_ok(x_admin_token, authorization, vitrin_access):
         return _forbidden()
+    if not await _admin_write_rate_ok(tenant_id):
+        return error_response(429, *_RATE_LIMITED)
     status = str(payload.get("status", ""))
     if status not in ("active", "suspended"):
         return error_response(422, "invalid_request", "status must be active or suspended.")

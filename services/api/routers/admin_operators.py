@@ -54,6 +54,16 @@ async def _principal(
     return False, None
 
 
+async def _write_rate_ok() -> bool:
+    """Throttle operator create/status/delete mutations so a leaked operator
+    token can't be replayed to spam-create or tear down admin accounts."""
+    from acip_core.clients import get_redis
+    from acip_core.ratelimit import RateLimiter
+
+    limiter = RateLimiter(get_redis(), default_per_min=30)
+    return await limiter.allow("adminwrite:operators")
+
+
 def _forbidden():
     return error_response(401, "unauthorized", "A valid x-admin-token is required.")
 
@@ -111,6 +121,8 @@ async def create_operator(
     ok, principal = await _principal(x_admin_token, authorization, vitrin_access)
     if not ok:
         return _forbidden()
+    if not await _write_rate_ok():
+        return error_response(429, "rate_limited", "Too many operator changes. Slow down.")
     email = str(payload.get("email", "")).strip().lower()
     password = str(payload.get("password", ""))
     full_name = str(payload.get("full_name", "")).strip() or None
@@ -191,6 +203,8 @@ async def set_operator_status(
         return _forbidden()
     if not _UUID_RE.match(operator_id):
         return _not_found()
+    if not await _write_rate_ok():
+        return error_response(429, "rate_limited", "Too many operator changes. Slow down.")
     status = str(payload.get("status", ""))
     if status not in ("active", "suspended"):
         return error_response(422, "invalid_request", "Status must be active or suspended.")
@@ -245,6 +259,8 @@ async def delete_operator(
         return _forbidden()
     if not _UUID_RE.match(operator_id):
         return _not_found()
+    if not await _write_rate_ok():
+        return error_response(429, "rate_limited", "Too many operator changes. Slow down.")
     if principal and principal.user_id == operator_id:
         return error_response(409, "self_action", "You cannot delete your own account.")
     pool = await get_pg_pool()

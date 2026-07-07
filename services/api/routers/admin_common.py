@@ -66,6 +66,18 @@ def _valid_uuid(value: str) -> bool:
     return True
 
 
+async def _admin_write_rate_ok(tenant_id: str) -> bool:
+    """Throttle sensitive per-tenant admin mutations (credit grant, plan
+    change, suspend/reactivate) so a leaked operator token can't be replayed
+    to hammer these endpoints. Fails open if Redis is unavailable — the
+    action is still gated by `_admin_ok` either way."""
+    from acip_core.clients import get_redis
+    from acip_core.ratelimit import RateLimiter
+
+    limiter = RateLimiter(get_redis(), default_per_min=30)
+    return await limiter.allow(f"adminwrite:{tenant_id}")
+
+
 async def _key_rows(conn, tenant_id: str) -> list[dict[str, Any]]:
     rows = await conn.fetch(
         "SELECT id, scope, label, revoked, created_at, last_used_at "
@@ -90,6 +102,7 @@ __all__ = [
     "_AUTHZ",
     "_COOKIE",
     "_admin_ok",
+    "_admin_write_rate_ok",
     "_authorized",
     "_forbidden",
     "_iso",
