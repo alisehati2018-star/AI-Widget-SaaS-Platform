@@ -38,7 +38,7 @@ assistant + analytics** for OpenCart / WooCommerce stores, built on
 ```bash
 cp .env.example .env          # set ES_PASSWORD, PG_PASSWORD, ADMIN_TOKEN, …
 
-# Core stack: Elasticsearch + Kibana + PostgreSQL 18 + Redis 8 + API + gateway + worker
+# Core stack: Elasticsearch + Kibana + PostgreSQL 18 + Redis 8 + API + worker
 docker compose -f infra/docker-compose.yml up -d
 curl -s localhost:8000/readyz   # API readiness — reports ES/PG/Redis status
 
@@ -82,8 +82,8 @@ curl -X POST http://localhost:8000/admin/tenants \
   -d '{"slug":"shop1","name":"Test Shop","scope":"widget"}'   # returns api_key
 ```
 
-Only `api` (8000), `gateway` (8080) and `kibana` (5601) publish host ports; the
-datastores and model servers stay on the internal network.
+Only `api` (8000) and `kibana` (5601) publish host ports; the datastores and
+model servers stay on the internal network.
 
 ### Method B — Without Docker (limited: code + UI only)
 
@@ -111,7 +111,8 @@ docs/generated/       Requirements, phase plans, traceability, expansion plan (5
 packages/             Domain libs: acip_core, acip_auth, acip_search, acip_sync,
                       acip_embedding, acip_cache, acip_gateway, acip_assistant,
                       acip_analytics, acip_billing
-services/             api · gateway · worker (FastAPI + Celery) — incl. auth/admin/public routers
+services/             api · worker (FastAPI + Celery) — incl. auth/admin/public routers
+                      (the AI gateway ladder runs inside `api`, via `acip_gateway`)
 apps/web/             Next.js app: marketing site + auth + store dashboard + admin panel
 apps/dashboard/       Legacy operator console + embeddable widget (widget/acip-widget.ts)
 db/migrations/        PostgreSQL control-plane schema (0001–0009: identity/auth/plans/billing/kb)

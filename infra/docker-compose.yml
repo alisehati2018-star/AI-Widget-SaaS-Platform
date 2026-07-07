@@ -1,8 +1,9 @@
 # ACIP — on-premise development topology (Phase 0, App D / REQ-M1-002).
 # Single-host Docker Compose; the same services move to Kubernetes unchanged.
 #
-# Network segmentation (REQ-M1-009): in PRODUCTION only `api` and `gateway`
-# publish host ports; datastores stay internal. This DEV compose additionally
+# Network segmentation (REQ-M1-009): in PRODUCTION only `caddy` (the reverse
+# proxy) publishes host ports; api/web/datastores stay internal-only, reached
+# through it (see docker-compose.prod.yml). This DEV compose additionally
 # publishes elasticsearch (9200), postgres (5432) and redis (6379) so you can
 # run the app on the host (the common local-dev case in .env.example) against
 # Docker-hosted datastores. Remove those `ports:` for a locked-down deployment.
@@ -107,29 +108,6 @@ services:
     command: ["--model", "Qwen/Qwen3-0.6B", "--enable-prefix-caching"]
     networks: [internal]
     profiles: ["inference"]
-
-  gateway: # AI gateway shell (M6) — externally exposed
-    <<: *python-build
-    command: ["uvicorn", "gateway.main:app", "--host", "0.0.0.0", "--port", "8080"]
-    env_file: [../.env]
-    # .env targets host-run mode (localhost); inside compose we reach datastores
-    # by service name. These overrides win over env_file values.
-    environment:
-      - ES_HOST=http://elasticsearch:9200
-      - ES_PASSWORD=
-      - PG_HOST=postgres
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/1
-      - CELERY_RESULT_BACKEND=redis://redis:6379/2
-      - EMBEDDINGS_URL=http://embeddings:80
-      - RERANKER_URL=http://reranker:80
-      - LLM_URL=http://llm:8000
-    ports:
-      - "8080:8080"
-    networks: [internal]
-    depends_on:
-      redis:
-        condition: service_healthy
 
   api: # public API (M1/§12) — externally exposed
     <<: *python-build

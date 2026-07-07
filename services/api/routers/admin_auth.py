@@ -10,136 +10,45 @@ Nothing here ever reads or writes the customer ``users`` table, and nothing in
 writes ``admin_users`` — the two identity planes are isolated at both the
 database and the routing layer, so a bug in one auth path can't grant access
 in the other.
+
+Session lifecycle (login/refresh/logout/me/bootstrap) lives here; account
+changes (password/email) live in ``admin_auth_account.py``; TOTP two-factor
+enrollment lives in ``admin_auth_totp.py``.
 """
 
 from __future__ import annotations
 
-import hashlib
-import ipaddress
-import re
-import secrets
-from datetime import UTC, datetime, timedelta
-from typing import Any, Literal, cast
+from datetime import timedelta
+from typing import Any
 
-from acip_auth import (
-    Role,
-    create_access_token,
-    create_refresh_token,
-    decode_token,
-    hash_password,
-    needs_rehash,
-    validate_password_strength,
-    verify_password,
-)
-from acip_auth.models import AuthPrincipal
-from acip_auth.tokens import ExpiredTokenError, TokenError
-from acip_auth.totp import generate_totp_secret, otpauth_uri, verify_totp, verify_totp_step
+from acip_auth import hash_password, needs_rehash, validate_password_strength, verify_password
+from acip_auth.tokens import TokenError
+from acip_auth.totp import verify_totp_step
 from acip_core.audit import audit
-from acip_core.clients import get_pg_pool, get_redis
+from acip_core.clients import get_pg_pool
 from acip_core.config import get_settings
 from acip_core.errors import error_response
-from acip_core.ratelimit import RateLimiter
-from fastapi import APIRouter, Cookie, Header, Request, Response
+from fastapi import APIRouter, Request, Response
+
+from .admin_auth_common import (
+    _ACCESS_COOKIE,
+    _ADMIN,
+    _AUTHZ,
+    _EMAIL_RE,
+    _RATE_LIMITED,
+    _REFRESH_COOKIE,
+    _clear_admin_cookies,
+    _hash_token,
+    _ip_rate_ok,
+    _issue_tokens,
+    _now,
+    _set_admin_cookies,
+    _token_response,
+    admin_current_principal,
+)
+from .admin_auth_common import decode_token as _decode_token  # re-exported for /refresh
 
 router = APIRouter(prefix="/admin/auth", tags=["admin-auth"])
-
-_ADMIN = Header(default=None, alias="x-admin-token")
-_AUTHZ = Header(default=None, alias="authorization")
-_ACCESS_COOKIE = Cookie(default=None, alias="vitrin_admin_access")
-_REFRESH_COOKIE = Cookie(default=None, alias="vitrin_admin_refresh")
-
-_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-_RATE_LIMITED = ("rate_limited", "Too many requests from your network. Please slow down.")
-
-
-def _now() -> datetime:
-    return datetime.now(UTC)
-
-
-def _hash_token(raw: str) -> str:
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
-
-
-def _client_ip(request: Request) -> str | None:
-    host = request.client.host if request.client else None
-    if not host:
-        return None
-    try:
-        ipaddress.ip_address(host)
-    except ValueError:
-        return None
-    return host
-
-
-def _set_admin_cookies(response: Response, access: str, refresh: str) -> None:
-    s = get_settings()
-    secure = s.cookie_secure
-    samesite = cast(Literal["lax", "strict", "none"], s.cookie_samesite)
-    response.set_cookie(
-        "vitrin_admin_access", access, httponly=True, secure=secure,
-        samesite=samesite, path="/", max_age=s.access_token_ttl,
-    )
-    response.set_cookie(
-        "vitrin_admin_refresh", refresh, httponly=True, secure=secure,
-        samesite=samesite, path="/", max_age=s.refresh_token_ttl,
-    )
-    response.set_cookie(
-        "vitrin_admin_csrf", secrets.token_urlsafe(24), httponly=False,
-        secure=secure, samesite=samesite, path="/", max_age=s.refresh_token_ttl,
-    )
-
-
-def _clear_admin_cookies(response: Response) -> None:
-    for name in ("vitrin_admin_access", "vitrin_admin_refresh", "vitrin_admin_csrf"):
-        response.delete_cookie(name, path="/")
-
-
-async def _ip_rate_ok(request: Request) -> bool:
-    s = get_settings()
-    ip = request.client.host if request.client else "unknown"
-    limiter = RateLimiter(get_redis(), default_per_min=s.auth_ip_rate_per_min)
-    return await limiter.allow(f"adminauthip:{ip}")
-
-
-def _issue_tokens(admin: dict, *, request: Request) -> dict[str, Any]:
-    s = get_settings()
-    secret = s.auth_secret
-    access = create_access_token(
-        user_id=str(admin["id"]),
-        role=Role.PLATFORM_ADMIN.value,
-        tenant_id=None,
-        email=str(admin["email"]),
-        secret=secret,
-        ttl_seconds=s.access_token_ttl,
-    )
-    refresh, jti = create_refresh_token(
-        user_id=str(admin["id"]), secret=secret, ttl_seconds=s.refresh_token_ttl
-    )
-    return {
-        "access": access,
-        "refresh": refresh,
-        "jti_hash": _hash_token(jti),
-        "expires_at": _now() + timedelta(seconds=s.refresh_token_ttl),
-        "ua": (request.headers.get("user-agent") or "")[:300],
-        "ip": _client_ip(request),
-    }
-
-
-def _token_response(admin: dict, tokens: dict[str, Any]) -> dict[str, Any]:
-    s = get_settings()
-    return {
-        "access_token": tokens["access"],
-        "refresh_token": tokens["refresh"],
-        "token_type": "bearer",
-        "expires_in": s.access_token_ttl,
-        "user": {
-            "id": str(admin["id"]),
-            "email": admin["email"],
-            "full_name": admin.get("full_name"),
-            "role": "platform_admin",
-            "tenant_id": None,
-        },
-    }
 
 
 @router.post("/login")
@@ -251,7 +160,7 @@ async def refresh(
     raw = str(payload.get("refresh_token", "") or vitrin_admin_refresh or "")
     invalid = error_response(401, "invalid_token", "Invalid or expired refresh token.")
     try:
-        claims = decode_token(raw, s.auth_secret)
+        claims = _decode_token(raw, s.auth_secret)
     except TokenError:
         return invalid
     if claims.get("typ") != "refresh":
@@ -304,7 +213,7 @@ async def logout(
     raw = str(payload.get("refresh_token", "") or vitrin_admin_refresh or "")
     if raw and s.auth_secret:
         try:
-            claims = decode_token(raw, s.auth_secret)
+            claims = _decode_token(raw, s.auth_secret)
             jti_hash = _hash_token(str(claims.get("jti", "")))
             pool = await get_pg_pool()
             async with pool.acquire() as conn:
@@ -315,38 +224,6 @@ async def logout(
             pass
     _clear_admin_cookies(response)
     return {"status": "logged_out"}
-
-
-async def admin_current_principal(
-    authorization: str | None, access_cookie: str | None = None
-) -> AuthPrincipal | None:
-    """Resolve the admin access token (bearer header OR the admin-only httpOnly
-    cookie) into a principal, or None. Used by every ``/admin/*`` endpoint."""
-    s = get_settings()
-    if not s.auth_secret:
-        return None
-    token: str | None = None
-    if authorization:
-        parts = authorization.split(" ", 1)
-        if len(parts) == 2 and parts[0].lower() == "bearer":
-            token = parts[1]
-    if token is None and access_cookie:
-        token = access_cookie
-    if not token:
-        return None
-    try:
-        claims = decode_token(token, s.auth_secret)
-    except (ExpiredTokenError, TokenError):
-        return None
-    if claims.get("typ") != "access" or claims.get("role") != Role.PLATFORM_ADMIN.value:
-        return None
-    return AuthPrincipal(
-        user_id=str(claims.get("sub")),
-        email=str(claims.get("email", "")),
-        role=Role.PLATFORM_ADMIN,
-        tenant_id=None,
-        token_id=claims.get("jti"),
-    )
 
 
 @router.get("/me")
@@ -361,200 +238,6 @@ async def me(authorization: str | None = _AUTHZ, vitrin_admin_access: str | None
         "tenant_id": None,
         "is_admin": True,
     }
-
-
-@router.post("/change-password")
-async def change_password(
-    payload: dict[str, Any],
-    authorization: str | None = _AUTHZ,
-    vitrin_admin_access: str | None = _ACCESS_COOKIE,
-):
-    principal = await admin_current_principal(authorization, vitrin_admin_access)
-    if principal is None:
-        return error_response(401, "unauthenticated", "A valid access token is required.")
-    current = str(payload.get("current_password", ""))
-    new_password = str(payload.get("new_password", ""))
-    pw_problems = validate_password_strength(new_password)
-    if pw_problems:
-        return error_response(422, "weak_password", " ".join(pw_problems))
-    pool = await get_pg_pool()
-    async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            "SELECT password_hash FROM admin_users WHERE id = $1::uuid", principal.user_id
-        )
-        if row is None or not verify_password(current, row["password_hash"]):
-            return error_response(403, "invalid_password", "Your current password is incorrect.")
-        await conn.execute(
-            "UPDATE admin_users SET password_hash = $1 WHERE id = $2::uuid",
-            hash_password(new_password),
-            principal.user_id,
-        )
-    return {"status": "password_updated"}
-
-
-@router.post("/change-email")
-async def change_email(
-    payload: dict[str, Any],
-    authorization: str | None = _AUTHZ,
-    vitrin_admin_access: str | None = _ACCESS_COOKIE,
-):
-    """Change the signed-in admin's email. No verification email is sent —
-    platform admins are provisioned/managed by other admins, not self-serve."""
-    principal = await admin_current_principal(authorization, vitrin_admin_access)
-    if principal is None:
-        return error_response(401, "unauthenticated", "A valid access token is required.")
-    current = str(payload.get("current_password", ""))
-    new_email = str(payload.get("new_email", "")).strip().lower()
-    if not _EMAIL_RE.match(new_email):
-        return error_response(422, "invalid_email", "A valid email is required.")
-    pool = await get_pg_pool()
-    async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            "SELECT email, password_hash FROM admin_users WHERE id = $1::uuid", principal.user_id
-        )
-        if row is None or not verify_password(current, row["password_hash"]):
-            return error_response(403, "invalid_password", "Your current password is incorrect.")
-        if new_email == row["email"]:
-            return error_response(422, "invalid_email", "This is already your email address.")
-        if await conn.fetchval(
-            "SELECT 1 FROM admin_users WHERE lower(email) = $1 AND id <> $2::uuid",
-            new_email,
-            principal.user_id,
-        ):
-            return error_response(409, "email_taken", "An account with this email already exists.")
-        await conn.execute(
-            "UPDATE admin_users SET email = $1 WHERE id = $2::uuid", new_email, principal.user_id
-        )
-        await audit(
-            pool,
-            actor=row["email"],
-            action="admin_auth.change_email",
-            detail={"new_email": new_email},
-        )
-    return {"status": "email_changed", "email": new_email}
-
-
-# --------------------------------------------------------------------------- #
-# TOTP two-factor auth (Phase 9 hardening)                                      #
-# --------------------------------------------------------------------------- #
-@router.get("/totp")
-async def totp_status(
-    authorization: str | None = _AUTHZ, vitrin_admin_access: str | None = _ACCESS_COOKIE
-):
-    principal = await admin_current_principal(authorization, vitrin_admin_access)
-    if principal is None:
-        return error_response(401, "unauthenticated", "A valid access token is required.")
-    pool = await get_pg_pool()
-    async with pool.acquire() as conn:
-        enabled = await conn.fetchval(
-            "SELECT totp_enabled FROM admin_users WHERE id = $1::uuid", principal.user_id
-        )
-    return {"totp_enabled": bool(enabled)}
-
-
-@router.post("/totp/enroll")
-async def totp_enroll(
-    payload: dict[str, Any],
-    authorization: str | None = _AUTHZ,
-    vitrin_admin_access: str | None = _ACCESS_COOKIE,
-):
-    """Start enrollment: store a fresh secret (NOT yet enforced) and return it
-    with the otpauth:// URI. Enforcement begins only after /totp/confirm."""
-    principal = await admin_current_principal(authorization, vitrin_admin_access)
-    if principal is None:
-        return error_response(401, "unauthenticated", "A valid access token is required.")
-    current = str(payload.get("current_password", ""))
-    pool = await get_pg_pool()
-    async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            "SELECT email, password_hash, totp_enabled FROM admin_users WHERE id = $1::uuid",
-            principal.user_id,
-        )
-        if row is None or not verify_password(current, row["password_hash"]):
-            return error_response(403, "invalid_password", "Your current password is incorrect.")
-        if row["totp_enabled"]:
-            return error_response(409, "totp_already_enabled", "Two-factor auth is already on.")
-        secret = generate_totp_secret()
-        await conn.execute(
-            "UPDATE admin_users SET totp_secret = $1 WHERE id = $2::uuid",
-            secret,
-            principal.user_id,
-        )
-    return {
-        "secret": secret,
-        "otpauth_uri": otpauth_uri(secret, str(row["email"])),
-        "status": "pending_confirmation",
-    }
-
-
-@router.post("/totp/confirm")
-async def totp_confirm(
-    payload: dict[str, Any],
-    authorization: str | None = _AUTHZ,
-    vitrin_admin_access: str | None = _ACCESS_COOKIE,
-):
-    """Turn enforcement on after the admin proves the authenticator works."""
-    principal = await admin_current_principal(authorization, vitrin_admin_access)
-    if principal is None:
-        return error_response(401, "unauthenticated", "A valid access token is required.")
-    code = str(payload.get("totp_code", "")).strip()
-    pool = await get_pg_pool()
-    async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            "SELECT email, totp_secret, totp_enabled FROM admin_users WHERE id = $1::uuid",
-            principal.user_id,
-        )
-        if row is None or not row["totp_secret"]:
-            return error_response(409, "totp_not_enrolled", "Start enrollment first.")
-        if row["totp_enabled"]:
-            return error_response(409, "totp_already_enabled", "Two-factor auth is already on.")
-        step = verify_totp_step(str(row["totp_secret"]), code)
-        if step is None:
-            return error_response(401, "invalid_totp", "The 6-digit code is not valid.")
-        # Record the confirmation step too, so this exact code can't be
-        # replayed as the first login code.
-        await conn.execute(
-            "UPDATE admin_users SET totp_enabled = TRUE, totp_last_step = $1 WHERE id = $2::uuid",
-            step,
-            principal.user_id,
-        )
-    await audit(pool, actor=str(row["email"]), action="admin_auth.totp_enabled", detail={})
-    return {"status": "totp_enabled"}
-
-
-@router.post("/totp/disable")
-async def totp_disable(
-    payload: dict[str, Any],
-    authorization: str | None = _AUTHZ,
-    vitrin_admin_access: str | None = _ACCESS_COOKIE,
-):
-    """Turn 2FA off — requires the password AND a live code (a stolen session
-    alone can't weaken the account)."""
-    principal = await admin_current_principal(authorization, vitrin_admin_access)
-    if principal is None:
-        return error_response(401, "unauthenticated", "A valid access token is required.")
-    current = str(payload.get("current_password", ""))
-    code = str(payload.get("totp_code", "")).strip()
-    pool = await get_pg_pool()
-    async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            "SELECT email, password_hash, totp_secret, totp_enabled "
-            "FROM admin_users WHERE id = $1::uuid",
-            principal.user_id,
-        )
-        if row is None or not row["totp_enabled"]:
-            return error_response(409, "totp_not_enabled", "Two-factor auth is not on.")
-        if not verify_password(current, row["password_hash"]):
-            return error_response(403, "invalid_password", "Your current password is incorrect.")
-        if not verify_totp(str(row["totp_secret"]), code):
-            return error_response(401, "invalid_totp", "The 6-digit code is not valid.")
-        await conn.execute(
-            "UPDATE admin_users SET totp_enabled = FALSE, totp_secret = NULL "
-            "WHERE id = $1::uuid",
-            principal.user_id,
-        )
-    await audit(pool, actor=str(row["email"]), action="admin_auth.totp_disabled", detail={})
-    return {"status": "totp_disabled"}
 
 
 @router.post("/bootstrap")

@@ -1,4 +1,4 @@
-# Shared image for the Python services (api, gateway, worker).
+# Shared image for the Python services (api, worker).
 # Each service overrides the command in docker-compose.
 FROM python:3.13-slim
 

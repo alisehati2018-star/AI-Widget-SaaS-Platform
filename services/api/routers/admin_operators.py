@@ -43,7 +43,7 @@ async def _principal(
     """(authorized?, principal). The raw operator token authorizes with no
     principal (automation); a signed-in admin carries one, enabling the
     self-protection rails below."""
-    from .admin_auth import admin_current_principal
+    from .admin_auth_common import admin_current_principal
 
     principal = await admin_current_principal(authorization, cookie)
     if principal is not None:
