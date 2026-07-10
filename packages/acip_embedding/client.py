@@ -38,16 +38,60 @@ def truncate_mrl(vec: list[float], dims: int) -> list[float]:
     return _l2_normalize(vec[:dims])
 
 
-class EmbeddingClient:
-    def __init__(self, settings: Settings | None = None, redis=None) -> None:
-        self._s = settings or get_settings()
-        self._redis = redis  # optional; lazy to keep this importable without Redis
-        self._url = self._s.embeddings_url.rstrip("/")
-        self._dims = self._s.embedding_dims
+def cache_key(model: str, dims: int, text: str) -> str:
+    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    return f"emb:{model}:{dims}:{digest}"
 
-    def _cache_key(self, text: str) -> str:
-        digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
-        return f"emb:{self._s.embedding_model}:{self._dims}:{digest}"
+
+async def cache_get(redis, key: str) -> list[float] | None:
+    """Best-effort Redis lookup; any failure/absence is a cache miss."""
+    if redis is None:
+        return None
+    try:
+        cached = await redis.lrange(key, 0, -1)
+        return [float(x) for x in cached] if cached else None
+    except Exception:  # noqa: BLE001 - cache is best-effort
+        return None
+
+
+async def cache_set(redis, key: str, vec: list[float]) -> None:
+    if redis is None:
+        return
+    try:
+        await redis.delete(key)
+        await redis.rpush(key, *[str(x) for x in vec])
+        await redis.expire(key, 86400)
+    except Exception:  # noqa: BLE001 - cache is best-effort
+        pass
+
+
+class EmbeddingClient:
+    """Talks to one embedding endpoint. `wire="tei"` (default) speaks the
+    self-hosted Text-Embeddings-Inference `/embed` protocol used by the local
+    model; `wire="openai"` speaks the `/embeddings` OpenAI wire format used by
+    admin-configured vendor embedding models (`ai_providers`/`ai_models`,
+    `modality='embedding'`) — see `chained.py` for the multi-provider,
+    failover-capable client built on top of this one."""
+
+    def __init__(
+        self,
+        settings: Settings | None = None,
+        redis=None,
+        *,
+        base_url: str | None = None,
+        model: str | None = None,
+        dims: int | None = None,
+        api_key: str | None = None,
+        wire: str = "tei",
+    ) -> None:
+        s = settings or get_settings()
+        self._s = s
+        self._redis = redis  # optional; lazy to keep this importable without Redis
+        self._url = (base_url or s.embeddings_url).rstrip("/")
+        self._model = model or s.embedding_model
+        self._dims = dims if dims is not None else s.embedding_dims
+        self._api_key = api_key
+        self._wire = wire
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         """Embed a batch of texts → list of vectors (MRL-truncated)."""
@@ -55,34 +99,33 @@ class EmbeddingClient:
             return []
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
-                resp = await client.post(f"{self._url}/embed", json={"inputs": texts})
-                resp.raise_for_status()
-                raw = resp.json()
+                if self._wire == "openai":
+                    headers = {"Authorization": f"Bearer {self._api_key}"} if self._api_key else {}
+                    resp = await client.post(
+                        f"{self._url}/embeddings",
+                        json={"input": texts, "model": self._model},
+                        headers=headers,
+                    )
+                    resp.raise_for_status()
+                    data = resp.json()
+                    raw = [item["embedding"] for item in data["data"]]
+                else:
+                    resp = await client.post(f"{self._url}/embed", json={"inputs": texts})
+                    resp.raise_for_status()
+                    raw = resp.json()
         except Exception as exc:  # noqa: BLE001 - normalise all backend errors
-            log.warning("embedding.unavailable", error=str(exc))
+            log.warning("embedding.unavailable", error=str(exc), wire=self._wire)
             raise EmbeddingUnavailable(str(exc)) from exc
-        # TEI returns a list of vectors aligned with inputs.
         return [truncate_mrl([float(x) for x in v], self._dims) for v in raw]
 
     async def embed_one(self, text: str) -> list[float]:
         """Embed a single text, using the Redis cache when available."""
-        if self._redis is not None:
-            key = self._cache_key(text)
-            try:
-                cached = await self._redis.lrange(key, 0, -1)
-                if cached:
-                    return [float(x) for x in cached]
-            except Exception:  # noqa: BLE001 - cache is best-effort
-                pass
+        key = cache_key(self._model, self._dims, text)
+        cached = await cache_get(self._redis, key)
+        if cached is not None:
+            return cached
         vec = (await self.embed([text]))[0]
-        if self._redis is not None:
-            try:
-                key = self._cache_key(text)
-                await self._redis.delete(key)
-                await self._redis.rpush(key, *[str(x) for x in vec])
-                await self._redis.expire(key, 86400)
-            except Exception:  # noqa: BLE001
-                pass
+        await cache_set(self._redis, key, vec)
         return vec
 
 

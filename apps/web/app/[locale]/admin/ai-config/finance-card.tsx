@@ -7,7 +7,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { formatNumber } from "@/lib/datetime";
 import type { Locale } from "@/i18n/routing";
 import { Stat } from "@/components/ui";
-import type { FinanceData } from "./types";
+import type { FinanceData } from "../models/types";
 
 function usd(v: number, locale: Locale): string {
   return `$${formatNumber(Math.round(v * 100) / 100, locale)}`;

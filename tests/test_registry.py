@@ -5,7 +5,12 @@ from __future__ import annotations
 from acip_billing.pricing import ModelPrice, PricingConfig
 from acip_gateway.failover import Endpoint
 from acip_gateway.llm_client import LLMClient, LLMResponse
-from acip_gateway.registry import DynamicProviderChain, ProviderRegistry, RegistrySnapshot
+from acip_gateway.registry import (
+    DynamicProviderChain,
+    EmbeddingEndpoint,
+    ProviderRegistry,
+    RegistrySnapshot,
+)
 
 
 def _local_endpoint() -> Endpoint:
@@ -121,6 +126,102 @@ async def test_dynamic_chain_fails_over_within_task(monkeypatch):
     chain = DynamicProviderChain(reg, task="chat")
     resp = await chain.generate([{"role": "user", "content": "x"}])
     assert resp.text == "ok" and resp.provider == "local"
+
+
+async def test_endpoints_failover_disabled_truncates_to_primary_and_local(monkeypatch):
+    reg = ProviderRegistry(pool_getter=None)
+    snap = RegistrySnapshot(
+        endpoints_by_task={
+            "chat": [
+                _frontier_endpoint(),
+                Endpoint(client=LLMClient("https://api2.example", provider="acme2"),
+                         model="acme-2", is_local=False),
+                _local_endpoint(),
+            ]
+        },
+        failover_enabled=False,
+        loaded_at=0.0,
+    )
+
+    async def fake_snapshot():
+        return snap
+
+    monkeypatch.setattr(reg, "snapshot", fake_snapshot)
+    chain = await reg.endpoints("chat")
+    # Middle alternate dropped; primary + mandatory local terminal survive.
+    assert [e.client.provider_name for e in chain] == ["acme", "local"]
+
+
+async def test_endpoints_failover_disabled_primary_already_local_is_single(monkeypatch):
+    reg = ProviderRegistry(pool_getter=None)
+    snap = RegistrySnapshot(
+        endpoints_by_task={"chat": [_local_endpoint(), _frontier_endpoint()]},
+        failover_enabled=False,
+        loaded_at=0.0,
+    )
+
+    async def fake_snapshot():
+        return snap
+
+    monkeypatch.setattr(reg, "snapshot", fake_snapshot)
+    chain = await reg.endpoints("chat")
+    assert len(chain) == 1 and chain[0].is_local
+
+
+async def test_embedding_endpoints_failover_disabled_truncates(monkeypatch):
+    reg = ProviderRegistry(pool_getter=None)
+    snap = RegistrySnapshot(
+        embedding_endpoints=[
+            EmbeddingEndpoint(base_url="https://acme", api_key="k", model="acme-embed",
+                              dims=768, is_local=False, wire="openai"),
+            EmbeddingEndpoint(base_url="http://local:8080", api_key=None, model="local-embed",
+                              dims=768, is_local=True, wire="tei"),
+        ],
+        failover_enabled=False,
+        loaded_at=0.0,
+    )
+
+    async def fake_snapshot():
+        return snap
+
+    monkeypatch.setattr(reg, "snapshot", fake_snapshot)
+    endpoints = await reg.embedding_endpoints()
+    assert [e.model for e in endpoints] == ["acme-embed", "local-embed"]
+
+
+async def test_dynamic_chain_retries_transient_error_before_failover(monkeypatch):
+    import httpx
+
+    calls = {"n": 0}
+
+    class Flaky:
+        provider_name = "acme"
+
+        async def chat(self, *a, **k):
+            calls["n"] += 1
+            if calls["n"] <= 1:
+                raise httpx.TimeoutException("timed out")
+            return LLMResponse(text="recovered", model="acme-1", provider="acme")
+
+    reg = ProviderRegistry(pool_getter=None)
+    snap = RegistrySnapshot(
+        endpoints_by_task={
+            "chat": [
+                Endpoint(client=Flaky(), model="acme-1", is_local=False,
+                         max_retries=1, retry_backoff_ms=0),
+            ]
+        },
+        loaded_at=0.0,
+    )
+
+    async def fake_snapshot():
+        return snap
+
+    monkeypatch.setattr(reg, "snapshot", fake_snapshot)
+    chain = DynamicProviderChain(reg, task="chat")
+    resp = await chain.generate([{"role": "user", "content": "x"}])
+    assert resp.text == "recovered"
+    assert calls["n"] == 2
 
 
 async def test_dynamic_chain_prefer_local_filters_chain(monkeypatch):

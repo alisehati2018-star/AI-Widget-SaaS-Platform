@@ -1,5 +1,7 @@
 // Shared shapes for the AI providers / pricing / finance admin page.
 
+export type ModelModality = "chat" | "embedding" | "rerank";
+
 export interface AiModel {
   id: string;
   provider_id: string;
@@ -8,6 +10,22 @@ export interface AiModel {
   input_usd_per_1m: number;
   output_usd_per_1m: number;
   enabled: boolean;
+  modality: ModelModality;
+  dims: number | null;
+  context_window: number | null;
+  is_free_tier: boolean;
+  // Only present on the flat GET /admin/ai/models listing.
+  provider_name?: string;
+  provider_is_local?: boolean;
+}
+
+export type ProviderDiscoverKind = "openai_compatible" | "openrouter" | "google" | "bynara" | "conduit";
+
+export interface ProviderPlatformUsage {
+  period_days: number;
+  call_count: number;
+  platform_credits: number;
+  estimated_cost_usd: number;
 }
 
 export interface AiProvider {
@@ -21,19 +39,65 @@ export interface AiProvider {
   enabled: boolean;
   timeout_s: number;
   notes: string | null;
+  discover_kind: ProviderDiscoverKind;
+  // Retries of the same endpoint before the chain fails over to the next
+  // provider/model (0 = one attempt, today's behavior).
+  max_retries: number;
+  retry_backoff_ms: number;
+  priority: number;
   models: AiModel[];
+  platform_usage: ProviderPlatformUsage;
 }
+
+export interface ProviderTemplate {
+  key: string;
+  display_name: string;
+  base_url: string;
+  discover_kind: ProviderDiscoverKind;
+  description: string;
+  dashboard_url: string;
+  already_created: boolean;
+}
+
+export interface DiscoveredModel {
+  model: string;
+  label: string;
+  input_usd_per_1m: number;
+  output_usd_per_1m: number;
+  context_length: number | null;
+  already_imported: boolean;
+}
+
+export type IneligibleReason = "MODEL_INACTIVE" | "PROVIDER_INACTIVE" | "PROVIDER_NO_API_KEY";
 
 export interface RouteEntry {
   model_id: string;
   model: string;
+  label: string | null;
   provider: string;
   is_local: boolean;
+  is_eligible: boolean;
+  ineligible_reason: IneligibleReason | null;
 }
 
 export interface RoutesData {
   routes: Record<string, RouteEntry[]>;
   tasks: string[];
+}
+
+export interface CreditCheckResult {
+  credit: {
+    source: "external_api" | "api_key_check";
+    usage?: number;
+    limit?: number | null;
+    remaining?: number | null;
+    currency?: string;
+    key_valid?: boolean;
+    models_available?: number;
+    note?: string;
+    dashboard_url?: string;
+  };
+  platform_usage: ProviderPlatformUsage;
 }
 
 export interface PricingData {
