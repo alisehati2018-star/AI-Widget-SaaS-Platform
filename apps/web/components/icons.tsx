@@ -29,6 +29,8 @@ const P: Record<string, Paths> = {
   plans: <><path d="M3 12V5a2 2 0 0 1 2-2h7l9 9-9 9z" /><circle cx="8" cy="8" r="1.5" /></>,
   usage: <><path d="M3 12h4l3 8 4-16 3 8h4" /></>,
   models: <><rect x="7" y="7" width="10" height="10" rx="2" /><path d="M10 2v3M14 2v3M10 19v3M14 19v3M2 10h3M2 14h3M19 10h3M19 14h3" /></>,
+  providers: <><rect x="3" y="4" width="18" height="6" rx="1.5" /><rect x="3" y="14" width="18" height="6" rx="1.5" /><path d="M7 7h.01M7 17h.01" /></>,
+  aiConfig: <><circle cx="6" cy="7" r="2" /><path d="M8 7h13" /><circle cx="16" cy="13" r="2" /><path d="M3 13h11M18 13h3" /><circle cx="9" cy="19" r="2" /><path d="M3 19h4M11 19h10" /></>,
   queue: <><path d="M12 3l9 5-9 5-9-5z" /><path d="M3 13l9 5 9-5M3 17l9 5 9-5" /></>,
   health: <><path d="M3 12h4l2-5 3 9 2-4h7" /></>,
   security: <><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z" /><path d="m9 12 2 2 4-4" /></>,

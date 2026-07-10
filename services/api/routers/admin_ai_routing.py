@@ -12,17 +12,20 @@ from typing import Any
 
 from acip_core.audit import audit
 from acip_core.clients import get_pg_pool
+from acip_core.config import get_settings
 from fastapi import APIRouter
 
 from .admin_ai_common import (
     _ADMIN,
     _AUTHZ,
     _COOKIE,
+    _TASK_MODALITY,
     _TASKS,
     _UUID_RE,
     _forbidden,
     _invalid,
     _invalidate_registry,
+    _model_eligibility,
     _ok,
 )
 
@@ -43,18 +46,26 @@ async def get_routes(
     pool = await get_pg_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            "SELECT r.task, r.position, r.model_id, m.model, p.name AS provider, p.is_local "
+            "SELECT r.task, r.position, r.model_id, m.model, m.label, m.enabled AS model_enabled, "
+            "p.name AS provider, p.is_local, p.enabled AS provider_enabled, "
+            "(p.api_key <> '') AS provider_has_api_key "
             "FROM ai_routes r JOIN ai_models m ON m.id = r.model_id "
             "JOIN ai_providers p ON p.id = m.provider_id ORDER BY r.task, r.position"
         )
     routes: dict[str, list[dict]] = {task: [] for task in _TASKS}
     for r in rows:
+        is_eligible, reason = _model_eligibility(
+            r["model_enabled"], r["provider_enabled"], r["provider_has_api_key"]
+        )
         routes.setdefault(r["task"], []).append(
             {
                 "model_id": str(r["model_id"]),
                 "model": r["model"],
+                "label": r["label"],
                 "provider": r["provider"],
                 "is_local": r["is_local"],
+                "is_eligible": is_eligible,
+                "ineligible_reason": reason,
             }
         )
     return {"routes": routes, "tasks": list(_TASKS)}
@@ -79,18 +90,38 @@ async def put_route(
     for mid in model_ids:
         if not isinstance(mid, str) or not _UUID_RE.match(mid):
             return _invalid("Every entry of 'model_ids' must be a model UUID.")
+    required_modality = _TASK_MODALITY[task]
     pool = await get_pg_pool()
     async with pool.acquire() as conn:
         async with conn.transaction():
-            known = {
-                str(r["id"])
+            found = {
+                str(r["id"]): r
                 for r in await conn.fetch(
-                    "SELECT id FROM ai_models WHERE id = ANY($1::uuid[])", model_ids
+                    "SELECT id, modality, dims FROM ai_models WHERE id = ANY($1::uuid[])",
+                    model_ids,
                 )
             }
-            missing = [m for m in model_ids if m not in known]
+            missing = [m for m in model_ids if m not in found]
             if missing:
                 return _invalid("Unknown model id(s) in 'model_ids'.")
+            wrong_modality = [
+                mid for mid in model_ids if found[mid]["modality"] != required_modality
+            ]
+            if wrong_modality:
+                return _invalid(
+                    f"task '{task}' requires models of modality '{required_modality}'."
+                )
+            if task == "embedding":
+                expected_dims = get_settings().embedding_dims
+                mismatched = [
+                    mid for mid in model_ids
+                    if found[mid]["dims"] is not None and found[mid]["dims"] != expected_dims
+                ]
+                if mismatched:
+                    return _invalid(
+                        f"model dims must match the configured embedding dimension "
+                        f"({expected_dims}); check the model(s) with a different 'dims' value."
+                    )
             await conn.execute("DELETE FROM ai_routes WHERE task = $1", task)
             for pos, mid in enumerate(model_ids):
                 await conn.execute(
@@ -105,6 +136,52 @@ async def put_route(
     )
     _invalidate_registry()
     return {"task": task, "count": len(model_ids)}
+
+
+# --------------------------------------------------------------------------- #
+# Global routing settings (failover master switch)                            #
+# --------------------------------------------------------------------------- #
+@router.get("/routing-settings")
+async def get_routing_settings(
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    if not await _ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT failover_enabled FROM ai_routing_settings WHERE id")
+    return {"failover_enabled": row["failover_enabled"]}
+
+
+@router.put("/routing-settings")
+async def put_routing_settings(
+    payload: dict[str, Any],
+    x_admin_token: str | None = _ADMIN,
+    authorization: str | None = _AUTHZ,
+    vitrin_access: str | None = _COOKIE,
+):
+    """Master on/off switch for cross-endpoint retry/failover. When off, the
+    registry only ever tries the first (primary) endpoint of any chain —
+    per-provider `max_retries` still governs retry count while this is on."""
+    if not await _ok(x_admin_token, authorization, vitrin_access):
+        return _forbidden()
+    if "failover_enabled" not in payload:
+        return _invalid("Field 'failover_enabled' is required.")
+    enabled = bool(payload["failover_enabled"])
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE ai_routing_settings SET failover_enabled = $1, updated_at = now() WHERE id",
+            enabled,
+        )
+    await audit(
+        pool, actor="operator", action="ai.routing_settings_update",
+        detail={"failover_enabled": enabled},
+    )
+    _invalidate_registry()
+    return {"failover_enabled": enabled}
 
 
 # --------------------------------------------------------------------------- #

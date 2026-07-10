@@ -1,0 +1,7 @@
+# Persian search synonyms for local dev / seed (ES synonym_graph format).
+گوشی, موبایل, تلفن همراه
+سامسونگ, samsung
+اپل, apple, آیفون
+لپتاپ, لپ تاپ, notebook
+هدفون, هندزفری
+تلویزیون, تی وی, tv

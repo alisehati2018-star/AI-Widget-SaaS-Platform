@@ -103,6 +103,48 @@ async def test_provider_chain_fails_over_to_local():
     assert resp.text == "local-answer"
 
 
+async def test_provider_chain_retries_transient_error_before_failover():
+    """A retryable (timeout) error on the primary endpoint is retried up to
+    max_retries times before the chain moves on — not an immediate failover."""
+    import httpx
+
+    calls = {"n": 0}
+
+    class Flaky:
+        async def chat(self, *a, **k):
+            calls["n"] += 1
+            if calls["n"] <= 2:
+                raise httpx.TimeoutException("timed out")
+            return LLMResponse(text="recovered", model="f", provider="frontier")
+
+    chain = ProviderChain([
+        Endpoint(Flaky(), "f", is_local=False, max_retries=2, retry_backoff_ms=0),
+        Endpoint(FakeLLM("local-answer"), "l", is_local=True),
+    ])
+    resp = await chain.generate([{"role": "user", "content": "x"}])
+    assert resp.text == "recovered"
+    assert calls["n"] == 3
+
+
+async def test_provider_chain_non_retryable_error_fails_over_immediately():
+    """An auth/validation-shaped error must NOT burn retries against the same
+    (broken) endpoint — it should escalate to the next endpoint right away."""
+    calls = {"n": 0}
+
+    class Unauthorized:
+        async def chat(self, *a, **k):
+            calls["n"] += 1
+            raise RuntimeError("401 unauthorized")
+
+    chain = ProviderChain([
+        Endpoint(Unauthorized(), "f", is_local=False, max_retries=3, retry_backoff_ms=0),
+        Endpoint(FakeLLM("local-answer"), "l", is_local=True),
+    ])
+    resp = await chain.generate([{"role": "user", "content": "x"}])
+    assert resp.text == "local-answer"
+    assert calls["n"] == 1  # no retries burned on a non-retryable error
+
+
 # --- compress ---
 
 def test_build_context_delimits_untrusted_data():

@@ -67,7 +67,8 @@ services:
       - POSTGRES_USER=${PG_USER:-acip}
       - POSTGRES_PASSWORD=${PG_PASSWORD:-acip}
     volumes:
-      - pg-data:/var/lib/postgresql/data
+      # Postgres 18+ expects the volume at /var/lib/postgresql (not .../data).
+      - pg-data:/var/lib/postgresql
       - ../db/migrations:/docker-entrypoint-initdb.d:ro
     # Published so a host-run app/worker (per .env.example) can reach it.
     ports:

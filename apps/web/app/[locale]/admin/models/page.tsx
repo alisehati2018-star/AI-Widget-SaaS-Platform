@@ -1,60 +1,19 @@
 "use client";
 
-import { useLocale, useTranslations } from "next-intl";
-import { useState } from "react";
-import { adminFetch as authFetch } from "@/lib/auth";
-import { formatNumber } from "@/lib/datetime";
+import { useTranslations } from "next-intl";
 import { useAdminResource as useResource } from "@/lib/hooks/useResource";
-import type { Locale } from "@/i18n/routing";
 import { DashboardShell, useAdminNav } from "@/components/shell";
-import { Badge, Spinner } from "@/components/ui";
-import { ProvidersCard } from "./providers-card";
-import { RoutesCard } from "./routes-card";
-import { PricingCard } from "./pricing-card";
-import { FinanceCard } from "./finance-card";
-import type { AiProvider, FinanceData, GatewayStatus, PricingData, RoutesData } from "./types";
-
-interface PingInfo { configured: boolean; reachable: boolean; latency_ms: number | null }
-type PingMap = Record<"embeddings" | "reranker" | "llm", PingInfo>;
+import { Spinner } from "@/components/ui";
+import { ModelsTable } from "./models-table";
+import type { AiModel, AiProvider } from "./types";
 
 export default function AdminModels() {
   const t = useTranslations("admin");
-  const locale = useLocale() as Locale;
   const nav = useAdminNav();
-  const { data } = useResource<GatewayStatus>("/admin/models");
+  const modelsRes = useResource<{ models: AiModel[] }>("/admin/ai/models?include_inactive=true");
   const providersRes = useResource<{ providers: AiProvider[] }>("/admin/ai/providers");
-  const routesRes = useResource<RoutesData>("/admin/ai/routes");
-  const pricingRes = useResource<PricingData>("/admin/ai/pricing");
-  const financeRes = useResource<FinanceData>("/admin/ai/finance?days=30");
-  const [ping, setPing] = useState<PingMap | null>(null);
-  const [pinging, setPinging] = useState(false);
 
-  async function runPing() {
-    setPinging(true);
-    try {
-      const r = await authFetch<{ services: PingMap }>("/admin/models/ping", { method: "POST" });
-      setPing(r.services);
-    } catch {
-      setPing(null);
-    } finally {
-      setPinging(false);
-    }
-  }
-
-  const reachBadge = (key: keyof PingMap) => {
-    if (!ping) return null;
-    const info = ping[key];
-    if (!info.configured) return <Badge>{t("models.notConfigured")}</Badge>;
-    return info.reachable ? (
-      <Badge tone="success">
-        {t("models.reachable")} · {formatNumber(info.latency_ms ?? 0, locale)} {t("common.ms")}
-      </Badge>
-    ) : (
-      <Badge tone="warning">{t("models.unreachable")}</Badge>
-    );
-  };
-
-  if (!data) {
+  if (!modelsRes.data || !providersRes.data) {
     return (
       <DashboardShell title={t("models.title")} nav={nav} requireAdmin loginHref="/admin/login">
         <Spinner />
@@ -64,71 +23,11 @@ export default function AdminModels() {
 
   return (
     <DashboardShell title={t("models.title")} nav={nav} requireAdmin loginHref="/admin/login">
-      <div className="row-between" style={{ marginTop: "-1rem", flexWrap: "wrap", gap: ".6rem" }}>
-        <p style={{ margin: 0 }}>{t("models.intro")}</p>
-        <button className="btn btn-primary" disabled={pinging} onClick={() => void runPing()}>
-          {pinging ? <Spinner /> : t("models.pingAll")}
-        </button>
-      </div>
-
-      {financeRes.data ? <FinanceCard finance={financeRes.data} /> : null}
-
-      {providersRes.data ? (
-        <ProvidersCard providers={providersRes.data.providers} reload={providersRes.reload} />
-      ) : null}
-
-      {routesRes.data && providersRes.data ? (
-        <RoutesCard
-          routes={routesRes.data}
-          providers={providersRes.data.providers}
-          reload={routesRes.reload}
-        />
-      ) : null}
-
-      {pricingRes.data ? (
-        <PricingCard pricing={pricingRes.data} reload={() => { pricingRes.reload(); financeRes.reload(); }} />
-      ) : null}
-
-      <div className="card" style={{ margin: "1rem 0 1.5rem" }}>
-        <h3>{t("models.configTitle")}</h3>
-        <p className="hint">{t("models.envConfigHint")}</p>
-        <table className="table">
-          <tbody>
-            <tr>
-              <td className="muted">{t("models.localLlm")}</td>
-              <td>{data.llm_model} <span className="muted" dir="ltr">({data.llm_url})</span></td>
-              <td>{reachBadge("llm")}</td>
-            </tr>
-            <tr>
-              <td className="muted">{t("models.embeddings")}</td>
-              <td className="muted" dir="ltr">{data.embeddings_url}</td>
-              <td>{reachBadge("embeddings")}</td>
-            </tr>
-            <tr>
-              <td className="muted">{t("models.reranker")}</td>
-              <td>{data.rerank_enabled ? <Badge tone="success">{t("common.on")}</Badge> : <Badge>{t("common.off")}</Badge>} <span className="muted" dir="ltr">{data.reranker_url}</span></td>
-              <td>{reachBadge("reranker")}</td>
-            </tr>
-            <tr>
-              <td className="muted">{t("models.frontier")}</td>
-              <td>{data.frontier_enabled ? <Badge tone="warning">{data.frontier_model ?? t("common.enabled")}</Badge> : <Badge>{t("common.disabled")}</Badge>}</td>
-              <td></td>
-            </tr>
-          </tbody>
-        </table>
-        {ping ? <p className="hint">{t("models.pingHint")}</p> : null}
-      </div>
-      <div className="card">
-        <h3>{t("models.byRung")}</h3>
-        {data.by_rung.length ? (
-          <table className="table">
-            <thead><tr><th>{t("common.colRung")}</th><th>{t("common.colCalls")}</th></tr></thead>
-            <tbody>{data.by_rung.map((r) => <tr key={r.rung}><td>{r.rung}</td><td>{formatNumber(r.count, locale)}</td></tr>)}</tbody>
-          </table>
-        ) : (
-          <p className="muted">{t("models.empty")}</p>
-        )}
-      </div>
+      <ModelsTable
+        models={modelsRes.data.models}
+        providers={providersRes.data.providers}
+        reload={() => { modelsRes.reload(); providersRes.reload(); }}
+      />
     </DashboardShell>
   );
 }

@@ -21,7 +21,7 @@ from acip_cache.metering import record_usage
 from acip_core.clients import get_es_client, get_pg_pool, get_redis
 from acip_core.config import get_settings
 from acip_core.ratelimit import RateLimiter
-from acip_embedding import get_embedding_client
+from acip_embedding import get_embedding_client_for_task
 from acip_gateway.registry import DynamicProviderChain, ProviderRegistry
 from acip_gateway.router import GatewayRouter, TurnResult
 from acip_search.retrieval import SearchService
@@ -44,20 +44,20 @@ def get_rate_limiter() -> RateLimiter:
 
 
 @lru_cache
+def get_provider_registry() -> ProviderRegistry:
+    """Process-wide registry over ai_providers/ai_models/ai_routes/pricing."""
+    return ProviderRegistry(get_pg_pool)
+
+
+@lru_cache
 def get_search_service() -> SearchService:
     redis = get_redis()
     return SearchService(
         es=get_es_client(),
-        embedding_client=get_embedding_client(redis=redis),
+        embedding_client=get_embedding_client_for_task(get_provider_registry(), redis=redis),
         redis=redis,
         meter=_meter,
     )
-
-
-@lru_cache
-def get_provider_registry() -> ProviderRegistry:
-    """Process-wide registry over ai_providers/ai_models/ai_routes/pricing."""
-    return ProviderRegistry(get_pg_pool)
 
 
 @lru_cache
@@ -84,7 +84,7 @@ async def _pricer(rung: str, result: TurnResult) -> tuple[float, float]:
 def get_assistant() -> RagAssistant:
     s = get_settings()
     redis = get_redis()
-    embed_client = get_embedding_client(redis=redis)
+    embed_client = get_embedding_client_for_task(get_provider_registry(), redis=redis)
     search = get_search_service()
 
     async def retrieve(tenant_id: str, query: str) -> list[dict]:

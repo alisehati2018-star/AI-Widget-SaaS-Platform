@@ -15,7 +15,7 @@ from typing import Any
 from acip_cache.data_version import bump_data_version
 from acip_core.clients import get_es_client, get_redis
 from acip_core.logging import get_logger
-from acip_embedding import get_embedding_client
+from acip_embedding import get_embedding_client_for_task
 from acip_sync.dlq import park
 from acip_sync.ingest import tombstone_product, upsert_product
 from acip_sync.normalize import normalize_product
@@ -42,9 +42,26 @@ def _run(coro):
     return _loop.run_until_complete(coro)
 
 
+_registry = None
+
+
+def _get_registry():
+    """Process-wide provider registry (TTL-cached), mirroring the API
+    process's `runtime.get_provider_registry()` singleton — constructing a
+    fresh one per call would defeat its 30s cache and hit PG on every embed."""
+    global _registry
+    if _registry is None:
+        from acip_core.clients import get_pg_pool
+        from acip_gateway.registry import ProviderRegistry
+
+        _registry = ProviderRegistry(get_pg_pool)
+    return _registry
+
+
 async def _embed_text(text: str) -> list[float] | None:
     try:
-        return await get_embedding_client(redis=get_redis()).embed_one(text)
+        client = get_embedding_client_for_task(_get_registry(), redis=get_redis())
+        return await client.embed_one(text)
     except Exception:  # noqa: BLE001 - embedding is optional; degrade to lexical doc
         return None
 
@@ -260,7 +277,8 @@ def reconcile_tenant(tenant_id: str, source: str = "rest") -> str:
 
 @celery_app.task(name="acip.embed.batch")
 def batch_embed(texts: list[str]) -> int:
-    vectors = _run(get_embedding_client(redis=get_redis()).embed(texts))
+    client = get_embedding_client_for_task(_get_registry(), redis=get_redis())
+    vectors = _run(client.embed(texts))
     return len(vectors)
 
 

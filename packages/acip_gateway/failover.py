@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from acip_core.logging import get_logger
 
 from .llm_client import LLMClient, LLMResponse
+from .retry import call_with_retry
 
 log = get_logger("gateway.failover")
 
@@ -22,6 +23,11 @@ class Endpoint:
     client: LLMClient
     model: str
     is_local: bool
+    # Retries of THIS endpoint before the chain moves to the next one.
+    # Default 0 = one attempt, i.e. today's behavior, unchanged until an
+    # admin opts a provider into retry-before-failover.
+    max_retries: int = 0
+    retry_backoff_ms: int = 250
 
 
 class ProviderChain:
@@ -44,8 +50,14 @@ class ProviderChain:
         chain = self.local_only if prefer_local else self._endpoints
         last_exc: Exception | None = None
         for ep in chain:
-            try:
+
+            async def _call(ep: Endpoint = ep) -> LLMResponse:
                 return await ep.client.chat(messages, ep.model, max_tokens=max_tokens)
+
+            try:
+                return await call_with_retry(
+                    _call, max_retries=ep.max_retries, backoff_ms=ep.retry_backoff_ms
+                )
             except Exception as exc:  # noqa: BLE001 - fail over to the next endpoint
                 last_exc = exc
                 log.warning("failover.endpoint_failed", model=ep.model, is_local=ep.is_local)

@@ -23,7 +23,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .routers import (
     admin,
+    admin_ai_discovery,
     admin_ai_finance,
+    admin_ai_models,
     admin_ai_providers,
     admin_ai_routing,
     admin_audit,
@@ -32,6 +34,7 @@ from .routers import (
     admin_auth_totp,
     admin_billing_ops,
     admin_contact,
+    admin_credit_policy,
     admin_es,
     admin_governance,
     admin_misc,
@@ -179,8 +182,11 @@ def create_app() -> FastAPI:
     app.include_router(admin_contact.router)
     app.include_router(admin_misc.router)
     app.include_router(admin_ai_providers.router)
+    app.include_router(admin_ai_models.router)
     app.include_router(admin_ai_routing.router)
+    app.include_router(admin_ai_discovery.router)
     app.include_router(admin_ai_finance.router)
+    app.include_router(admin_credit_policy.router)
     app.include_router(admin_operators.router)
 
     return app
