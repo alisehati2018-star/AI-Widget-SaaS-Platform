@@ -6,6 +6,7 @@ import { ApiError } from "@/lib/api";
 import { adminFetch as authFetch } from "@/lib/auth";
 import { DashboardShell, useAdminNav } from "@/components/shell";
 import { Alert, Badge, Field, Input, Spinner } from "@/components/ui";
+import { CreditPolicyCard } from "./credit-policy-card";
 
 interface Plan {
   id: string;
@@ -122,6 +123,10 @@ export default function AdminPlans() {
       </div>
       {note ? <Alert kind="success">{note}</Alert> : null}
       {error ? <Alert kind="error">{error}</Alert> : null}
+
+      <div style={{ marginTop: "1rem" }}>
+        <CreditPolicyCard />
+      </div>
 
       <div className="dash-2col" style={{ marginTop: "1rem" }}>
         <div className="card">

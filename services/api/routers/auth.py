@@ -7,7 +7,8 @@ the machine scoped API keys in ``/v1/*``. Security posture:
   stored hashed and revocable (logout / breach).
 - Brute-force defence: per-account failed-login counter + timed lockout.
 - Generic error messages (no account enumeration) on login/reset.
-- Self-serve signup provisions a tenant + a trial subscription atomically.
+- Self-serve signup provisions a tenant + a trial subscription + a one-time
+  signup credit grant (`signup_credit_policy`) atomically.
 
 Password reset / email verification / change-password / change-email live in
 ``auth_password.py``; shared cookie/token/rate-limit helpers live in
@@ -49,6 +50,27 @@ from .auth_common import (
 from .auth_common import decode_token as _decode_token  # re-exported for /refresh
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+async def _grant_signup_credit(conn, tenant_id) -> None:
+    """One-time credit grant for a brand-new signup, per the admin-editable
+    `signup_credit_policy` (separate from a plan's monthly allowance, which is
+    only granted on plan activation/renewal — trialing signups never hit
+    that path). Runs inside the caller's signup transaction."""
+    policy = await conn.fetchrow(
+        "SELECT auto_grant_enabled, signup_credits FROM signup_credit_policy WHERE id"
+    )
+    if policy is not None and not policy["auto_grant_enabled"]:
+        return
+    amount = float(policy["signup_credits"]) if policy is not None else 0.0
+    if amount <= 0:
+        return
+    await conn.execute(
+        "INSERT INTO credit_ledger (tenant_id, delta, rung, reason) "
+        "VALUES ($1, $2, 'grant', 'signup_bonus')",
+        tenant_id,
+        amount,
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -110,6 +132,7 @@ async def signup(
                     plan_id,
                     _now() + timedelta(days=14),
                 )
+            await _grant_signup_credit(conn, tenant_id)
             tokens = _issue_tokens(conn, dict(user), request=request)
             await conn.execute(
                 "INSERT INTO auth_sessions (user_id, jti_hash, user_agent, ip, expires_at) "

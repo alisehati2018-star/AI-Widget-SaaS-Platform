@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 import { ApiError } from "@/lib/api";
 import { adminFetch as authFetch } from "@/lib/auth";
 import { Alert, Field, Input, Spinner } from "@/components/ui";
-import type { PricingData } from "./types";
+import type { PricingData } from "../models/types";
 
 const KEYS: (keyof PricingData)[] = [
   "usd_per_credit",
