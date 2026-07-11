@@ -24,6 +24,7 @@ from acip_core.ratelimit import RateLimiter
 from acip_embedding import get_embedding_client_for_task
 from acip_gateway.registry import DynamicProviderChain, ProviderRegistry
 from acip_gateway.router import GatewayRouter, TurnResult
+from acip_search.reranker import ChainedReranker
 from acip_search.retrieval import SearchService
 
 
@@ -57,6 +58,7 @@ def get_search_service() -> SearchService:
         embedding_client=get_embedding_client_for_task(get_provider_registry(), redis=redis),
         redis=redis,
         meter=_meter,
+        reranker=ChainedReranker(get_provider_registry()),
     )
 
 

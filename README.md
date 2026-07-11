@@ -107,6 +107,7 @@ npx tsc --noEmit
 
 ```
 docs/PRODUCT*.md      Authoritative product spec + strategy (Vitrin)
+docs/admin-ai-guide-fa.md  Operator guide: AI providers/models/routing/pricing/profit (fa)
 docs/generated/       Requirements, phase plans, traceability, expansion plan (5–8)
 packages/             Domain libs: acip_core, acip_auth, acip_search, acip_sync,
                       acip_embedding, acip_cache, acip_gateway, acip_assistant,
