@@ -9,7 +9,7 @@ const BASE = process.env.BASE || "http://127.0.0.1:3000";
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || "dev-admin-token";
 const EXE = "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
 const PAGES = ["/", "/en", "/login", "/signup", "/pricing", "/features", "/docs", "/contact"];
-const ADMIN_PAGES = ["/admin", "/admin/tenants", "/admin/contact", "/admin/operators",
+const ADMIN_PAGES = ["/admin", "/admin/tenants", "/admin/contact", "/admin/operators", "/admin/providers", "/admin/ai-config",
   "/admin/elasticsearch", "/admin/queue", "/admin/flags", "/admin/health"];
 const FAIL = new Set(["serious", "critical"]);
 

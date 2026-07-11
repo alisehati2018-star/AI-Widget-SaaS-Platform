@@ -13,7 +13,7 @@ const TOL = 2; // px rounding tolerance
 const PUBLIC = ["/", "/en", "/pricing", "/features", "/docs", "/contact", "/login", "/signup",
   "/forgot-password", "/reset-password", "/verify-email", "/legal/terms", "/legal/privacy"];
 const ADMIN = ["/admin", "/admin/tenants", "/admin/users", "/admin/plans", "/admin/billing",
-  "/admin/usage", "/admin/analytics", "/admin/models", "/admin/health", "/admin/security",
+  "/admin/usage", "/admin/analytics", "/admin/models", "/admin/providers", "/admin/ai-config", "/admin/health", "/admin/security",
   "/admin/flags", "/admin/audit", "/admin/settings",
   // Phase 4: the console/tooling pages too — the FULL admin surface is swept.
   "/admin/elasticsearch", "/admin/agent", "/admin/widget", "/admin/synonyms",

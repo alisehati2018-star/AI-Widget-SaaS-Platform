@@ -82,6 +82,28 @@ def _fmt_labels(key: tuple[tuple[str, str], ...]) -> str:
 metrics = Metrics()
 
 
+def _patch_route_details() -> None:
+    """Compat shim: FastAPI ≥0.138 keeps lazy ``_IncludedRouter`` objects (no
+    ``.path`` attribute) in ``app.routes``, and the OTel FastAPI
+    instrumentation's span-name resolver reads ``.path`` unguarded on a
+    PARTIAL route match — turning an otherwise-fine request into a 500.
+    Wrap it so a failed span-name lookup can never fail the request."""
+    from opentelemetry.instrumentation import fastapi as _otel_fastapi
+
+    original = _otel_fastapi._get_route_details
+    if getattr(original, "_acip_safe", False):  # idempotent across create_app calls
+        return
+
+    def _safe_get_route_details(scope):
+        try:
+            return original(scope)
+        except AttributeError:
+            return scope.get("path")
+
+    _safe_get_route_details._acip_safe = True  # type: ignore[attr-defined]
+    _otel_fastapi._get_route_details = _safe_get_route_details
+
+
 def setup_telemetry(app, settings) -> None:
     """Instrument the FastAPI app for tracing (best-effort; never breaks boot)."""
     if not settings.otel_enabled:
@@ -93,6 +115,7 @@ def setup_telemetry(app, settings) -> None:
         from opentelemetry.sdk.trace import TracerProvider
         from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
 
+        _patch_route_details()
         provider = TracerProvider(resource=Resource.create({"service.name": settings.service_name}))
         exporter = None
         if settings.otel_endpoint:
