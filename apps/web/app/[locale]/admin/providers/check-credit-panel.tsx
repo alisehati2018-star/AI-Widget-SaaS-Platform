@@ -35,7 +35,7 @@ export function CheckCreditPanel({
       );
       setResult(r);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : tp("creditCheckError"));
+      setError(err instanceof ApiError ? err.message : tp("checkCreditError"));
     } finally {
       setBusy(false);
     }

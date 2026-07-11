@@ -8,7 +8,8 @@ import { Link } from "@/i18n/navigation";
 import type { Locale } from "@/i18n/routing";
 import { DashboardShell, useAdminNav } from "@/components/shell";
 import { TrendChart } from "@/components/trend-chart";
-import { Badge, Spinner } from "@/components/ui";
+import { Alert, Badge, Spinner } from "@/components/ui";
+import { LocalInfraCard } from "./local-infra-card";
 
 interface Sample { ts: number; ok: number; total: number; pg_ms: number | null }
 interface Health {
@@ -23,9 +24,13 @@ export default function AdminHealth() {
   const locale = useLocale() as Locale;
   const nav = useAdminNav();
   const [data, setData] = useState<Health | null>(null);
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    const load = () => authFetch<Health>("/admin/health").then(setData).catch(() => setData(null));
+    const load = () =>
+      authFetch<Health>("/admin/health")
+        .then((r) => { setData(r); setFailed(false); })
+        .catch(() => { setData(null); setFailed(true); });
     load();
     const id = setInterval(load, 10000);
     return () => clearInterval(id);
@@ -44,8 +49,11 @@ export default function AdminHealth() {
             <h3 style={{ margin: 0 }}>{t("health.overall")}</h3>
             {data ? (
               <Badge tone={data.status === "ok" ? "success" : "warning"}>{data.status}</Badge>
+            ) : failed ? (
+              <Badge tone="warning">{t("common.off")}</Badge>
             ) : <Spinner />}
           </div>
+          {failed ? <Alert kind="error">{t("common.loadFailed")}</Alert> : null}
           {data ? (
             <table className="table">
               <tbody>
@@ -91,6 +99,8 @@ export default function AdminHealth() {
         )}
         <p className="hint">{t("health.sparklineHint")}</p>
       </div>
+
+      <LocalInfraCard />
     </DashboardShell>
   );
 }

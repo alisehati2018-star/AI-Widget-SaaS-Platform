@@ -149,55 +149,84 @@ export function PlanCard({ d, onDone }: { d: TenantDetail; onDone: (msg: string)
 
 export function LifecycleCard({ d, onDone }: { d: TenantDetail; onDone: (msg: string) => void }) {
   const t = useTranslations("admin");
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  // Every action reports real failures instead of pretending success: run the
+  // request, surface ApiError text in the card, and only call onDone on 2xx.
+  async function run(action: { (): Promise<void> }) {
+    setErr(null);
+    setBusy(true);
+    try {
+      await action();
+    } catch (e2) {
+      setErr(e2 instanceof ApiError ? e2.message : t("tenantDetail.actionFailed"));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function setStatus(status: string) {
-    await authFetch(`/admin/tenants/${d.id}/status`, { body: { status } }).catch(() => {});
-    onDone(status === "suspended" ? t("tenantDetail.noteSuspended") : t("tenantDetail.noteActivated"));
+    if (status === "suspended" && !window.confirm(t("tenantDetail.suspendConfirm"))) return;
+    await run(async () => {
+      await authFetch(`/admin/tenants/${d.id}/status`, { body: { status } });
+      onDone(status === "suspended" ? t("tenantDetail.noteSuspended") : t("tenantDetail.noteActivated"));
+    });
   }
 
   async function setTracking(enabled: boolean) {
-    await authFetch(`/admin/tenants/${d.id}/tracking`, { body: { enabled } }).catch(() => {});
-    onDone(enabled ? t("tenantDetail.noteTrackingOn") : t("tenantDetail.noteTrackingOff"));
+    await run(async () => {
+      await authFetch(`/admin/tenants/${d.id}/tracking`, { body: { enabled } });
+      onDone(enabled ? t("tenantDetail.noteTrackingOn") : t("tenantDetail.noteTrackingOff"));
+    });
   }
 
   async function exportData() {
-    const out = await authFetch<unknown>(`/admin/tenants/${d.id}/export`).catch(() => null);
-    if (!out) return;
-    const blob = new Blob([JSON.stringify(out, null, 2)], { type: "application/json" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `tenant-${d.slug}-export.json`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    await run(async () => {
+      const out = await authFetch<unknown>(`/admin/tenants/${d.id}/export`);
+      const blob = new Blob([JSON.stringify(out, null, 2)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `tenant-${d.slug}-export.json`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
   }
 
   async function erase() {
     if (!window.confirm(t("tenantDetail.eraseConfirm"))) return;
-    await authFetch(`/admin/tenants/${d.id}/erase`, { method: "POST", body: {} }).catch(() => {});
-    onDone(t("tenantDetail.noteErased"));
+    await run(async () => {
+      await authFetch(`/admin/tenants/${d.id}/erase`, { method: "POST", body: {} });
+      onDone(t("tenantDetail.noteErased"));
+    });
   }
 
   return (
     <div className="card">
       <h3>{t("tenantDetail.lifecycleTitle")}</h3>
       <p className="hint">{t("tenantDetail.lifecycleHint")}</p>
+      {err ? <Alert kind="error">{err}</Alert> : null}
       <div className="row" style={{ flexWrap: "wrap", marginBottom: "1rem" }}>
         {d.status === "active" ? (
-          <button className="btn btn-danger" onClick={() => void setStatus("suspended")}>{t("tenantDetail.suspend")}</button>
+          <button className="btn btn-danger" disabled={busy} onClick={() => void setStatus("suspended")}>
+            {busy ? <Spinner /> : t("tenantDetail.suspend")}
+          </button>
         ) : (
-          <button className="btn btn-soft" onClick={() => void setStatus("active")}>{t("tenantDetail.activate")}</button>
+          <button className="btn btn-soft" disabled={busy} onClick={() => void setStatus("active")}>
+            {busy ? <Spinner /> : t("tenantDetail.activate")}
+          </button>
         )}
       </div>
       <h4>{t("tenantDetail.governanceTitle")}</h4>
       <p className="hint">{t("tenantDetail.governanceHint")}</p>
       <div className="row" style={{ flexWrap: "wrap" }}>
         {d.tracking_enabled ? (
-          <button className="btn btn-soft" onClick={() => void setTracking(false)}>{t("tenantDetail.disableTracking")}</button>
+          <button className="btn btn-soft" disabled={busy} onClick={() => void setTracking(false)}>{t("tenantDetail.disableTracking")}</button>
         ) : (
-          <button className="btn btn-soft" onClick={() => void setTracking(true)}>{t("tenantDetail.enableTracking")}</button>
+          <button className="btn btn-soft" disabled={busy} onClick={() => void setTracking(true)}>{t("tenantDetail.enableTracking")}</button>
         )}
-        <button className="btn btn-ghost" onClick={() => void exportData()}>{t("tenantDetail.exportData")}</button>
-        <button className="btn btn-danger" onClick={() => void erase()}>{t("tenantDetail.eraseData")}</button>
+        <button className="btn btn-ghost" disabled={busy} onClick={() => void exportData()}>{t("tenantDetail.exportData")}</button>
+        <button className="btn btn-danger" disabled={busy} onClick={() => void erase()}>{t("tenantDetail.eraseData")}</button>
       </div>
     </div>
   );

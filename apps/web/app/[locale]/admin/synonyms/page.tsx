@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
+import { ApiError } from "@/lib/api";
 import { adminFetch as authFetch } from "@/lib/auth";
 import { DashboardShell, useAdminNav } from "@/components/shell";
 import { Alert, Spinner } from "@/components/ui";
@@ -16,6 +17,8 @@ export default function AdminSynonyms() {
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     authFetch<{ tenants: TenantRow[] }>("/admin/tenants")
@@ -38,8 +41,16 @@ export default function AdminSynonyms() {
 
   async function save() {
     const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
-    await authFetch(`/admin/synonyms?tenant=${encodeURIComponent(selected)}`, { body: { synonyms: lines } });
-    setSaved(true);
+    setErr(null);
+    setBusy(true);
+    try {
+      await authFetch(`/admin/synonyms?tenant=${encodeURIComponent(selected)}`, { body: { synonyms: lines } });
+      setSaved(true);
+    } catch (e2) {
+      setErr(e2 instanceof ApiError ? e2.message : t("common.actionFailed"));
+    } finally {
+      setBusy(false);
+    }
   }
 
   const ruleCount = text.split("\n").map((l) => l.trim()).filter(Boolean).length;
@@ -61,6 +72,7 @@ export default function AdminSynonyms() {
             <span className="hint">{t("synonyms.count", { n: ruleCount })}</span>
           </div>
           {saved ? <Alert kind="success">{t("synonyms.saved")}</Alert> : null}
+          {err ? <Alert kind="error">{err}</Alert> : null}
           {loading ? (
             <Spinner />
           ) : (
@@ -73,7 +85,9 @@ export default function AdminSynonyms() {
             />
           )}
           <div style={{ marginTop: "1rem" }}>
-            <button className="btn btn-primary" onClick={() => void save()} disabled={!selected}>{t("synonyms.save")}</button>
+            <button className="btn btn-primary" onClick={() => void save()} disabled={!selected || busy}>
+              {busy ? <Spinner /> : t("synonyms.save")}
+            </button>
           </div>
         </div>
 

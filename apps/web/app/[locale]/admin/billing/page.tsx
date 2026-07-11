@@ -2,7 +2,7 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
-import type { Order } from "@/lib/api";
+import { ApiError, type Order } from "@/lib/api";
 import { adminFetch as authFetch } from "@/lib/auth";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/datetime";
 import type { Locale } from "@/i18n/routing";
@@ -31,9 +31,12 @@ export default function AdminBilling() {
 
   async function act(id: string, action: "mark-paid" | "refund") {
     setBusy(id + action);
+    setError(null);
     try {
       await authFetch(`/admin/orders/${id}/${action}`, { method: "POST" });
       load();
+    } catch (e2) {
+      setError(e2 instanceof ApiError ? e2.message : t("common.actionFailed"));
     } finally {
       setBusy(null);
     }
@@ -44,6 +47,7 @@ export default function AdminBilling() {
 
   async function runJob(job: "run-renewals" | "run-dunning") {
     setBusy(job);
+    setError(null);
     try {
       const r = await authFetch<Record<string, number>>(`/admin/billing/${job}`, { method: "POST" });
       setMsg(
@@ -52,6 +56,8 @@ export default function AdminBilling() {
           : t("billing.dunningResult", { emailed: r.emailed ?? 0, pastDue: r.past_due ?? 0 }),
       );
       load();
+    } catch (e2) {
+      setError(e2 instanceof ApiError ? e2.message : t("common.actionFailed"));
     } finally {
       setBusy(null);
     }
@@ -61,6 +67,7 @@ export default function AdminBilling() {
     <DashboardShell title={t("billing.title")} nav={nav} requireAdmin loginHref="/admin/login">
       <p style={{ marginTop: "-1rem" }}>{t("billing.intro")}</p>
       {msg ? <Alert kind="success">{msg}</Alert> : null}
+      {error ? <Alert kind="error">{error}</Alert> : null}
       <div className="row" style={{ gap: ".4rem", marginBottom: "1.25rem" }}>
         <button className={tab === "orders" ? "btn btn-primary" : "btn btn-soft"} onClick={() => setTab("orders")}>
           {t("billing.tabOrders")}

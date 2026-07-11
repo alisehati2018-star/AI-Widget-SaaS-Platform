@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
+import { ApiError } from "@/lib/api";
 import { adminFetch as authFetch } from "@/lib/auth";
 import { DashboardShell, useAdminNav } from "@/components/shell";
 import { Icon } from "@/components/icons";
@@ -42,22 +43,35 @@ export default function AdminWidget() {
   const nav = useAdminNav();
   const [cfg, setCfg] = useState<WidgetDefaults | null>(null);
   const [saved, setSaved] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [previewNonce, setPreviewNonce] = useState(0);
   const [origin, setOrigin] = useState("");
+  const [loadNonce, setLoadNonce] = useState(0);
 
   useEffect(() => {
     setOrigin(window.location.origin);
+    setLoadFailed(false);
     authFetch<{ defaults: WidgetDefaults }>("/admin/widget-defaults")
       .then((r) => setCfg(r.defaults))
-      .catch(() => setCfg(null));
-  }, []);
+      .catch(() => { setCfg(null); setLoadFailed(true); });
+  }, [loadNonce]);
 
   async function save() {
     if (!cfg) return;
-    await authFetch("/admin/widget-defaults", { body: cfg });
-    setSaved(true);
-    // The real preview reads the SAVED config — refresh it after every save.
-    setPreviewNonce((n) => n + 1);
+    setErr(null);
+    setBusy(true);
+    try {
+      await authFetch("/admin/widget-defaults", { body: cfg });
+      setSaved(true);
+      // The real preview reads the SAVED config — refresh it after every save.
+      setPreviewNonce((n) => n + 1);
+    } catch (e2) {
+      setErr(e2 instanceof ApiError ? e2.message : t("common.actionFailed"));
+    } finally {
+      setBusy(false);
+    }
   }
 
   function set<K extends keyof WidgetDefaults>(k: K, v: WidgetDefaults[K]) {
@@ -68,7 +82,16 @@ export default function AdminWidget() {
   if (!cfg) {
     return (
       <DashboardShell title={t("widget.title")} nav={nav} requireAdmin loginHref="/admin/login">
-        <Spinner />
+        {loadFailed ? (
+          <div className="card">
+            <Alert kind="error">{t("common.loadFailed")}</Alert>
+            <button className="btn btn-soft" onClick={() => setLoadNonce((n) => n + 1)}>
+              {t("common.retry")}
+            </button>
+          </div>
+        ) : (
+          <Spinner />
+        )}
       </DashboardShell>
     );
   }
@@ -77,6 +100,7 @@ export default function AdminWidget() {
     <DashboardShell title={t("widget.title")} nav={nav} requireAdmin loginHref="/admin/login">
       <p style={{ marginTop: "-1rem" }}>{t("widget.intro")}</p>
       {saved ? <Alert kind="success">{t("widget.saved")}</Alert> : null}
+      {err ? <Alert kind="error">{err}</Alert> : null}
 
       <div className="dash-2col">
         <div className="card">
@@ -108,7 +132,9 @@ export default function AdminWidget() {
             <input type="checkbox" checked={cfg.platform_brand} onChange={(e) => set("platform_brand", e.target.checked)} />
             {t("widget.platformBrand")}
           </label>
-          <button className="btn btn-primary" onClick={() => void save()}>{t("widget.save")}</button>
+          <button className="btn btn-primary" onClick={() => void save()} disabled={busy}>
+            {busy ? <Spinner /> : t("widget.save")}
+          </button>
         </div>
 
         <div className="card-stack">

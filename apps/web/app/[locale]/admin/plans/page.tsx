@@ -183,17 +183,17 @@ export default function AdminPlans() {
               <Field label={t("plans.descriptionFa")}>
                 <Input value={editing.description_fa ?? ""} onChange={(e) => setEditing({ ...editing, description_fa: e.target.value })} />
               </Field>
-              <Field label={t("plans.price")}>
-                <Input type="number" value={editing.price_monthly} onChange={(e) => setEditing({ ...editing, price_monthly: parseFloat(e.target.value) || 0 })} />
+              <Field label={t("plans.price")} hint={t("plans.numericHint")}>
+                <Input type="number" min={0} value={editing.price_monthly} onChange={(e) => setEditing({ ...editing, price_monthly: parseFloat(e.target.value) || 0 })} />
               </Field>
               <Field label={t("plans.credits")}>
-                <Input type="number" value={editing.credits_per_month} onChange={(e) => setEditing({ ...editing, credits_per_month: parseFloat(e.target.value) || 0 })} />
+                <Input type="number" min={0} value={editing.credits_per_month} onChange={(e) => setEditing({ ...editing, credits_per_month: parseFloat(e.target.value) || 0 })} />
               </Field>
               <Field label={t("plans.cap")}>
-                <Input type="number" value={editing.monthly_credit_cap} onChange={(e) => setEditing({ ...editing, monthly_credit_cap: parseFloat(e.target.value) || 0 })} />
+                <Input type="number" min={0} value={editing.monthly_credit_cap} onChange={(e) => setEditing({ ...editing, monthly_credit_cap: parseFloat(e.target.value) || 0 })} />
               </Field>
               <Field label={t("plans.rateLimit")}>
-                <Input type="number" value={editing.rate_limit_per_min} onChange={(e) => setEditing({ ...editing, rate_limit_per_min: parseInt(e.target.value, 10) || 0 })} />
+                <Input type="number" min={0} value={editing.rate_limit_per_min} onChange={(e) => setEditing({ ...editing, rate_limit_per_min: parseInt(e.target.value, 10) || 0 })} />
               </Field>
               <label className="row" style={{ gap: ".5rem", marginBottom: "1rem" }}>
                 <input type="checkbox" checked={editing.is_public} onChange={(e) => setEditing({ ...editing, is_public: e.target.checked })} />
