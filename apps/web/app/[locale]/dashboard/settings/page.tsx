@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ApiError, type TenantProfile } from "@/lib/api";
 import { authFetch, useSession } from "@/lib/auth";
 import { DashboardShell, useOwnerNav } from "@/components/shell";
@@ -14,6 +14,7 @@ export default function SettingsPage() {
   const nav = useOwnerNav();
   const { user } = useSession();
   const [profile, setProfile] = useState<TenantProfile | null>(null);
+  const [profileFailed, setProfileFailed] = useState(false);
   const [tracking, setTracking] = useState(true);
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -26,14 +27,16 @@ export default function SettingsPage() {
   const [emError, setEmError] = useState<string | null>(null);
   const [emBusy, setEmBusy] = useState(false);
 
-  useEffect(() => {
+  const loadProfile = useCallback(() => {
+    setProfileFailed(false);
     authFetch<TenantProfile>("/tenant/profile")
       .then((p) => {
         setProfile(p);
         setTracking(p.tracking_enabled);
       })
-      .catch(() => setProfile(null));
+      .catch(() => setProfileFailed(true));
   }, []);
+  useEffect(() => loadProfile(), [loadProfile]);
 
   async function toggleTracking() {
     const next = !tracking;
@@ -143,6 +146,11 @@ export default function SettingsPage() {
                   <tr><td className="muted">{t("settings.account")}</td><td>{user?.email}</td></tr>
                 </tbody>
               </table>
+            ) : profileFailed ? (
+              <>
+                <p className="muted">{t("common.loadFailed")}</p>
+                <button className="btn btn-soft" onClick={loadProfile}>{t("common.retry")}</button>
+              </>
             ) : (
               <Spinner />
             )}

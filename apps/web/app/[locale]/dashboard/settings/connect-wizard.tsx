@@ -32,7 +32,9 @@ export function ConnectWizard() {
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const [profileFailed, setProfileFailed] = useState(false);
   const reload = useCallback(() => {
+    setProfileFailed(false);
     authFetch<TenantProfile>("/tenant/profile")
       .then((p) => {
         setPlatform(p.settings.platform ?? "opencart");
@@ -42,7 +44,7 @@ export function ConnectWizard() {
         setWooCs(p.settings.woo_consumer_secret ?? "");
         setOcToken(p.settings.oc_export_token ?? "");
       })
-      .catch(() => {});
+      .catch(() => setProfileFailed(true));
     authFetch<{ keys: KeyRow[] }>("/tenant/keys")
       .then((r) => setHasSyncKey(r.keys.some((k) => k.scope === "sync" && !k.revoked)))
       .catch(() => setHasSyncKey(false));
@@ -107,6 +109,14 @@ export function ConnectWizard() {
       <p className="hint">{t("connect.hint")}</p>
       {note ? <Alert kind="success">{note}</Alert> : null}
       {error ? <Alert kind="error">{error}</Alert> : null}
+      {profileFailed ? (
+        <Alert kind="error">
+          {t("common.loadFailed")}{" "}
+          <button className="btn btn-soft" onClick={reload} style={{ marginInlineStart: ".5rem" }}>
+            {t("common.retry")}
+          </button>
+        </Alert>
+      ) : null}
 
       <div className="row" style={{ gap: ".6rem", alignItems: "flex-start", flexWrap: "wrap" }}>
         <div style={{ flex: 1, minWidth: 260 }}>
@@ -144,7 +154,8 @@ export function ConnectWizard() {
                 <p className="muted" style={{ fontSize: ".85rem" }}>{t("connect.pullHintOc")}</p>
               </>
             ) : null}
-            <button className="btn btn-primary" disabled={busy || !storeUrl.trim()}>
+            {/* Saving over a failed load would overwrite real credentials with blanks. */}
+            <button className="btn btn-primary" disabled={busy || profileFailed || !storeUrl.trim()}>
               {busy ? <Spinner /> : t("connect.step1Save")}
             </button>
           </form>

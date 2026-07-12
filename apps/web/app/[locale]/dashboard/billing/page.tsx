@@ -115,9 +115,19 @@ export default function BillingPage() {
   }
 
   async function lifecycle(action: "cancel" | "resume") {
-    await authFetch(`/tenant/billing/${action}`, { method: "POST" }).catch(() => {});
-    setNote(action === "cancel" ? t("noteCancel") : t("noteResume"));
-    reload();
+    if (action === "cancel" && !window.confirm(t("cancelConfirm"))) return;
+    setError(null);
+    setNote(null);
+    setPending(action);
+    try {
+      await authFetch(`/tenant/billing/${action}`, { method: "POST" });
+      setNote(action === "cancel" ? t("noteCancel") : t("noteResume"));
+      reload();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t("lifecycleFailed"));
+    } finally {
+      setPending(null);
+    }
   }
 
   const tone = (s: string) => (s === "paid" ? "success" : s === "pending" ? "warning" : undefined);
@@ -152,8 +162,12 @@ export default function BillingPage() {
           </div>
           {onPaidPlan ? (
             <div className="row" style={{ gap: "0.5rem" }}>
-              <button className="btn btn-soft" onClick={() => void lifecycle("resume")}>{t("resume")}</button>
-              <button className="btn btn-danger" onClick={() => void lifecycle("cancel")}>{t("cancel")}</button>
+              <button className="btn btn-soft" disabled={pending === "resume"} onClick={() => void lifecycle("resume")}>
+                {pending === "resume" ? <Spinner /> : t("resume")}
+              </button>
+              <button className="btn btn-danger" disabled={pending === "cancel"} onClick={() => void lifecycle("cancel")}>
+                {pending === "cancel" ? <Spinner /> : t("cancel")}
+              </button>
             </div>
           ) : null}
         </div>

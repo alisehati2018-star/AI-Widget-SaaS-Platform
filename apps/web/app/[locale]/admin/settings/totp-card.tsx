@@ -21,10 +21,15 @@ export function TotpCard() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  const [loadFailed, setLoadFailed] = useState(false);
   const reload = useCallback(() => {
+    setLoadFailed(false);
     adminFetch<{ totp_enabled: boolean }>("/admin/auth/totp", { method: "GET" })
       .then((r) => setEnabled(r.totp_enabled))
-      .catch(() => setEnabled(null));
+      .catch(() => {
+        setEnabled(null);
+        setLoadFailed(true);
+      });
   }, []);
   useEffect(() => reload(), [reload]);
 
@@ -77,6 +82,15 @@ export function TotpCard() {
       <p className="muted" style={{ fontSize: ".9rem" }}>{t("settings.totpBody")}</p>
       {note ? <Alert kind="success">{note}</Alert> : null}
       {error ? <Alert kind="error">{error}</Alert> : null}
+
+      {loadFailed ? (
+        <>
+          <p className="muted">{t("common.loadFailed")}</p>
+          <button className="btn btn-soft" onClick={reload}>{t("common.retry")}</button>
+        </>
+      ) : enabled === null ? (
+        <Spinner />
+      ) : null}
 
       {enabled === false && !enrollment ? (
         <form onSubmit={enroll}>

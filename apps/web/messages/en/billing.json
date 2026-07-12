@@ -26,6 +26,8 @@
   "colPlan": "Plan",
   "colProvider": "Provider",
   "ordersNote": "Manual orders activate once the platform confirms payment. Card / gateway checkout (Stripe / ZarinPal) plugs into the same flow.",
+  "cancelConfirm": "Cancel the current subscription? It deactivates at the end of the billing period and the widget falls back to the free plan.",
+  "lifecycleFailed": "The operation failed. Please try again.",
   "noteCancel": "Subscription will cancel at period end.",
   "noteResume": "Subscription resumed.",
   "noteOrder": "Order created — pending confirmation.",
