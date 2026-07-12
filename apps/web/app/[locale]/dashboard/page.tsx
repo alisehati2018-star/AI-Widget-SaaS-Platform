@@ -1,7 +1,7 @@
 "use client";
 
 import { useLocale, useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { apiFetch, type TenantProfile } from "@/lib/api";
 import { authFetch, useSession } from "@/lib/auth";
 import { formatNumber } from "@/lib/datetime";
@@ -21,22 +21,29 @@ export default function DashboardHome() {
   const [profile, setProfile] = useState<TenantProfile | null>(null);
   const [widget, setWidget] = useState<WidgetInfo | null>(null);
   const [sync, setSync] = useState<SyncStatus | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [resent, setResent] = useState(false);
+  const [resendError, setResendError] = useState<string | null>(null);
 
-  useEffect(() => {
-    authFetch<TenantProfile>("/tenant/profile").then(setProfile).catch(() => setProfile(null));
+  const load = useCallback(() => {
+    setLoadFailed(false);
+    authFetch<TenantProfile>("/tenant/profile").then(setProfile).catch(() => {
+      setProfile(null);
+      setLoadFailed(true);
+    });
     authFetch<WidgetInfo>("/tenant/widget").then(setWidget).catch(() => setWidget(null));
     authFetch<SyncStatus>("/tenant/sync-status").then(setSync).catch(() => setSync(null));
   }, []);
+  useEffect(() => load(), [load]);
 
   async function resendVerification() {
     if (!user?.email) return;
+    setResendError(null);
     try {
       await apiFetch("/auth/verify-request", { body: { email: user.email } });
-    } catch {
-      /* generic */
-    } finally {
       setResent(true);
+    } catch {
+      setResendError(t("common.actionFailed"));
     }
   }
 
@@ -86,11 +93,22 @@ export default function DashboardHome() {
           {resent ? (
             <strong>{t("overview.verifySent")}</strong>
           ) : (
-            <button className="btn btn-soft" style={{ marginInlineStart: "0.5rem" }} onClick={() => void resendVerification()}>
-              {t("overview.verifyResend")}
-            </button>
+            <>
+              <button className="btn btn-soft" style={{ marginInlineStart: "0.5rem" }} onClick={() => void resendVerification()}>
+                {t("overview.verifyResend")}
+              </button>
+              {resendError ? <strong style={{ marginInlineStart: "0.5rem" }}>{resendError}</strong> : null}
+            </>
           )}
         </Alert>
+      ) : null}
+      {loadFailed ? (
+        <div className="alert alert-warning" role="status">
+          {t("common.loadFailed")}{" "}
+          <button className="btn btn-soft" style={{ marginInlineStart: "0.5rem" }} onClick={load}>
+            {t("common.retry")}
+          </button>
+        </div>
       ) : null}
       {lowCredits ? (
         <div className="alert alert-warning" role="status">

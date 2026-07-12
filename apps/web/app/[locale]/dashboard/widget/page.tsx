@@ -2,7 +2,8 @@
 
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { ApiError } from "@/lib/api";
 import { authFetch } from "@/lib/auth";
 import { DashboardShell, useOwnerNav } from "@/components/shell";
 import { Icon } from "@/components/icons";
@@ -31,19 +32,23 @@ export default function WidgetPage() {
   const t = useTranslations("dashboard");
   const nav = useOwnerNav();
   const [info, setInfo] = useState<WidgetInfo | null>(null);
+  const [infoFailed, setInfoFailed] = useState(false);
   const [cfg, setCfg] = useState<WidgetSettings>({
     logo_url: "", primary_color: "#1A7A4B", widget_greeting: "",
     position: "bottom-right", chat_enabled: true, search_enabled: true,
   });
   const [savedBranding, setSavedBranding] = useState(false);
   const [savedConfig, setSavedConfig] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [testKey, setTestKey] = useState("");
   const [testNonce, setTestNonce] = useState(0);
   const [testOn, setTestOn] = useState(false);
 
-  useEffect(() => {
+  const loadInfo = useCallback(() => {
+    setInfoFailed(false);
+    setInfo(null);
     authFetch<WidgetInfo>("/tenant/widget")
       .then((w) => {
         setInfo(w);
@@ -57,24 +62,27 @@ export default function WidgetPage() {
           search_enabled: s.search_enabled ?? true,
         });
       })
-      .catch(() => setInfo(null));
+      .catch(() => setInfoFailed(true));
   }, []);
+  useEffect(() => loadInfo(), [loadInfo]);
 
   async function saveBranding(e: React.FormEvent) {
     e.preventDefault();
-    setBusy(true); setSavedBranding(false);
+    setBusy(true); setSavedBranding(false); setError(null);
     try {
       await authFetch("/tenant/settings", {
         method: "PATCH",
         body: { logo_url: cfg.logo_url, primary_color: cfg.primary_color },
       });
       setSavedBranding(true);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t("common.actionFailed"));
     } finally { setBusy(false); }
   }
 
   async function saveConfig(e: React.FormEvent) {
     e.preventDefault();
-    setBusy(true); setSavedConfig(false);
+    setBusy(true); setSavedConfig(false); setError(null);
     try {
       await authFetch("/tenant/settings", {
         method: "PATCH",
@@ -86,6 +94,8 @@ export default function WidgetPage() {
         },
       });
       setSavedConfig(true);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t("common.actionFailed"));
     } finally { setBusy(false); }
   }
 
@@ -111,6 +121,7 @@ export default function WidgetPage() {
   return (
     <DashboardShell title={t("nav.widget")} nav={nav}>
       <p style={{ marginTop: "-1rem" }}>{t("widget.intro")}</p>
+      {error ? <Alert kind="error">{error}</Alert> : null}
 
       <div className="card" style={{ marginBottom: "1.5rem" }}>
         <div className="row-between">
@@ -120,7 +131,12 @@ export default function WidgetPage() {
               : <Badge tone="warning">{t("widget.statusPending")}</Badge>
           ) : null}
         </div>
-        {!info ? <Spinner /> : (
+        {infoFailed ? (
+          <>
+            <p className="muted">{t("common.loadFailed")}</p>
+            <button className="btn btn-soft" onClick={loadInfo}>{t("common.retry")}</button>
+          </>
+        ) : !info ? <Spinner /> : (
           <>
             <p className="hint">{info.ready ? t("widget.embedReady") : t("widget.embedNotReady")}</p>
             <pre className="input" dir="ltr" style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontFamily: "monospace", fontSize: "0.82rem", textAlign: "left", opacity: info.ready ? 1 : 0.6 }}>

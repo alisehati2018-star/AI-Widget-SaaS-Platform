@@ -43,14 +43,24 @@ export default function KeysPage() {
     }
   }
 
-  async function revoke(id: string) {
-    await authFetch(`/tenant/keys/${id}/revoke`, { method: "POST" }).catch(() => {});
-    load();
+  async function revoke(id: string, keyLabel: string | null) {
+    if (!window.confirm(t("keys.revokeConfirm", { label: keyLabel || id.slice(0, 8) }))) return;
+    setError(null);
+    setBusy(true);
+    try {
+      await authFetch(`/tenant/keys/${id}/revoke`, { method: "POST" });
+      load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : tErrors("saveFailed"));
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
     <DashboardShell title={t("nav.keys")} nav={nav}>
       <p style={{ marginTop: "-1rem" }}>{t("keys.intro")}</p>
+      {error ? <Alert kind="error">{error}</Alert> : null}
 
       {created ? (
         <Alert kind="success">
@@ -62,7 +72,6 @@ export default function KeysPage() {
 
       <div className="card" style={{ marginBottom: "1.5rem" }}>
         <h3>{t("keys.createTitle")}</h3>
-        {error ? <Alert kind="error">{error}</Alert> : null}
         <form onSubmit={create} className="row" style={{ alignItems: "flex-end", flexWrap: "wrap" }}>
           <div style={{ minWidth: 180 }}>
             <Field label={t("keys.scope")}>
@@ -103,7 +112,7 @@ export default function KeysPage() {
                   <td>{k.revoked ? <Badge>{t("keys.revoked")}</Badge> : <Badge tone="success">{t("keys.active")}</Badge>}</td>
                   <td>
                     {!k.revoked ? (
-                      <button className="btn btn-danger" onClick={() => void revoke(k.id)}>{t("keys.revoke")}</button>
+                      <button className="btn btn-danger" disabled={busy} onClick={() => void revoke(k.id, k.label)}>{t("keys.revoke")}</button>
                     ) : null}
                   </td>
                 </tr>

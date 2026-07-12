@@ -86,16 +86,26 @@ export default function KnowledgePage() {
     }
   }
 
-  async function remove(id: string) {
-    await authFetch(`/tenant/kb/${id}`, { method: "DELETE" }).catch(() => {});
-    if (editing?.id === id) setEditing(null);
-    load();
+  async function remove(id: string, title: string) {
+    if (!window.confirm(t("knowledge.deleteConfirm", { title }))) return;
+    setError(null);
+    setBusy(true);
+    try {
+      await authFetch(`/tenant/kb/${id}`, { method: "DELETE" });
+      if (editing?.id === id) setEditing(null);
+      load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : tErrors("saveFailed"));
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
     <DashboardShell title={t("nav.knowledge")} nav={nav}>
       <p style={{ marginTop: "-1rem" }}>{t("knowledge.intro")}</p>
       {note ? <Alert kind="success">{note}</Alert> : null}
+      {error ? <Alert kind="error">{error}</Alert> : null}
 
       <div className="dash-2col">
         <div className="card">
@@ -131,7 +141,7 @@ export default function KnowledgePage() {
                     <td>
                       <div className="row" style={{ gap: ".3rem", flexWrap: "wrap" }}>
                         <button className="btn btn-ghost" onClick={() => startEdit(a)}>{tc("actions.edit")}</button>
-                        <button className="btn btn-danger" onClick={() => void remove(a.id)}>{tc("actions.delete")}</button>
+                        <button className="btn btn-danger" disabled={busy} onClick={() => void remove(a.id, a.title)}>{tc("actions.delete")}</button>
                       </div>
                     </td>
                   </tr>
@@ -142,7 +152,6 @@ export default function KnowledgePage() {
         </div>
 
         <div className="card" style={{ position: "sticky", top: "1.5rem" }}>
-          {error ? <Alert kind="error">{error}</Alert> : null}
           {editing ? (
             <form onSubmit={saveEdit}>
               <h3>{t("knowledge.editTitle")}</h3>

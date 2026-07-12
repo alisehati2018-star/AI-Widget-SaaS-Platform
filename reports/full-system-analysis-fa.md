@@ -147,9 +147,33 @@ mock/داده‌ی ساختگی (صفر)، endpoint بدون مصرف‌کنند
 | بخش | امتیاز |
 |---|---|
 | ادمین | ۹.۴ |
-| داشبورد فروشنده | ۷.۸ |
-| عمومی/احراز | ۹.۲ |
+| داشبورد فروشنده | ۷.۸ ← **۹.۳ (پس از رفع)** |
+| عمومی/احراز | ۹.۲ ← **۹.۴ (پس از رفع)** |
 | بک‌اند/امنیت/ساختار | ۹.۶ |
-| **کل (وزن‌دار به تعداد صفحه و اهمیت)** | **۸.۹ / ۱۰** |
+| **کل (وزن‌دار به تعداد صفحه و اهمیت)** | **۸.۹ ← ۹.۴ / ۱۰** |
 
 مسیر رسیدن به ~۹.۵: فقط رفع ۱۳ یافتهٔ داشبورد (دستهٔ الف). بگویید تا اجرا کنم — الگو و محل دقیق هر ۱۳ مورد در این گزارش مشخص است.
+
+---
+
+## ۸) وضعیت رفع (به‌روزرسانی)
+
+**هر ۱۳ یافتهٔ D1–D13 رفع شد** + ۹ مورد هم‌خانوادهٔ دیگر که در جاروی کامل پیدا شد:
+
+| یافته | رفع |
+|---|---|
+| D1/D2 (team) | catch + Alert سطح صفحه + `disabled={busy}` روی دکمه‌های ردیف |
+| D3 (leads) | optimistic با **rollback** روی شکست + Alert |
+| D4 (settings tracking) | optimistic با rollback + پیام موفقیت فقط بعد از تایید سرور |
+| D5 (export) | try/catch + پیام `exportFailed` (settings و leads) |
+| D6 (widget saves) | catch + Alert خطا |
+| D7 (keys revoke) | `window.confirm` با نام کلید + catch + busy |
+| D8 (knowledge delete) | `window.confirm` با عنوان مقاله + catch + busy |
+| D9 (credits) | مصرف `error`/`reload` از hook + دکمهٔ «تلاش مجدد» |
+| D10 (assistant status) | حالت شکست + retry؛ ذخیرهٔ greeting هم catch گرفت |
+| D11 (catalog sync) | حالت شکست + retry؛ ذخیرهٔ connection هم catch گرفت |
+| D12 (onboarding resend) | موفقیت فقط بعد از سرور؛ خطا Alert؛ شکست پروفایل → retry به‌جای اسپینر ابدی |
+| D13 (audit) | `error` از hook + پیام `loadFailed` + retry |
+| اضافه‌ها | overview (resend + بنر شکست بارگذاری + retry)، search (ذخیرهٔ مترادف catch + محافظ پاک‌شدن مترادف‌ها وقتی load شکست می‌خورد)، connect-wizard (خطای step1/verify در Alert خطا نه موفقیت)، widget info (اسپینر ابدی → retry)، settings erase (خطا در Alert خطا)، billing top-up select و progressbar نقشهٔ راه (aria-label) |
+
+**تایید زنده روی استک واقعی:** `tsc` پاک، i18n صفر خطا، hardcoded صفر، حجم صفر تخلف، `next build` سبز، **responsive صفر overflow** (عمومی+ادمین+فروشنده در ۳ عرض)، **a11y صفر تخلف جدی/بحرانی در هر ۳۵ صفحه** (پوشش داشبورد فروشنده به جاروی a11y اضافه شد)، functional صفر شکست.

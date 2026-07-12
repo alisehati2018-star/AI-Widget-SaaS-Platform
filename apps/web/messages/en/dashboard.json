@@ -30,7 +30,11 @@
     "active": "active",
     "draft": "draft",
     "yes": "yes",
-    "no": "no"
+    "no": "no",
+    "loadFailed": "Loading data failed. Check your connection.",
+    "retry": "Retry",
+    "exportFailed": "Export failed. Please try again.",
+    "actionFailed": "The action failed. Please try again."
   },
   "overview": {
     "title": "Overview",
@@ -174,7 +178,8 @@
     "publish": "Publish",
     "unpublish": "Unpublish",
     "updated": "Article updated.",
-    "searchPlaceholder": "Search article titles and bodies…"
+    "searchPlaceholder": "Search article titles and bodies…",
+    "deleteConfirm": "Delete article \"{title}\"? This cannot be undone."
   },
   "analytics": {
     "intro": "Relevance · latency · cost · reliability for your store.",
@@ -299,7 +304,8 @@
     "colCreated": "Created",
     "active": "active",
     "revoked": "revoked",
-    "revoke": "Revoke"
+    "revoke": "Revoke",
+    "revokeConfirm": "Revoke key \"{label}\"? Any widget/sync using it stops immediately."
   },
   "team": {
     "intro": "Invite staff to help manage your store. Staff have reduced privileges.",

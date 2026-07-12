@@ -12,14 +12,19 @@ export default function ActivityPage() {
   const t = useTranslations("dashboard");
   const locale = useLocale() as Locale;
   const nav = useOwnerNav();
-  const { data, loading } = useResource<{ entries: AuditEntry[] }>("/tenant/audit");
+  const { data, loading, error, reload } = useResource<{ entries: AuditEntry[] }>("/tenant/audit");
   const entries = loading ? null : (data?.entries ?? []);
 
   return (
     <DashboardShell title={t("nav.activity")} nav={nav}>
       <p style={{ marginTop: "-1rem" }}>{t("activity.intro")}</p>
       <div className="card">
-        {entries === null ? (
+        {error ? (
+          <>
+            <p className="muted">{t("common.loadFailed")}</p>
+            <button className="btn btn-soft" onClick={reload}>{t("common.retry")}</button>
+          </>
+        ) : entries === null ? (
           <Spinner />
         ) : entries.length === 0 ? (
           <p className="muted">{t("activity.empty")}</p>
