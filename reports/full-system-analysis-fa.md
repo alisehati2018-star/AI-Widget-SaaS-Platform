@@ -177,3 +177,11 @@ mock/داده‌ی ساختگی (صفر)، endpoint بدون مصرف‌کنند
 | اضافه‌ها | overview (resend + بنر شکست بارگذاری + retry)، search (ذخیرهٔ مترادف catch + محافظ پاک‌شدن مترادف‌ها وقتی load شکست می‌خورد)، connect-wizard (خطای step1/verify در Alert خطا نه موفقیت)، widget info (اسپینر ابدی → retry)، settings erase (خطا در Alert خطا)، billing top-up select و progressbar نقشهٔ راه (aria-label) |
 
 **تایید زنده روی استک واقعی:** `tsc` پاک، i18n صفر خطا، hardcoded صفر، حجم صفر تخلف، `next build` سبز، **responsive صفر overflow** (عمومی+ادمین+فروشنده در ۳ عرض)، **a11y صفر تخلف جدی/بحرانی در هر ۳۵ صفحه** (پوشش داشبورد فروشنده به جاروی a11y اضافه شد)، functional صفر شکست.
+
+### موارد «دستهٔ ج» که بسته شد (به‌روزرسانی دوم)
+- **کیفیت rerank:** ورودی cross-encoder حالا عنوان + توضیحات (سقف ۳۰۰ نویسه) است، نه فقط عنوان — با تست.
+- **کلاس legacy `Reranker`** (بدون مصرف‌کننده) حذف شد؛ `ChainedReranker` تنها مسیر است.
+- **هشدارهای i18n صفر شد** (۹۷ ← ۰): چکر حالا hookهای scoped (`useTranslations("admin.aiConfigPage")` با aliasهای `ta`/`tp`/`tm`)، کلیدهای template-literal (`type_${x}`) و کلیدهای map-driven را می‌فهمد؛ ۱۶ کلید واقعاً مردهٔ `models.*` از هر دو زبان حذف شد.
+- گیت‌های کامل پس از این تغییرات: ruff/mypy/pytest (۱۸۷ سبز)، tsc/i18n(0/0)/hardcoded/size، `next build`، و هر سه جاروی مرورگری صفر شکست.
+
+باقی‌ماندهٔ واقعی فقط وابسته به محیط عملیاتی شماست: ES واقعی، کلید provider واقعی، merchant زرین‌پال، و یک نگاه دستی روی دستگاه موبایل واقعی. HA چندسرور هم تصمیم معماری v2 است، نه نقص کد.

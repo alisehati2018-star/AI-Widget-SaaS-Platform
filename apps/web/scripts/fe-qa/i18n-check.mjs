@@ -62,13 +62,43 @@ for (const ns of namespaces) {
 const src = walk(join(ROOT, "app")).concat(walk(join(ROOT, "components")));
 const referenced = new Set();
 const rawPrefixes = new Set();
+const scopePrefixes = new Set();
+const dynPrefixes = new Set(); // template-literal calls: t(`type_${x}`) → "type_"
+// Keys reached only through a lookup map (invisible to static analysis).
+// Keep in sync with REASON_KEYS in admin/ai-config/binding-editor.tsx.
+const MAP_DRIVEN_KEYS = [/^aiConfigPage\.issue/];
 const callRe = /\b(?:t|tc|t[A-Z][A-Za-z]*)\(\s*["'`]([A-Za-z0-9_.]+)["'`]/g;
 const rawRe = /\b(?:t|tc|t[A-Z][A-Za-z]*)\.raw\(\s*["'`]([A-Za-z0-9_.]+)["'`]/g;
+// Scoped hooks — `const ta = useTranslations("admin.aiConfigPage")` then
+// ta("title") references the relative key "aiConfigPage.title". Resolve each
+// file's translator aliases against their declared scope so those calls count.
+const aliasDeclRe =
+  /\bconst\s+(\w+)\s*=\s*(?:await\s+)?(?:use|get)Translations\(\s*["'`]([A-Za-z0-9_.]+)["'`]\s*\)/g;
 for (const file of src) {
   const text = readFileSync(file, "utf8");
   let m;
   while ((m = callRe.exec(text))) referenced.add(m[1]);
   while ((m = rawRe.exec(text))) rawPrefixes.add(m[1]);
+  const tplRe = /\b(?:t|tc|t[A-Z][A-Za-z]*)\(\s*\x60([A-Za-z0-9_.]+)\$\{/g;
+  while ((m = tplRe.exec(text))) dynPrefixes.add(m[1]);
+  const aliases = new Map(); // alias name → in-namespace key prefix ("" = top level)
+  while ((m = aliasDeclRe.exec(text))) {
+    const parts = m[2].split(".");
+    const prefix = parts.length > 1 ? parts.slice(1).join(".") : "";
+    aliases.set(m[1], prefix);
+    if (prefix) scopePrefixes.add(prefix);
+  }
+  for (const [name, prefix] of aliases) {
+    const aCallRe = new RegExp(String.raw`\b${name}\(\s*["'\x60]([A-Za-z0-9_.]+)["'\x60]`, "g");
+    const aRawRe = new RegExp(
+      String.raw`\b${name}\.raw\(\s*["'\x60]([A-Za-z0-9_.]+)["'\x60]`,
+      "g",
+    );
+    while ((m = aCallRe.exec(text))) referenced.add(prefix ? `${prefix}.${m[1]}` : m[1]);
+    while ((m = aRawRe.exec(text))) rawPrefixes.add(prefix ? `${prefix}.${m[1]}` : m[1]);
+    const aTplRe = new RegExp(String.raw`\b${name}\(\s*\x60([A-Za-z0-9_.]+)\$\{`, "g");
+    while ((m = aTplRe.exec(text))) dynPrefixes.add(prefix ? `${prefix}.${m[1]}` : m[1]);
+  }
 }
 
 // Relative key paths present in any namespace (fa is the source of truth).
@@ -93,7 +123,12 @@ for (const rel of allRel) {
   const used =
     referenced.has(rel) ||
     [...rawPrefixes].some((p) => rel === p || rel.startsWith(`${p}.`)) ||
-    [...referenced].some((r) => rel.startsWith(`${r}.`));
+    [...referenced].some((r) => rel.startsWith(`${r}.`)) ||
+    [...scopePrefixes].some(
+      (p) => rel.startsWith(`${p}.`) && referenced.has(rel.slice(p.length + 1)),
+    ) ||
+    [...dynPrefixes].some((p) => rel.startsWith(p)) ||
+    MAP_DRIVEN_KEYS.some((re) => re.test(rel));
   if (!used) (console.warn(`⚠ unused: ${rel}`), warnings++);
 }
 

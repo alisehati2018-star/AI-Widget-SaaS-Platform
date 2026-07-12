@@ -17,7 +17,6 @@ Wire protocols:
 from __future__ import annotations
 
 import httpx
-from acip_core.config import get_settings
 from acip_core.logging import get_logger
 
 log = get_logger("reranker")
@@ -48,27 +47,6 @@ async def _rerank_call(
             resp.raise_for_status()
             scored = [(r["index"], float(r.get("score", 0.0))) for r in resp.json()]
     return [i for i, _ in sorted(scored, key=lambda t: t[1], reverse=True)]
-
-
-class Reranker:
-    """Single env-configured TEI reranker (legacy path)."""
-
-    def __init__(self) -> None:
-        self._url = get_settings().reranker_url.rstrip("/")
-
-    async def rerank(self, query: str, docs: list[str], top_n: int | None = None) -> list[int]:
-        """Return doc indices ordered best-first. Falls back to identity order."""
-        if not docs:
-            return []
-        try:
-            order = await _rerank_call(
-                base_url=self._url, wire="tei", model=get_settings().reranker_model,
-                api_key=None, query=query, docs=docs,
-            )
-        except Exception as exc:  # noqa: BLE001 - degrade to un-reranked
-            log.warning("reranker.unavailable", error=str(exc))
-            order = list(range(len(docs)))
-        return order[: top_n or len(order)]
 
 
 class ChainedReranker:
