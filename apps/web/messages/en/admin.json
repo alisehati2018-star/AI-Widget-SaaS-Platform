@@ -524,7 +524,31 @@
     "sparklineTitle": "Database latency trend",
     "sparklineLabel": "PG latency",
     "sparklineEmpty": "Not enough samples yet — this page records one every 10 seconds.",
-    "sparklineHint": "Each visit records a latency sample (the most recent 96 are kept)."
+    "sparklineHint": "Each visit records a latency sample (the most recent 96 are kept).",
+    "deepTitle": "Deep system health",
+    "deepHint": "Every subsystem is probed concurrently: database, Redis, search, worker queue, the AI chain, and gateway/email configuration.",
+    "deepRun": "Re-check",
+    "deepFailed": "The health check could not run. Check the server connection.",
+    "colComponent": "Component",
+    "colStatus": "Status",
+    "colLatency": "Latency",
+    "colDetail": "Detail",
+    "ms": "ms",
+    "comp": {
+      "postgres": "Database (PostgreSQL)",
+      "redis": "Cache & sessions (Redis)",
+      "elasticsearch": "Search engine (Elasticsearch)",
+      "queue": "Task queue (Celery)",
+      "ai_registry": "AI service chain",
+      "billing_psp": "Payment gateway",
+      "email": "Email delivery"
+    },
+    "status": {
+      "ok": "healthy",
+      "error": "error",
+      "configured": "configured",
+      "not_configured": "not configured"
+    }
   },
   "security": {
     "title": "Security monitoring",

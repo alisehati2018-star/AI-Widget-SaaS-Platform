@@ -2,7 +2,8 @@
 
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, type TenantProfile } from "@/lib/api";
+import { type TenantProfile } from "@/lib/api";
+import { useApiErrorMessage } from "@/lib/errors";
 import { authFetch } from "@/lib/auth";
 import { Link } from "@/i18n/navigation";
 import { Alert, Badge, Field, Input, Spinner } from "@/components/ui";
@@ -19,6 +20,7 @@ interface SyncStatus {
  *  itself off as the store completes it. */
 export function ConnectWizard() {
   const t = useTranslations("dashboard");
+  const apiMsg = useApiErrorMessage();
   const [platform, setPlatform] = useState("opencart");
   const [storeUrl, setStoreUrl] = useState("");
   const [savedUrl, setSavedUrl] = useState("");
@@ -71,7 +73,7 @@ export function ConnectWizard() {
       setSavedUrl(storeUrl.trim());
       setNote(t("connect.step1Saved"));
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t("common.actionFailed"));
+      setError(apiMsg(err) ?? t("common.actionFailed"));
     } finally {
       setBusy(false);
     }

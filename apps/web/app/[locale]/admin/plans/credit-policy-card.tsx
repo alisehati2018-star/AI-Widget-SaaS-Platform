@@ -6,7 +6,7 @@
 
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
-import { ApiError } from "@/lib/api";
+import { useApiErrorMessage } from "@/lib/errors";
 import { adminFetch as authFetch } from "@/lib/auth";
 import { Alert, Field, Input, Spinner } from "@/components/ui";
 
@@ -17,6 +17,7 @@ interface CreditPolicy {
 
 export function CreditPolicyCard() {
   const t = useTranslations("admin");
+  const apiMsg = useApiErrorMessage();
   const [policy, setPolicy] = useState<CreditPolicy | null>(null);
   const [amount, setAmount] = useState("");
   const [enabled, setEnabled] = useState(true);
@@ -54,7 +55,7 @@ export function CreditPolicyCard() {
       setPolicy(r);
       setFlash(t("plans.creditPolicySaved"));
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t("plans.saveFailed"));
+      setError(apiMsg(err) ?? t("plans.saveFailed"));
     } finally {
       setBusy(false);
     }

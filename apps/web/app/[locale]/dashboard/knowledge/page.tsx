@@ -2,7 +2,7 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
-import { ApiError } from "@/lib/api";
+import { useApiErrorMessage } from "@/lib/errors";
 import { authFetch } from "@/lib/auth";
 import { formatDate } from "@/lib/datetime";
 import type { Locale } from "@/i18n/routing";
@@ -21,6 +21,7 @@ const EMPTY_DRAFT = { title: "", body: "" };
 
 export default function KnowledgePage() {
   const t = useTranslations("dashboard");
+  const apiMsg = useApiErrorMessage();
   const tc = useTranslations("common");
   const tErrors = useTranslations("errors");
   const locale = useLocale() as Locale;
@@ -61,7 +62,7 @@ export default function KnowledgePage() {
       setNote(t("knowledge.updated"));
       load();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : tErrors("saveFailed"));
+      setError(apiMsg(err) ?? tErrors("saveFailed"));
     } finally {
       setBusy(false);
     }
@@ -80,7 +81,7 @@ export default function KnowledgePage() {
       setNote(t("knowledge.updated"));
       load();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : tErrors("saveFailed"));
+      setError(apiMsg(err) ?? tErrors("saveFailed"));
     } finally {
       setBusy(false);
     }
@@ -95,7 +96,7 @@ export default function KnowledgePage() {
       if (editing?.id === id) setEditing(null);
       load();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : tErrors("saveFailed"));
+      setError(apiMsg(err) ?? tErrors("saveFailed"));
     } finally {
       setBusy(false);
     }

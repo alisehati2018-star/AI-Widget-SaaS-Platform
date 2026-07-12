@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
-import { ApiError } from "@/lib/api";
+import { useApiErrorMessage } from "@/lib/errors";
 import { adminFetch } from "@/lib/auth";
 import { Alert, Badge, Field, Input, Spinner } from "@/components/ui";
 
@@ -13,6 +13,7 @@ interface Enrollment { secret: string; otpauth_uri: string }
  *  login. Disabling requires the password AND a live code. */
 export function TotpCard() {
   const t = useTranslations("admin");
+  const apiMsg = useApiErrorMessage();
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
   const [password, setPassword] = useState("");
@@ -34,7 +35,7 @@ export function TotpCard() {
   useEffect(() => reload(), [reload]);
 
   function fail(err: unknown) {
-    setError(err instanceof ApiError ? err.message : t("settings.genericError"));
+    setError(apiMsg(err) ?? t("settings.genericError"));
   }
 
   async function enroll(e: React.FormEvent) {

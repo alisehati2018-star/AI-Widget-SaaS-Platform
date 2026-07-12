@@ -2,13 +2,14 @@
 
 import { useTranslations } from "next-intl";
 import { useState } from "react";
-import { ApiError } from "@/lib/api";
+import { useApiErrorMessage } from "@/lib/errors";
 import { login } from "@/lib/auth";
 import { Link, useRouter } from "@/i18n/navigation";
 import { Alert, Brand, Field, Input, Spinner } from "@/components/ui";
 
 export default function LoginPage() {
   const t = useTranslations("auth");
+  const apiMsg = useApiErrorMessage();
   const tErrors = useTranslations("errors");
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -24,7 +25,7 @@ export default function LoginPage() {
       const user = await login(email, password);
       router.replace(user.role === "platform_admin" ? "/admin" : "/dashboard");
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : tErrors("generic"));
+      setError(apiMsg(err) ?? tErrors("generic"));
       setBusy(false);
     }
   }

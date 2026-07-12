@@ -2,7 +2,7 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
-import { ApiError } from "@/lib/api";
+import { useApiErrorMessage } from "@/lib/errors";
 import { adminFetch as authFetch } from "@/lib/auth";
 import { formatDate, formatNumber } from "@/lib/datetime";
 import { useAdminResource as useResource } from "@/lib/hooks/useResource";
@@ -33,6 +33,7 @@ const STATUSES = ["", "new", "read", "resolved"] as const;
 
 export default function AdminContact() {
   const t = useTranslations("admin");
+  const apiMsg = useApiErrorMessage();
   const locale = useLocale() as Locale;
   const nav = useAdminNav();
 
@@ -82,7 +83,7 @@ export default function AdminContact() {
         setSelected((cur) => (cur ? { ...cur, ...body } as ContactMessage : cur));
       }
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t("contact.saveFailed"));
+      setError(apiMsg(err) ?? t("contact.saveFailed"));
     } finally {
       setBusy(false);
     }

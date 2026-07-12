@@ -2,7 +2,7 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
-import { ApiError } from "@/lib/api";
+import { useApiErrorMessage } from "@/lib/errors";
 import { adminFetch as authFetch } from "@/lib/auth";
 import { formatDate, formatNumber } from "@/lib/datetime";
 import { useAdminResource as useResource } from "@/lib/hooks/useResource";
@@ -26,6 +26,7 @@ interface OperatorList {
 
 export default function AdminOperators() {
   const t = useTranslations("admin");
+  const apiMsg = useApiErrorMessage();
   const locale = useLocale() as Locale;
   const nav = useAdminNav();
 
@@ -55,7 +56,7 @@ export default function AdminOperators() {
       setEmail(""); setFullName(""); setPassword("");
       reload();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t("operators.actionFailed"));
+      setError(apiMsg(err) ?? t("operators.actionFailed"));
     } finally {
       setBusy(false);
     }
@@ -69,7 +70,7 @@ export default function AdminOperators() {
       await fn();
       reload();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t("operators.actionFailed"));
+      setError(apiMsg(err) ?? t("operators.actionFailed"));
     } finally {
       setBusy(false);
     }

@@ -2,7 +2,8 @@
 
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, type TenantProfile } from "@/lib/api";
+import { type TenantProfile } from "@/lib/api";
+import { useApiErrorMessage } from "@/lib/errors";
 import { authFetch, useSession } from "@/lib/auth";
 import { DashboardShell, useOwnerNav } from "@/components/shell";
 import { Alert, Badge, Field, Input, Spinner } from "@/components/ui";
@@ -10,6 +11,7 @@ import { ConnectWizard } from "./connect-wizard";
 
 export default function SettingsPage() {
   const t = useTranslations("dashboard");
+  const apiMsg = useApiErrorMessage();
   const tv = useTranslations("validation");
   const nav = useOwnerNav();
   const { user } = useSession();
@@ -50,7 +52,7 @@ export default function SettingsPage() {
       setNote(next ? t("settings.trackingEnabled") : t("settings.trackingDisabled"));
     } catch (err) {
       setTracking(!next);
-      setError(err instanceof ApiError ? err.message : t("common.actionFailed"));
+      setError(apiMsg(err) ?? t("common.actionFailed"));
     }
   }
 
@@ -78,7 +80,7 @@ export default function SettingsPage() {
       await authFetch("/tenant/erase", { body: { confirm } });
       setNote(t("settings.erased"));
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t("settings.eraseFailed"));
+      setError(apiMsg(err) ?? t("settings.eraseFailed"));
     }
   }
 
@@ -98,7 +100,7 @@ export default function SettingsPage() {
       setPw({ current: "", next: "", confirm: "" });
       setPwNote(t("settings.pwUpdated"));
     } catch (err) {
-      setPwError(err instanceof ApiError ? err.message : t("settings.eraseFailed"));
+      setPwError(apiMsg(err) ?? t("settings.eraseFailed"));
     } finally {
       setPwBusy(false);
     }
@@ -116,7 +118,7 @@ export default function SettingsPage() {
       setEm({ password: "", email: "" });
       setEmNote(t("settings.emailChanged"));
     } catch (err) {
-      setEmError(err instanceof ApiError ? err.message : t("settings.eraseFailed"));
+      setEmError(apiMsg(err) ?? t("settings.eraseFailed"));
     } finally {
       setEmBusy(false);
     }

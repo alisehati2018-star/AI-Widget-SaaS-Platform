@@ -6,7 +6,7 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
-import { ApiError } from "@/lib/api";
+import { useApiErrorMessage } from "@/lib/errors";
 import { adminFetch as authFetch } from "@/lib/auth";
 import { formatNumber } from "@/lib/datetime";
 import { Link } from "@/i18n/navigation";
@@ -32,6 +32,7 @@ export function ProvidersTable({
   reload: () => void;
 }) {
   const t = useTranslations("admin");
+  const apiMsg = useApiErrorMessage();
   const tp = useTranslations("admin.providersPage");
   const locale = useLocale() as Locale;
   const [error, setError] = useState<string | null>(null);
@@ -51,7 +52,7 @@ export function ProvidersTable({
       await fn();
       reload();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t("models.actionFailed"));
+      setError(apiMsg(err) ?? t("models.actionFailed"));
     } finally {
       setBusy(false);
     }

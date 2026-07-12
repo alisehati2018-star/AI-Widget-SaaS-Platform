@@ -2,7 +2,8 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
-import { ApiError, type AnalyticsBundle } from "@/lib/api";
+import { type AnalyticsBundle } from "@/lib/api";
+import { useApiErrorMessage } from "@/lib/errors";
 import { adminFetch as authFetch } from "@/lib/auth";
 import { formatNumber } from "@/lib/datetime";
 import type { Locale } from "@/i18n/routing";
@@ -26,6 +27,7 @@ interface AnalystResult {
 
 export default function AdminAnalytics() {
   const t = useTranslations("admin");
+  const apiMsg = useApiErrorMessage();
   const locale = useLocale() as Locale;
   const nav = useAdminNav();
   const [tenants, setTenants] = useState<TenantRow[]>([]);
@@ -75,7 +77,7 @@ export default function AdminAnalytics() {
       });
       setAnalyst(r);
     } catch (e) {
-      setAnalystError(e instanceof ApiError ? e.message : t("analytics.analystEmpty"));
+      setAnalystError(apiMsg(e) ?? t("analytics.analystEmpty"));
     } finally {
       setAnalystBusy(false);
     }

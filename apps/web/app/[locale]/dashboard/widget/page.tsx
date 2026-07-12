@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { ApiError } from "@/lib/api";
+import { useApiErrorMessage } from "@/lib/errors";
 import { authFetch } from "@/lib/auth";
 import { DashboardShell, useOwnerNav } from "@/components/shell";
 import { Icon } from "@/components/icons";
@@ -30,6 +30,7 @@ interface WidgetSettings {
 
 export default function WidgetPage() {
   const t = useTranslations("dashboard");
+  const apiMsg = useApiErrorMessage();
   const nav = useOwnerNav();
   const [info, setInfo] = useState<WidgetInfo | null>(null);
   const [infoFailed, setInfoFailed] = useState(false);
@@ -76,7 +77,7 @@ export default function WidgetPage() {
       });
       setSavedBranding(true);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t("common.actionFailed"));
+      setError(apiMsg(err) ?? t("common.actionFailed"));
     } finally { setBusy(false); }
   }
 
@@ -95,7 +96,7 @@ export default function WidgetPage() {
       });
       setSavedConfig(true);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t("common.actionFailed"));
+      setError(apiMsg(err) ?? t("common.actionFailed"));
     } finally { setBusy(false); }
   }
 

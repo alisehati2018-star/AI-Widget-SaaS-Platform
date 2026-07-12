@@ -3,13 +3,14 @@
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
 import type { TeamMember } from "@/lib/api";
-import { ApiError } from "@/lib/api";
+import { useApiErrorMessage } from "@/lib/errors";
 import { authFetch } from "@/lib/auth";
 import { DashboardShell, useOwnerNav } from "@/components/shell";
 import { Alert, Badge, Field, Input, Spinner } from "@/components/ui";
 
 export default function TeamPage() {
   const t = useTranslations("dashboard");
+  const apiMsg = useApiErrorMessage();
   const tErrors = useTranslations("errors");
   const nav = useOwnerNav();
   const [members, setMembers] = useState<TeamMember[] | null>(null);
@@ -42,7 +43,7 @@ export default function TeamPage() {
       }
       load();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : tErrors("saveFailed"));
+      setError(apiMsg(err) ?? tErrors("saveFailed"));
     } finally {
       setBusy(false);
     }
@@ -55,7 +56,7 @@ export default function TeamPage() {
       await authFetch("/tenant/team/role", { body: { email: memberEmail, role } });
       load();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : tErrors("saveFailed"));
+      setError(apiMsg(err) ?? tErrors("saveFailed"));
     } finally {
       setBusy(false);
     }
@@ -69,7 +70,7 @@ export default function TeamPage() {
       await authFetch("/tenant/team/remove", { body: { email: memberEmail } });
       load();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : tErrors("saveFailed"));
+      setError(apiMsg(err) ?? tErrors("saveFailed"));
     } finally {
       setBusy(false);
     }
@@ -86,7 +87,7 @@ export default function TeamPage() {
         ? `${window.location.origin}/reset-password?token=${r.setup_token}`
         : "invited");
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : tErrors("saveFailed"));
+      setError(apiMsg(err) ?? tErrors("saveFailed"));
     }
   }
 

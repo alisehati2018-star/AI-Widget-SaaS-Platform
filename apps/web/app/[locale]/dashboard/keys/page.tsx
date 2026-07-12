@@ -3,7 +3,7 @@
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
 import type { ApiKey } from "@/lib/api";
-import { ApiError } from "@/lib/api";
+import { useApiErrorMessage } from "@/lib/errors";
 import { authFetch } from "@/lib/auth";
 import { formatDate } from "@/lib/datetime";
 import type { Locale } from "@/i18n/routing";
@@ -12,6 +12,7 @@ import { Alert, Badge, Field, Input, Spinner } from "@/components/ui";
 
 export default function KeysPage() {
   const t = useTranslations("dashboard");
+  const apiMsg = useApiErrorMessage();
   const tErrors = useTranslations("errors");
   const locale = useLocale() as Locale;
   const nav = useOwnerNav();
@@ -37,7 +38,7 @@ export default function KeysPage() {
       setLabel("");
       load();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : tErrors("saveFailed"));
+      setError(apiMsg(err) ?? tErrors("saveFailed"));
     } finally {
       setBusy(false);
     }
@@ -51,7 +52,7 @@ export default function KeysPage() {
       await authFetch(`/tenant/keys/${id}/revoke`, { method: "POST" });
       load();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : tErrors("saveFailed"));
+      setError(apiMsg(err) ?? tErrors("saveFailed"));
     } finally {
       setBusy(false);
     }

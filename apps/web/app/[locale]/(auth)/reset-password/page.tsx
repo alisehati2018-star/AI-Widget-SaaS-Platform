@@ -2,12 +2,14 @@
 
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
-import { apiFetch, ApiError } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
+import { useApiErrorMessage } from "@/lib/errors";
 import { Link } from "@/i18n/navigation";
 import { Alert, Brand, Field, Input, Spinner } from "@/components/ui";
 
 export default function ResetPasswordPage() {
   const t = useTranslations("auth");
+  const apiMsg = useApiErrorMessage();
   const tValidation = useTranslations("validation");
   const tErrors = useTranslations("errors");
   const [token, setToken] = useState("");
@@ -35,7 +37,7 @@ export default function ResetPasswordPage() {
       await apiFetch("/auth/password/reset-confirm", { body: { token, password } });
       setDone(true);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : tErrors("saveFailed"));
+      setError(apiMsg(err) ?? tErrors("saveFailed"));
     } finally {
       setBusy(false);
     }

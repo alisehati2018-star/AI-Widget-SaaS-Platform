@@ -2,7 +2,8 @@
 
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
-import { apiFetch, ApiError } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
+import { useApiErrorMessage } from "@/lib/errors";
 import { Link } from "@/i18n/navigation";
 import { Alert, Brand, Field, Input, Spinner } from "@/components/ui";
 
@@ -10,6 +11,7 @@ type State = "working" | "ok" | "error" | "manual";
 
 export default function VerifyEmailPage() {
   const t = useTranslations("auth");
+  const apiMsg = useApiErrorMessage();
   const tErrors = useTranslations("errors");
   const [state, setState] = useState<State>("manual");
   const [message, setMessage] = useState("");
@@ -27,7 +29,7 @@ export default function VerifyEmailPage() {
       .then(() => setState("ok"))
       .catch((e) => {
         setState("error");
-        setMessage(e instanceof ApiError ? e.message : tErrors("generic"));
+        setMessage(apiMsg(e) ?? tErrors("generic"));
       });
   }, [tErrors]);
 

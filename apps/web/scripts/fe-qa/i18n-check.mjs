@@ -59,7 +59,9 @@ for (const ns of namespaces) {
 
 // Collect ONLY translation-function calls: t("x") / tc("x") / tErrors("x") /
 // t.raw("x"). Precise capture avoids matching apiFetch()/useState()/etc.
-const src = walk(join(ROOT, "app")).concat(walk(join(ROOT, "components")));
+const src = walk(join(ROOT, "app"))
+  .concat(walk(join(ROOT, "components")))
+  .concat(walk(join(ROOT, "lib")));
 const referenced = new Set();
 const rawPrefixes = new Set();
 const scopePrefixes = new Set();
@@ -114,6 +116,9 @@ const allRel = [...relKeys.keys()];
 for (const ref of [...referenced, ...rawPrefixes]) {
   if (relKeys.has(ref)) continue;
   if (allRel.some((k) => k.startsWith(`${ref}.`))) continue; // parent of leaves
+  // Bare leaf of a scoped hook (const t = useTranslations("admin.health")):
+  // the alias pass already recorded the resolved "health.deepTitle" form.
+  if ([...scopePrefixes].some((p) => relKeys.has(`${p}.${ref}`))) continue;
   console.error(`✗ missing: t("${ref}") has no entry in any namespace`);
   errors++;
 }

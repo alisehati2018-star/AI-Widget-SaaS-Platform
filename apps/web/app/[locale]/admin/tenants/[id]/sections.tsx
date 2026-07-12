@@ -4,7 +4,7 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
-import { ApiError } from "@/lib/api";
+import { useApiErrorMessage } from "@/lib/errors";
 import { adminFetch as authFetch } from "@/lib/auth";
 import { formatDate } from "@/lib/datetime";
 import type { Locale } from "@/i18n/routing";
@@ -43,6 +43,7 @@ export interface TenantDetail {
 
 export function ProfileCard({ d }: { d: TenantDetail }) {
   const t = useTranslations("admin");
+  const apiMsg = useApiErrorMessage();
   const locale = useLocale() as Locale;
   return (
     <div className="card">
@@ -103,6 +104,7 @@ export function ProfileCard({ d }: { d: TenantDetail }) {
 
 export function KeysCard({ d, onDone }: { d: TenantDetail; onDone: (msg: string) => void }) {
   const t = useTranslations("admin");
+  const apiMsg = useApiErrorMessage();
   const locale = useLocale() as Locale;
   const [scope, setScope] = useState("widget");
   const [label, setLabel] = useState("");
@@ -122,7 +124,7 @@ export function KeysCard({ d, onDone }: { d: TenantDetail; onDone: (msg: string)
       setLabel("");
       onDone(t("tenantDetail.keyIssued"));
     } catch (e2) {
-      setErr(e2 instanceof ApiError ? e2.message : t("tenantDetail.actionFailed"));
+      setErr(apiMsg(e2) ?? t("tenantDetail.actionFailed"));
     } finally {
       setBusy(false);
     }
@@ -134,7 +136,7 @@ export function KeysCard({ d, onDone }: { d: TenantDetail; onDone: (msg: string)
       await authFetch(`/admin/tenants/${d.id}/keys/${keyId}/revoke`, { method: "POST", body: {} });
       onDone(t("tenantDetail.keyRevoked"));
     } catch (e2) {
-      setErr(e2 instanceof ApiError ? e2.message : t("tenantDetail.actionFailed"));
+      setErr(apiMsg(e2) ?? t("tenantDetail.actionFailed"));
     }
   }
 
@@ -209,6 +211,7 @@ export function KeysCard({ d, onDone }: { d: TenantDetail; onDone: (msg: string)
 
 export function NotesCard({ d, onDone }: { d: TenantDetail; onDone: (msg: string) => void }) {
   const t = useTranslations("admin");
+  const apiMsg = useApiErrorMessage();
   const [notes, setNotes] = useState(d.admin_notes ?? "");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -220,7 +223,7 @@ export function NotesCard({ d, onDone }: { d: TenantDetail; onDone: (msg: string
       await authFetch(`/admin/tenants/${d.id}/notes`, { method: "PATCH", body: { notes } });
       onDone(t("tenantDetail.notesSaved"));
     } catch (e2) {
-      setErr(e2 instanceof ApiError ? e2.message : t("tenantDetail.actionFailed"));
+      setErr(apiMsg(e2) ?? t("tenantDetail.actionFailed"));
     } finally {
       setBusy(false);
     }

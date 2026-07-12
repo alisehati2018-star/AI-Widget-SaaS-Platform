@@ -3,12 +3,14 @@
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { ApiError } from "@/lib/api";
+import { useApiErrorMessage } from "@/lib/errors";
 import { adminLogin, useAdminSession } from "@/lib/auth";
 import { useRouter } from "@/i18n/navigation";
 import { Alert, Brand, Field, Input, Spinner } from "@/components/ui";
 
 export default function AdminLoginPage() {
   const t = useTranslations("auth");
+  const apiMsg = useApiErrorMessage();
   const tErrors = useTranslations("errors");
   const router = useRouter();
   const { user, loading } = useAdminSession();
@@ -37,7 +39,7 @@ export default function AdminLoginPage() {
         setNeedsTotp(true);
         setError(null);
       } else {
-        setError(err instanceof ApiError ? err.message : tErrors("generic"));
+        setError(apiMsg(err) ?? tErrors("generic"));
       }
       setBusy(false);
     }

@@ -2,7 +2,7 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
-import { ApiError } from "@/lib/api";
+import { useApiErrorMessage } from "@/lib/errors";
 import { adminFetch as authFetch } from "@/lib/auth";
 import { formatDateTime, formatNumber } from "@/lib/datetime";
 import { useAdminResource as useResource } from "@/lib/hooks/useResource";
@@ -25,6 +25,7 @@ interface SecResp {
 
 export default function AdminSecurity() {
   const t = useTranslations("admin");
+  const apiMsg = useApiErrorMessage();
   const locale = useLocale() as Locale;
   const nav = useAdminNav();
   const { data, reload } = useResource<SecResp>("/admin/security");
@@ -45,7 +46,7 @@ export default function AdminSecurity() {
       setNote(t("security.unlocked", { email: account.email }));
       reload();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : t("security.unlockFailed"));
+      setError(apiMsg(e) ?? t("security.unlockFailed"));
     } finally {
       setBusy(null);
     }

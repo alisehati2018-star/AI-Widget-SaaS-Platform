@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
-import { ApiError } from "@/lib/api";
+import { useApiErrorMessage } from "@/lib/errors";
 import { adminFetch as authFetch } from "@/lib/auth";
 import { DashboardShell, useAdminNav } from "@/components/shell";
 import { Alert, Badge, Field, Input, Spinner } from "@/components/ui";
@@ -31,6 +31,7 @@ const CODE_RE = /^[a-z0-9][a-z0-9_-]{1,30}$/;
 
 export default function AdminPlans() {
   const t = useTranslations("admin");
+  const apiMsg = useApiErrorMessage();
   const nav = useAdminNav();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
@@ -93,7 +94,7 @@ export default function AdminPlans() {
       setCreating(false);
       await reload();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t("plans.saveFailed"));
+      setError(apiMsg(err) ?? t("plans.saveFailed"));
     } finally {
       setBusy(false);
     }
@@ -109,7 +110,7 @@ export default function AdminPlans() {
       if (editing?.id === p.id) setEditing(null);
       await reload();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t("plans.deleteFailed"));
+      setError(apiMsg(err) ?? t("plans.deleteFailed"));
     } finally {
       setBusy(false);
     }

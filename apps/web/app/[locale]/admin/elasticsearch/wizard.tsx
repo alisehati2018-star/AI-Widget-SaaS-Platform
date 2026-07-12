@@ -2,7 +2,7 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
-import { ApiError } from "@/lib/api";
+import { useApiErrorMessage } from "@/lib/errors";
 import { adminFetch as authFetch } from "@/lib/auth";
 import { formatTime } from "@/lib/datetime";
 import type { Locale } from "@/i18n/routing";
@@ -30,6 +30,7 @@ export function SetupWizard({
   appendLog: (e: LogEntry) => void;
 }) {
   const t = useTranslations("admin");
+  const apiMsg = useApiErrorMessage();
   const locale = useLocale() as Locale;
   const [source, setSource] = useState("");
   const [running, setRunning] = useState(false);
@@ -50,7 +51,7 @@ export function SetupWizard({
       return true;
     } catch (e) {
       mark(step, "failed");
-      const msg = e instanceof ApiError ? e.message : t("elasticsearch.actionFailed");
+      const msg = apiMsg(e) ?? t("elasticsearch.actionFailed");
       appendLog({ at: new Date().toISOString(), step: label, ok: false, detail: msg });
       return false;
     }

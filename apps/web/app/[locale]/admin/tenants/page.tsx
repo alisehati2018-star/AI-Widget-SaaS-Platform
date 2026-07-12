@@ -2,7 +2,7 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
-import { ApiError } from "@/lib/api";
+import { useApiErrorMessage } from "@/lib/errors";
 import { adminFetch as authFetch } from "@/lib/auth";
 import { Link } from "@/i18n/navigation";
 import { formatNumber } from "@/lib/datetime";
@@ -33,6 +33,7 @@ const PAGE = 20;
 
 export default function AdminTenants() {
   const t = useTranslations("admin");
+  const apiMsg = useApiErrorMessage();
   const tErrors = useTranslations("errors");
   const locale = useLocale() as Locale;
   const nav = useAdminNav();
@@ -78,7 +79,7 @@ export default function AdminTenants() {
       setName("");
       reload();
     } catch (err) {
-      setFormError(err instanceof ApiError ? err.message : tErrors("saveFailed"));
+      setFormError(apiMsg(err) ?? tErrors("saveFailed"));
     } finally {
       setBusy(false);
     }

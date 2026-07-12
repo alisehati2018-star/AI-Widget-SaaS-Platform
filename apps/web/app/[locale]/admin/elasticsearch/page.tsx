@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
-import { ApiError } from "@/lib/api";
+import { useApiErrorMessage } from "@/lib/errors";
 import { adminFetch as authFetch } from "@/lib/auth";
 import { DashboardShell, useAdminNav } from "@/components/shell";
 import { Alert, Badge, Field, Input, Spinner } from "@/components/ui";
@@ -45,6 +45,7 @@ function bytes(n?: number | null): string {
 
 export default function AdminElasticsearch() {
   const t = useTranslations("admin");
+  const apiMsg = useApiErrorMessage();
   const nav = useAdminNav();
   const [health, setHealth] = useState<Health | null>(null);
   const [indices, setIndices] = useState<IndexRow[]>([]);
@@ -76,7 +77,7 @@ export default function AdminElasticsearch() {
       const r = await authFetch<{ docs: number }>(`/admin/es/tenant-count?tenant=${encodeURIComponent(tenantSel)}`);
       setTenantDocs(r.docs);
     } catch (e) {
-      setErr(e instanceof ApiError ? e.message : t("elasticsearch.actionFailed"));
+      setErr(apiMsg(e) ?? t("elasticsearch.actionFailed"));
     } finally {
       setCountBusy(false);
     }
@@ -111,7 +112,7 @@ export default function AdminElasticsearch() {
       appendLog({ at: new Date().toISOString(), step: ok, ok: true, detail: JSON.stringify(r ?? {}) });
       await reload();
     } catch (e) {
-      const msg = e instanceof ApiError ? e.message : t("elasticsearch.actionFailed");
+      const msg = apiMsg(e) ?? t("elasticsearch.actionFailed");
       setErr(msg);
       appendLog({ at: new Date().toISOString(), step: ok, ok: false, detail: msg });
     }
@@ -125,7 +126,7 @@ export default function AdminElasticsearch() {
       );
       setMapping({ index, body: JSON.stringify({ mapping: m.mapping, settings: m.settings }, null, 2) });
     } catch (e) {
-      setErr(e instanceof ApiError ? e.message : t("elasticsearch.actionFailed"));
+      setErr(apiMsg(e) ?? t("elasticsearch.actionFailed"));
     }
   }
 

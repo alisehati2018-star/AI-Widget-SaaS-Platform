@@ -9,7 +9,11 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 
 from acip_core.config import get_settings
-from acip_core.errors import unhandled_exception_handler
+from acip_core.errors import (
+    http_exception_handler,
+    unhandled_exception_handler,
+    validation_exception_handler,
+)
 from acip_core.logging import configure_logging, get_logger
 from acip_core.middleware import (
     CsrfMiddleware,
@@ -19,7 +23,9 @@ from acip_core.middleware import (
 )
 from acip_core.obs import setup_telemetry
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .routers import (
     admin,
@@ -37,6 +43,7 @@ from .routers import (
     admin_credit_policy,
     admin_es,
     admin_governance,
+    admin_health_deep,
     admin_misc,
     admin_monitoring,
     admin_operators,
@@ -143,6 +150,8 @@ def create_app() -> FastAPI:
         expose_headers=["x-request-id"],
     )
     app.add_exception_handler(Exception, unhandled_exception_handler)
+    app.add_exception_handler(RequestValidationError, validation_exception_handler)
+    app.add_exception_handler(StarletteHTTPException, http_exception_handler)
     setup_telemetry(app, settings)
 
     app.include_router(health.router)
@@ -176,6 +185,7 @@ def create_app() -> FastAPI:
     app.include_router(admin_governance.router)
     app.include_router(admin_security.router)
     app.include_router(admin_monitoring.router)
+    app.include_router(admin_health_deep.router)
     app.include_router(admin_ops_status.router)
     app.include_router(admin_es.router)
     app.include_router(admin_plans.router)

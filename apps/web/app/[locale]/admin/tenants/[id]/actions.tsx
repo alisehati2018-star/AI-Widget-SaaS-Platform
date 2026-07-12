@@ -6,6 +6,7 @@
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 import { ApiError } from "@/lib/api";
+import { useApiErrorMessage } from "@/lib/errors";
 import { adminFetch as authFetch } from "@/lib/auth";
 import { formatNumber } from "@/lib/datetime";
 import { useAdminResource } from "@/lib/hooks/useResource";
@@ -15,6 +16,7 @@ import type { TenantDetail } from "./sections";
 
 export function CreditsCard({ d, onDone }: { d: TenantDetail; onDone: (msg: string) => void }) {
   const t = useTranslations("admin");
+  const apiMsg = useApiErrorMessage();
   const locale = useLocale() as Locale;
   const [delta, setDelta] = useState("");
   const [reason, setReason] = useState("");
@@ -37,7 +39,7 @@ export function CreditsCard({ d, onDone }: { d: TenantDetail; onDone: (msg: stri
       setReason("");
       onDone(t("tenantDetail.creditAdjusted"));
     } catch (e2) {
-      setErr(e2 instanceof ApiError ? e2.message : t("tenantDetail.actionFailed"));
+      setErr(apiMsg(e2) ?? t("tenantDetail.actionFailed"));
     } finally {
       setBusy(false);
     }
@@ -86,6 +88,7 @@ interface PlanOption { code: string; name: string; price_monthly: number }
 
 export function PlanCard({ d, onDone }: { d: TenantDetail; onDone: (msg: string) => void }) {
   const t = useTranslations("admin");
+  const apiMsg = useApiErrorMessage();
   const { data } = useAdminResource<{ plans: PlanOption[] }>("/admin/plans");
   const [code, setCode] = useState(d.subscription.plan_code ?? "");
   const [status, setStatus] = useState(d.subscription.status === "none" ? "active" : d.subscription.status);
@@ -108,7 +111,7 @@ export function PlanCard({ d, onDone }: { d: TenantDetail; onDone: (msg: string)
       });
       onDone(t("tenantDetail.planChanged"));
     } catch (e2) {
-      setErr(e2 instanceof ApiError ? e2.message : t("tenantDetail.actionFailed"));
+      setErr(apiMsg(e2) ?? t("tenantDetail.actionFailed"));
     } finally {
       setBusy(false);
     }
@@ -149,6 +152,7 @@ export function PlanCard({ d, onDone }: { d: TenantDetail; onDone: (msg: string)
 
 export function LifecycleCard({ d, onDone }: { d: TenantDetail; onDone: (msg: string) => void }) {
   const t = useTranslations("admin");
+  const apiMsg = useApiErrorMessage();
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -160,7 +164,7 @@ export function LifecycleCard({ d, onDone }: { d: TenantDetail; onDone: (msg: st
     try {
       await action();
     } catch (e2) {
-      setErr(e2 instanceof ApiError ? e2.message : t("tenantDetail.actionFailed"));
+      setErr(apiMsg(e2) ?? t("tenantDetail.actionFailed"));
     } finally {
       setBusy(false);
     }

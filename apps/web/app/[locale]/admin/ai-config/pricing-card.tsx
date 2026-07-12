@@ -5,7 +5,7 @@
 
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
-import { ApiError } from "@/lib/api";
+import { useApiErrorMessage } from "@/lib/errors";
 import { adminFetch as authFetch } from "@/lib/auth";
 import { Alert, Field, Input, Spinner } from "@/components/ui";
 import type { PricingData } from "../models/types";
@@ -20,6 +20,7 @@ const KEYS: (keyof PricingData)[] = [
 
 export function PricingCard({ pricing, reload }: { pricing: PricingData; reload: () => void }) {
   const t = useTranslations("admin");
+  const apiMsg = useApiErrorMessage();
   const [form, setForm] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
@@ -48,7 +49,7 @@ export function PricingCard({ pricing, reload }: { pricing: PricingData; reload:
       setFlash(t("models.pricingSaved"));
       reload();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t("models.actionFailed"));
+      setError(apiMsg(err) ?? t("models.actionFailed"));
     } finally {
       setBusy(false);
     }

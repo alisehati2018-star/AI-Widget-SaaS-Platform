@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { useState } from "react";
-import { ApiError } from "@/lib/api";
+import { useApiErrorMessage } from "@/lib/errors";
 import { adminFetch, useAdminSession } from "@/lib/auth";
 import { Link } from "@/i18n/navigation";
 import { DashboardShell, useAdminNav } from "@/components/shell";
@@ -11,6 +11,7 @@ import { TotpCard } from "./totp-card";
 
 export default function AdminSettings() {
   const t = useTranslations("admin");
+  const apiMsg = useApiErrorMessage();
   const tv = useTranslations("validation");
   const nav = useAdminNav();
   const { user } = useAdminSession();
@@ -42,7 +43,7 @@ export default function AdminSettings() {
       setPw({ current: "", next: "", confirm: "" });
       setPwNote(t("settings.pwUpdated"));
     } catch (err) {
-      setPwError(err instanceof ApiError ? err.message : t("settings.genericError"));
+      setPwError(apiMsg(err) ?? t("settings.genericError"));
     } finally {
       setPwBusy(false);
     }
@@ -60,7 +61,7 @@ export default function AdminSettings() {
       setEm({ password: "", email: "" });
       setEmNote(t("settings.emailChanged"));
     } catch (err) {
-      setEmError(err instanceof ApiError ? err.message : t("settings.genericError"));
+      setEmError(apiMsg(err) ?? t("settings.genericError"));
     } finally {
       setEmBusy(false);
     }

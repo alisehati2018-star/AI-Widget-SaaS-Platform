@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
-import { ApiError } from "@/lib/api";
+import { useApiErrorMessage } from "@/lib/errors";
 import { adminFetch as authFetch } from "@/lib/auth";
 import { DashboardShell, useAdminNav } from "@/components/shell";
 import { Alert, Badge, Field, Input, Spinner } from "@/components/ui";
@@ -46,6 +46,7 @@ function saveHistory(tenant: string, turns: HistoryEntry[]) {
 
 export default function AdminAgent() {
   const t = useTranslations("admin");
+  const apiMsg = useApiErrorMessage();
   const nav = useAdminNav();
   const [tenants, setTenants] = useState<TenantRow[]>([]);
   const [selected, setSelected] = useState("");
@@ -109,7 +110,7 @@ export default function AdminAgent() {
         citations: r.citations,
       });
     } catch (e) {
-      setErr(e instanceof ApiError ? e.message : t("agent.failed"));
+      setErr(apiMsg(e) ?? t("agent.failed"));
     } finally { setBusy(false); }
   }
 
@@ -122,7 +123,7 @@ export default function AdminAgent() {
       });
       setResults(r.results ?? []);
     } catch (e) {
-      setErr(e instanceof ApiError ? e.message : t("agent.failed"));
+      setErr(apiMsg(e) ?? t("agent.failed"));
     } finally { setBusy(false); }
   }
 

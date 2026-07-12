@@ -2,7 +2,7 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
-import { ApiError } from "@/lib/api";
+import { useApiErrorMessage } from "@/lib/errors";
 import { adminFetch as authFetch } from "@/lib/auth";
 import { formatDateTime } from "@/lib/datetime";
 import type { Locale } from "@/i18n/routing";
@@ -20,6 +20,7 @@ interface Flag {
 
 export default function AdminFlags() {
   const t = useTranslations("admin");
+  const apiMsg = useApiErrorMessage();
   const locale = useLocale() as Locale;
   const nav = useAdminNav();
   const [flags, setFlags] = useState<Flag[] | null>(null);
@@ -38,7 +39,7 @@ export default function AdminFlags() {
       await authFetch(`/admin/feature-flags/${key}`, { body: { enabled } });
       load();
     } catch (e2) {
-      setErr(e2 instanceof ApiError ? e2.message : t("common.actionFailed"));
+      setErr(apiMsg(e2) ?? t("common.actionFailed"));
     } finally {
       setBusy(null);
     }

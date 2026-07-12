@@ -2,13 +2,15 @@
 
 import { useTranslations } from "next-intl";
 import { useState } from "react";
-import { apiFetch, ApiError } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
+import { useApiErrorMessage } from "@/lib/errors";
 import { MarketingFooter, MarketingNav } from "@/components/marketing";
 import { Icon, type IconName } from "@/components/icons";
 import { Alert, Field, Input, Spinner } from "@/components/ui";
 
 export default function ContactPage() {
   const t = useTranslations("marketing");
+  const apiMsg = useApiErrorMessage();
   const tErrors = useTranslations("errors");
   const [form, setForm] = useState({ name: "", email: "", message: "" });
   const [sent, setSent] = useState(false);
@@ -28,7 +30,7 @@ export default function ContactPage() {
       await apiFetch("/contact", { body: form });
       setSent(true);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : tErrors("sendFailed"));
+      setError(apiMsg(err) ?? tErrors("sendFailed"));
     } finally {
       setBusy(false);
     }

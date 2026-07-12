@@ -2,7 +2,8 @@
 
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, type TenantProfile } from "@/lib/api";
+import { type TenantProfile } from "@/lib/api";
+import { useApiErrorMessage } from "@/lib/errors";
 import { authFetch } from "@/lib/auth";
 import { Link } from "@/i18n/navigation";
 import { DashboardShell, useOwnerNav } from "@/components/shell";
@@ -17,6 +18,7 @@ interface AssistantStatus {
 
 export default function AssistantPage() {
   const t = useTranslations("dashboard");
+  const apiMsg = useApiErrorMessage();
   const tc = useTranslations("common");
   const nav = useOwnerNav();
   const [greeting, setGreeting] = useState("");
@@ -60,7 +62,7 @@ export default function AssistantPage() {
       await authFetch("/tenant/settings", { method: "PATCH", body: { widget_greeting: greeting } });
       setSaved(true);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t("common.actionFailed"));
+      setError(apiMsg(err) ?? t("common.actionFailed"));
     } finally {
       setBusy(false);
     }

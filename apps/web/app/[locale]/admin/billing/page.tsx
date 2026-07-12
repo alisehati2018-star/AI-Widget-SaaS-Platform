@@ -2,7 +2,8 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, type Order } from "@/lib/api";
+import { type Order } from "@/lib/api";
+import { useApiErrorMessage } from "@/lib/errors";
 import { adminFetch as authFetch } from "@/lib/auth";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/datetime";
 import type { Locale } from "@/i18n/routing";
@@ -12,6 +13,7 @@ import { InvoicesPanel } from "./invoices";
 
 export default function AdminBilling() {
   const t = useTranslations("admin");
+  const apiMsg = useApiErrorMessage();
   const locale = useLocale() as Locale;
   const nav = useAdminNav();
   const [tab, setTab] = useState<"orders" | "invoices">("orders");
@@ -36,7 +38,7 @@ export default function AdminBilling() {
       await authFetch(`/admin/orders/${id}/${action}`, { method: "POST" });
       load();
     } catch (e2) {
-      setError(e2 instanceof ApiError ? e2.message : t("common.actionFailed"));
+      setError(apiMsg(e2) ?? t("common.actionFailed"));
     } finally {
       setBusy(null);
     }
@@ -57,7 +59,7 @@ export default function AdminBilling() {
       );
       load();
     } catch (e2) {
-      setError(e2 instanceof ApiError ? e2.message : t("common.actionFailed"));
+      setError(apiMsg(e2) ?? t("common.actionFailed"));
     } finally {
       setBusy(null);
     }

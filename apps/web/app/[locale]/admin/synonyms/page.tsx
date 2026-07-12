@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
-import { ApiError } from "@/lib/api";
+import { useApiErrorMessage } from "@/lib/errors";
 import { adminFetch as authFetch } from "@/lib/auth";
 import { DashboardShell, useAdminNav } from "@/components/shell";
 import { Alert, Spinner } from "@/components/ui";
@@ -11,6 +11,7 @@ interface TenantRow { id: string; name: string }
 
 export default function AdminSynonyms() {
   const t = useTranslations("admin");
+  const apiMsg = useApiErrorMessage();
   const nav = useAdminNav();
   const [tenants, setTenants] = useState<TenantRow[]>([]);
   const [selected, setSelected] = useState("");
@@ -47,7 +48,7 @@ export default function AdminSynonyms() {
       await authFetch(`/admin/synonyms?tenant=${encodeURIComponent(selected)}`, { body: { synonyms: lines } });
       setSaved(true);
     } catch (e2) {
-      setErr(e2 instanceof ApiError ? e2.message : t("common.actionFailed"));
+      setErr(apiMsg(e2) ?? t("common.actionFailed"));
     } finally {
       setBusy(false);
     }

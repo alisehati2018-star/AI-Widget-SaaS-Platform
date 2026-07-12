@@ -9,6 +9,7 @@ import type { Locale } from "@/i18n/routing";
 import { DashboardShell, useAdminNav } from "@/components/shell";
 import { TrendChart } from "@/components/trend-chart";
 import { Alert, Badge, Spinner } from "@/components/ui";
+import { DeepHealthCard } from "./deep-health-card";
 import { LocalInfraCard } from "./local-infra-card";
 
 interface Sample { ts: number; ok: number; total: number; pg_ms: number | null }
@@ -100,6 +101,7 @@ export default function AdminHealth() {
         <p className="hint">{t("health.sparklineHint")}</p>
       </div>
 
+      <DeepHealthCard />
       <LocalInfraCard />
     </DashboardShell>
   );

@@ -5,13 +5,14 @@
 
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
-import { ApiError } from "@/lib/api";
+import { useApiErrorMessage } from "@/lib/errors";
 import { adminFetch as authFetch } from "@/lib/auth";
 import { Field, Input, Spinner } from "@/components/ui";
 import type { ProviderTemplate } from "./types";
 
 export function ProviderTemplatesPanel({ onCreated }: { onCreated: () => void }) {
   const t = useTranslations("admin");
+  const apiMsg = useApiErrorMessage();
   const [templates, setTemplates] = useState<ProviderTemplate[] | null>(null);
   const [picked, setPicked] = useState<ProviderTemplate | null>(null);
   const [apiKey, setApiKey] = useState("");
@@ -36,7 +37,7 @@ export function ProviderTemplatesPanel({ onCreated }: { onCreated: () => void })
       setApiKey("");
       onCreated();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t("models.actionFailed"));
+      setError(apiMsg(err) ?? t("models.actionFailed"));
     } finally {
       setBusy(false);
     }

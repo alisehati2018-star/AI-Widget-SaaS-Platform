@@ -2,7 +2,8 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
-import { ApiError, type Lead } from "@/lib/api";
+import { type Lead } from "@/lib/api";
+import { useApiErrorMessage } from "@/lib/errors";
 import { authFetch } from "@/lib/auth";
 import { formatDate, formatNumber } from "@/lib/datetime";
 import type { Locale } from "@/i18n/routing";
@@ -13,6 +14,7 @@ const STATUSES = ["new", "contacted", "qualified", "won", "lost"] as const;
 
 export default function LeadsPage() {
   const t = useTranslations("dashboard");
+  const apiMsg = useApiErrorMessage();
   const locale = useLocale() as Locale;
   const nav = useOwnerNav();
   const [leads, setLeads] = useState<Lead[] | null>(null);
@@ -41,7 +43,7 @@ export default function LeadsPage() {
       setLeads((rows) =>
         rows?.map((r) => (r.id === lead.id ? { ...r, status: previous } : r)) ?? rows,
       );
-      setError(err instanceof ApiError ? err.message : t("common.actionFailed"));
+      setError(apiMsg(err) ?? t("common.actionFailed"));
     }
   }
 
@@ -70,7 +72,7 @@ export default function LeadsPage() {
       setNote(t("leads.bulkApplied", { n: formatNumber(selected.size, locale) }));
       setSelected(new Set());
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t("common.actionFailed"));
+      setError(apiMsg(err) ?? t("common.actionFailed"));
     } finally {
       setBulkBusy(false);
     }

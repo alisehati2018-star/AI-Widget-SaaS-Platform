@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
-import { ApiError } from "@/lib/api";
+import { useApiErrorMessage } from "@/lib/errors";
 import { adminFetch as authFetch } from "@/lib/auth";
 import { DashboardShell, useAdminNav } from "@/components/shell";
 import { Icon } from "@/components/icons";
@@ -40,6 +40,7 @@ function previewDoc(origin: string, cfg: WidgetDefaults): string {
 
 export default function AdminWidget() {
   const t = useTranslations("admin");
+  const apiMsg = useApiErrorMessage();
   const nav = useAdminNav();
   const [cfg, setCfg] = useState<WidgetDefaults | null>(null);
   const [saved, setSaved] = useState(false);
@@ -68,7 +69,7 @@ export default function AdminWidget() {
       // The real preview reads the SAVED config — refresh it after every save.
       setPreviewNonce((n) => n + 1);
     } catch (e2) {
-      setErr(e2 instanceof ApiError ? e2.message : t("common.actionFailed"));
+      setErr(apiMsg(e2) ?? t("common.actionFailed"));
     } finally {
       setBusy(false);
     }

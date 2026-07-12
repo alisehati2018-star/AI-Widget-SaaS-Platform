@@ -6,7 +6,7 @@
 
 import { useTranslations } from "next-intl";
 import { useState } from "react";
-import { ApiError } from "@/lib/api";
+import { useApiErrorMessage } from "@/lib/errors";
 import { adminFetch as authFetch } from "@/lib/auth";
 import { Field, Input, Spinner } from "@/components/ui";
 import type { AiModel, AiProvider, ModelModality } from "./types";
@@ -53,6 +53,7 @@ export function ModelFormPanel({
   onSaved: () => void;
 }) {
   const t = useTranslations("admin");
+  const apiMsg = useApiErrorMessage();
   const tm = useTranslations("admin.models");
   const [form, setForm] = useState<FormState>(editing ? formFromModel(editing) : emptyForm(providers));
   const [error, setError] = useState<string | null>(null);
@@ -85,7 +86,7 @@ export function ModelFormPanel({
       onSaved();
       onClose();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t("models.actionFailed"));
+      setError(apiMsg(err) ?? t("models.actionFailed"));
     } finally {
       setBusy(false);
     }

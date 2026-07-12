@@ -2,7 +2,8 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, type TenantProfile } from "@/lib/api";
+import { type TenantProfile } from "@/lib/api";
+import { useApiErrorMessage } from "@/lib/errors";
 import { authFetch } from "@/lib/auth";
 import { formatDateTime, formatNumber } from "@/lib/datetime";
 import type { Locale } from "@/i18n/routing";
@@ -23,6 +24,7 @@ interface SyncStatus {
 
 export default function CatalogPage() {
   const t = useTranslations("dashboard");
+  const apiMsg = useApiErrorMessage();
   const locale = useLocale() as Locale;
   const nav = useOwnerNav();
   const [profile, setProfile] = useState<TenantProfile | null>(null);
@@ -73,7 +75,7 @@ export default function CatalogPage() {
       await authFetch("/tenant/settings", { method: "PATCH", body: { platform, store_url: storeUrl } });
       setSaved(true);
     } catch (err) {
-      setSaveError(err instanceof ApiError ? err.message : t("common.actionFailed"));
+      setSaveError(apiMsg(err) ?? t("common.actionFailed"));
     } finally {
       setBusy(false);
     }
@@ -89,7 +91,7 @@ export default function CatalogPage() {
       setSyncNote(t("catalog.syncQueued"));
       loadSync();
     } catch (e) {
-      setSyncError(e instanceof ApiError ? e.message : t("catalog.syncFailed"));
+      setSyncError(apiMsg(e) ?? t("catalog.syncFailed"));
     } finally {
       setSyncBusy(false);
     }

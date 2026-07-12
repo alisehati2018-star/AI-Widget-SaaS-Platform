@@ -2,7 +2,8 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, getPlans, localizePlan, type BillingMeta, type MyOrder, type PlanInfo, type TenantProfile } from "@/lib/api";
+import { getPlans, localizePlan, type BillingMeta, type MyOrder, type PlanInfo, type TenantProfile } from "@/lib/api";
+import { useApiErrorMessage } from "@/lib/errors";
 import { authFetch } from "@/lib/auth";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/datetime";
 import type { Locale } from "@/i18n/routing";
@@ -22,6 +23,7 @@ const TOPUP_CREDIT_CHOICES = [50000, 100000, 250000];
 
 export default function BillingPage() {
   const t = useTranslations("billing");
+  const apiMsg = useApiErrorMessage();
   const tErrors = useTranslations("errors");
   const locale = useLocale() as Locale;
   const nav = useOwnerNav();
@@ -75,7 +77,7 @@ export default function BillingPage() {
       setNote(r.instructions ?? t("noteOrder"));
       reload();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : tErrors("checkoutFailed"));
+      setError(apiMsg(err) ?? tErrors("checkoutFailed"));
     } finally {
       setPending(null);
     }
@@ -108,7 +110,7 @@ export default function BillingPage() {
       setNote(t("noteTopup", { credits: formatNumber(topupCredits, locale) }));
       reload();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t("topupFailed"));
+      setError(apiMsg(err) ?? t("topupFailed"));
     } finally {
       setPending(null);
     }
@@ -124,7 +126,7 @@ export default function BillingPage() {
       setNote(action === "cancel" ? t("noteCancel") : t("noteResume"));
       reload();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t("lifecycleFailed"));
+      setError(apiMsg(err) ?? t("lifecycleFailed"));
     } finally {
       setPending(null);
     }

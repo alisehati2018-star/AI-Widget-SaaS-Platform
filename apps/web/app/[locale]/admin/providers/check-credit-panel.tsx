@@ -7,7 +7,7 @@
 
 import { useTranslations } from "next-intl";
 import { useState } from "react";
-import { ApiError } from "@/lib/api";
+import { useApiErrorMessage } from "@/lib/errors";
 import { adminFetch as authFetch } from "@/lib/auth";
 import { Alert, Spinner } from "@/components/ui";
 import type { AiProvider, CreditCheckResult } from "../models/types";
@@ -20,6 +20,7 @@ export function CheckCreditPanel({
   onClose: () => void;
 }) {
   const t = useTranslations("admin");
+  const apiMsg = useApiErrorMessage();
   const tp = useTranslations("admin.providersPage");
   const [result, setResult] = useState<CreditCheckResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -35,7 +36,7 @@ export function CheckCreditPanel({
       );
       setResult(r);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : tp("checkCreditError"));
+      setError(apiMsg(err) ?? tp("checkCreditError"));
     } finally {
       setBusy(false);
     }

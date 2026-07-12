@@ -6,7 +6,7 @@
 
 import { useTranslations } from "next-intl";
 import { useState } from "react";
-import { ApiError } from "@/lib/api";
+import { useApiErrorMessage } from "@/lib/errors";
 import { adminFetch as authFetch } from "@/lib/auth";
 import { Alert, Spinner } from "@/components/ui";
 
@@ -18,6 +18,7 @@ export function GlobalSettingsPanel({
   reload: () => void;
 }) {
   const t = useTranslations("admin");
+  const apiMsg = useApiErrorMessage();
   const ta = useTranslations("admin.aiConfigPage");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -32,7 +33,7 @@ export function GlobalSettingsPanel({
       });
       reload();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t("models.actionFailed"));
+      setError(apiMsg(err) ?? t("models.actionFailed"));
     } finally {
       setBusy(false);
     }

@@ -6,7 +6,7 @@
 
 import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useState } from "react";
-import { ApiError } from "@/lib/api";
+import { useApiErrorMessage } from "@/lib/errors";
 import { adminFetch as authFetch } from "@/lib/auth";
 import { Alert, Badge } from "@/components/ui";
 import { DiscoverModelsPanel } from "./discover-models-modal";
@@ -23,6 +23,7 @@ export function ModelsTable({
   reload: () => void;
 }) {
   const t = useTranslations("admin");
+  const apiMsg = useApiErrorMessage();
   const tm = useTranslations("admin.models");
   const [activeTab, setActiveTab] = useState("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -88,7 +89,7 @@ export function ModelsTable({
       await authFetch(`/admin/ai/models/${m.id}`, { method: "DELETE" });
       reload();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t("models.actionFailed"));
+      setError(apiMsg(err) ?? t("models.actionFailed"));
     } finally {
       setBusy(false);
     }
@@ -109,7 +110,7 @@ export function ModelsTable({
       }
       reload();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : tm("bulkDeleteError"));
+      setError(apiMsg(err) ?? tm("bulkDeleteError"));
     } finally {
       setBusy(false);
     }

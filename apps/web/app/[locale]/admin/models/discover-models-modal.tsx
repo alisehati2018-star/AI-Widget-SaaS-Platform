@@ -6,7 +6,7 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
-import { ApiError } from "@/lib/api";
+import { useApiErrorMessage } from "@/lib/errors";
 import { adminFetch as authFetch } from "@/lib/auth";
 import { formatNumber } from "@/lib/datetime";
 import type { Locale } from "@/i18n/routing";
@@ -31,6 +31,7 @@ export function DiscoverModelsPanel({
   onImported: () => void;
 }) {
   const t = useTranslations("admin");
+  const apiMsg = useApiErrorMessage();
   const tdp = useTranslations("admin.discoverPicker");
   const locale = useLocale() as Locale;
   const [models, setModels] = useState<DiscoveredModel[] | null>(null);
@@ -51,7 +52,7 @@ export function DiscoverModelsPanel({
       setModels(r.models);
       setSelected(new Set(r.models.filter((m) => !m.already_imported).map((m) => m.model)));
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t("models.actionFailed"));
+      setError(apiMsg(err) ?? t("models.actionFailed"));
     } finally {
       setBusy(false);
     }
@@ -99,7 +100,7 @@ export function DiscoverModelsPanel({
       onImported();
       onClose();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t("models.actionFailed"));
+      setError(apiMsg(err) ?? t("models.actionFailed"));
     } finally {
       setBusy(false);
     }

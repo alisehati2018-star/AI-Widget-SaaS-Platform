@@ -2,7 +2,7 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
-import { ApiError } from "@/lib/api";
+import { useApiErrorMessage } from "@/lib/errors";
 import { authFetch } from "@/lib/auth";
 import { formatNumber } from "@/lib/datetime";
 import type { Locale } from "@/i18n/routing";
@@ -18,6 +18,7 @@ interface SearchTest {
 
 export default function SearchTuningPage() {
   const t = useTranslations("dashboard");
+  const apiMsg = useApiErrorMessage();
   const locale = useLocale() as Locale;
   const nav = useOwnerNav();
   const [synonyms, setSynonyms] = useState("");
@@ -62,7 +63,7 @@ export default function SearchTuningPage() {
       await authFetch("/tenant/synonyms", { body: { synonyms: lines } });
       setSaved(true);
     } catch (e) {
-      setSaveError(e instanceof ApiError ? e.message : t("common.actionFailed"));
+      setSaveError(apiMsg(e) ?? t("common.actionFailed"));
     } finally {
       setBusy(false);
     }
@@ -78,7 +79,7 @@ export default function SearchTuningPage() {
       const r = await authFetch<SearchTest>("/tenant/search-test", { body: { query: q } });
       setTest(r);
     } catch (e) {
-      setTestError(e instanceof ApiError ? e.message : t("search.testFailed"));
+      setTestError(apiMsg(e) ?? t("search.testFailed"));
     } finally {
       setTestBusy(false);
     }
