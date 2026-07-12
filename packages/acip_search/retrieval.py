@@ -21,11 +21,12 @@ log = get_logger("search")
 
 
 class SearchService:
-    def __init__(self, es, embedding_client=None, redis=None, meter=None) -> None:
+    def __init__(self, es, embedding_client=None, redis=None, meter=None, reranker=None) -> None:
         self._es = es
         self._embed = embedding_client
         self._redis = redis
         self._meter = meter  # callable(tenant_id, route, **kwargs) or None
+        self._reranker = reranker  # ChainedReranker (admin-bound chain) or None
         self._s = get_settings()
 
     async def _query_vector(self, text: str) -> list[float] | None:
@@ -50,6 +51,12 @@ class SearchService:
         size = size or self._s.search_default_size
         rerank = self._s.rerank_enabled if rerank is None else rerank
 
+        # Rerank placement: binding a `rerank` chain in the admin registry is
+        # the opt-in for application-side reranking (post-ES); RERANK_ENABLED
+        # keeps controlling the ES-side `text_similarity_reranker` path (needs
+        # a cluster inference endpoint). App-side wins when both are set.
+        app_rerank = self._reranker is not None and await self._reranker.has_chain()
+
         vector = await self._query_vector(text)
         body = build_hybrid_query(
             tenant_id,
@@ -57,7 +64,7 @@ class SearchService:
             query_vector=vector,
             filters=filters,
             size=size,
-            rerank=rerank,
+            rerank=rerank and not app_rerank,
             rerank_window=self._s.rerank_window,
             rerank_inference_id=self._s.reranker_model,
             rank_constant=self._s.rrf_rank_constant,
@@ -68,6 +75,11 @@ class SearchService:
         resp = await self._es.search(index=self._s.catalogue_alias, body=body)
         hits = resp["hits"]["hits"]
         results = [{**h["_source"], "score": h.get("_score")} for h in hits]
+
+        if app_rerank and len(results) > 1:
+            docs = [str(r.get("title", "")) for r in results]
+            order = await self._reranker.rerank(text, docs)
+            results = [results[i] for i in order if i < len(results)]
 
         if not results:
             await log_zero_result(self._redis, tenant_id, text)

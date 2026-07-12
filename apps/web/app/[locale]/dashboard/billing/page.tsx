@@ -226,7 +226,7 @@ export default function BillingPage() {
         <h3>{t("topupTitle")}</h3>
         <p className="hint">{t("topupHint")}</p>
         <div className="row" style={{ flexWrap: "wrap", alignItems: "center" }}>
-          <select className="input" style={{ maxWidth: 240 }} value={topupCredits} onChange={(e) => setTopupCredits(Number(e.target.value))}>
+          <select className="input" aria-label={t("topupTitle")} style={{ maxWidth: 240 }} value={topupCredits} onChange={(e) => setTopupCredits(Number(e.target.value))}>
             {TOPUP_CREDIT_CHOICES.map((credits) => {
               const rate = billingMeta?.topup_credits_per_unit ?? 1000;
               const price = Math.round((credits / Math.max(1, rate)) * 100) / 100;

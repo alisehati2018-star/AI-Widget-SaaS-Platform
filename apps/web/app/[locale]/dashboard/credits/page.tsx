@@ -26,7 +26,7 @@ export default function CreditsPage() {
   const t = useTranslations("dashboard");
   const locale = useLocale() as Locale;
   const nav = useOwnerNav();
-  const { data } = useResource<CreditsResp>("/tenant/credits");
+  const { data, error, reload } = useResource<CreditsResp>("/tenant/credits");
 
   const remaining = data?.cap != null ? Math.max(0, data.cap - data.used) : null;
   const num = (n: number | null | undefined) =>
@@ -45,7 +45,12 @@ export default function CreditsPage() {
 
       <div className="card">
         <h3>{t("credits.ledger")}</h3>
-        {data === null ? (
+        {error ? (
+          <>
+            <p className="muted">{t("common.loadFailed")}</p>
+            <button className="btn btn-soft" onClick={reload}>{t("common.retry")}</button>
+          </>
+        ) : data === null ? (
           <Spinner />
         ) : data.ledger.length === 0 ? (
           <p className="muted">{t("credits.empty")}</p>

@@ -1,8 +1,8 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
-import type { TenantProfile } from "@/lib/api";
+import { useCallback, useEffect, useState } from "react";
+import { ApiError, type TenantProfile } from "@/lib/api";
 import { authFetch } from "@/lib/auth";
 import { Link } from "@/i18n/navigation";
 import { DashboardShell, useOwnerNav } from "@/components/shell";
@@ -22,25 +22,36 @@ export default function AssistantPage() {
   const [greeting, setGreeting] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<AssistantStatus | null>(null);
+  const [statusFailed, setStatusFailed] = useState(false);
+
+  const loadStatus = useCallback(() => {
+    setStatusFailed(false);
+    setStatus(null);
+    authFetch<AssistantStatus>("/tenant/assistant-status")
+      .then(setStatus)
+      .catch(() => setStatusFailed(true));
+  }, []);
 
   useEffect(() => {
     authFetch<TenantProfile>("/tenant/profile")
       .then((p) => setGreeting(p.settings.widget_greeting ?? ""))
       .catch(() => {})
       .finally(() => setLoaded(true));
-    authFetch<AssistantStatus>("/tenant/assistant-status")
-      .then(setStatus)
-      .catch(() => setStatus(null));
-  }, []);
+    loadStatus();
+  }, [loadStatus]);
 
   async function save() {
     setBusy(true);
     setSaved(false);
+    setError(null);
     try {
       await authFetch("/tenant/settings", { method: "PATCH", body: { widget_greeting: greeting } });
       setSaved(true);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t("common.actionFailed"));
     } finally {
       setBusy(false);
     }
@@ -59,7 +70,12 @@ export default function AssistantPage() {
 
       <div className="card" style={{ marginBottom: "1.5rem" }}>
         <h3>{t("assistant.statusTitle")}</h3>
-        {status === null ? <Spinner /> : (
+        {statusFailed ? (
+          <>
+            <p className="muted">{t("common.loadFailed")}</p>
+            <button className="btn btn-soft" onClick={loadStatus}>{t("common.retry")}</button>
+          </>
+        ) : status === null ? <Spinner /> : (
           <>
             <div className="stat-grid">
               <div className="stat">
@@ -102,6 +118,7 @@ export default function AssistantPage() {
       <div className="card" style={{ marginBottom: "1.5rem" }}>
         <h3>{t("assistant.greetingTitle")}</h3>
         {saved ? <Alert kind="success">{t("common.saved")}</Alert> : null}
+        {error ? <Alert kind="error">{error}</Alert> : null}
         {loaded ? (
           <Field label={t("assistant.greetingLabel")}>
             <Input

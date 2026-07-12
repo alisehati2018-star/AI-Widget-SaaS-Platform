@@ -211,12 +211,16 @@ export function NotesCard({ d, onDone }: { d: TenantDetail; onDone: (msg: string
   const t = useTranslations("admin");
   const [notes, setNotes] = useState(d.admin_notes ?? "");
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
   async function save() {
+    setErr(null);
     setBusy(true);
     try {
       await authFetch(`/admin/tenants/${d.id}/notes`, { method: "PATCH", body: { notes } });
       onDone(t("tenantDetail.notesSaved"));
+    } catch (e2) {
+      setErr(e2 instanceof ApiError ? e2.message : t("tenantDetail.actionFailed"));
     } finally {
       setBusy(false);
     }
@@ -226,6 +230,7 @@ export function NotesCard({ d, onDone }: { d: TenantDetail; onDone: (msg: string
     <div className="card">
       <h3>{t("tenantDetail.notesTitle")}</h3>
       <p className="hint">{t("tenantDetail.notesHint")}</p>
+      {err ? <Alert kind="error">{err}</Alert> : null}
       <textarea
         className="input"
         style={{ minHeight: 110 }}

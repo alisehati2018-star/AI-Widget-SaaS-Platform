@@ -11,7 +11,7 @@ const EXE = process.env.CHROME || "/opt/pw-browsers/chromium-1194/chrome-linux/c
 const ADMIN_PAGES = [
   "/admin", "/admin/tenants", "/admin/users", "/admin/plans", "/admin/billing",
   "/admin/analytics", "/admin/usage", "/admin/audit", "/admin/security",
-  "/admin/queue", "/admin/health", "/admin/models", "/admin/elasticsearch",
+  "/admin/queue", "/admin/health", "/admin/models", "/admin/providers", "/admin/ai-config", "/admin/elasticsearch",
   "/admin/synonyms", "/admin/agent", "/admin/widget", "/admin/flags",
   "/admin/contact", "/admin/operators", "/admin/settings",
 ];

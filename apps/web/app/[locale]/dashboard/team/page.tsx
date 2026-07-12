@@ -49,14 +49,30 @@ export default function TeamPage() {
   }
 
   async function changeRole(memberEmail: string, role: string) {
-    await authFetch("/tenant/team/role", { body: { email: memberEmail, role } }).catch(() => {});
-    load();
+    setError(null);
+    setBusy(true);
+    try {
+      await authFetch("/tenant/team/role", { body: { email: memberEmail, role } });
+      load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : tErrors("saveFailed"));
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function removeMember(memberEmail: string) {
     if (!window.confirm(t("team.removeConfirm", { email: memberEmail }))) return;
-    await authFetch("/tenant/team/remove", { body: { email: memberEmail } }).catch(() => {});
-    load();
+    setError(null);
+    setBusy(true);
+    try {
+      await authFetch("/tenant/team/remove", { body: { email: memberEmail } });
+      load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : tErrors("saveFailed"));
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function resend(memberEmail: string) {
@@ -79,10 +95,10 @@ export default function TeamPage() {
   return (
     <DashboardShell title={t("nav.team")} nav={nav}>
       <p style={{ marginTop: "-1rem" }}>{t("team.intro")}</p>
+      {error ? <Alert kind="error">{error}</Alert> : null}
 
       <div className="card" style={{ marginBottom: "1.5rem" }}>
         <h3>{t("team.inviteTitle")}</h3>
-        {error ? <Alert kind="error">{error}</Alert> : null}
         {invite && invite !== "invited" ? (
           <Alert kind="success">
             {t("team.inviteCreated")}
@@ -137,10 +153,10 @@ export default function TeamPage() {
                           {t("team.resendInvite")}
                         </button>
                       ) : null}
-                      <button className="btn btn-soft" onClick={() => void changeRole(m.email, m.role === "store_owner" ? "store_staff" : "store_owner")}>
+                      <button className="btn btn-soft" disabled={busy} onClick={() => void changeRole(m.email, m.role === "store_owner" ? "store_staff" : "store_owner")}>
                         {m.role === "store_owner" ? t("team.makeStaff") : t("team.makeOwner")}
                       </button>
-                      <button className="btn btn-danger" onClick={() => void removeMember(m.email)}>{t("team.remove")}</button>
+                      <button className="btn btn-danger" disabled={busy} onClick={() => void removeMember(m.email)}>{t("team.remove")}</button>
                     </div>
                   </td>
                 </tr>

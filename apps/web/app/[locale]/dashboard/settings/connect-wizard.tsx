@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
-import type { TenantProfile } from "@/lib/api";
+import { ApiError, type TenantProfile } from "@/lib/api";
 import { authFetch } from "@/lib/auth";
 import { Link } from "@/i18n/navigation";
 import { Alert, Badge, Field, Input, Spinner } from "@/components/ui";
@@ -30,6 +30,7 @@ export function ConnectWizard() {
   const [busy, setBusy] = useState(false);
   const [checking, setChecking] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(() => {
     authFetch<TenantProfile>("/tenant/profile")
@@ -53,6 +54,7 @@ export function ConnectWizard() {
     e.preventDefault();
     setBusy(true);
     setNote(null);
+    setError(null);
     try {
       await authFetch("/tenant/settings", {
         method: "PATCH",
@@ -66,6 +68,8 @@ export function ConnectWizard() {
       });
       setSavedUrl(storeUrl.trim());
       setNote(t("connect.step1Saved"));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t("common.actionFailed"));
     } finally {
       setBusy(false);
     }
@@ -74,6 +78,7 @@ export function ConnectWizard() {
   async function verify() {
     setChecking(true);
     setNote(null);
+    setError(null);
     try {
       const source = platform === "custom" ? "rest" : platform;
       await authFetch("/tenant/sync/trigger", { body: { source } });
@@ -81,7 +86,7 @@ export function ConnectWizard() {
       setSync(s);
       setNote(t("connect.verifyQueued"));
     } catch {
-      setNote(t("connect.verifyFailed"));
+      setError(t("connect.verifyFailed"));
     } finally {
       setChecking(false);
     }
@@ -101,6 +106,7 @@ export function ConnectWizard() {
       <h3>{t("connect.title")}</h3>
       <p className="hint">{t("connect.hint")}</p>
       {note ? <Alert kind="success">{note}</Alert> : null}
+      {error ? <Alert kind="error">{error}</Alert> : null}
 
       <div className="row" style={{ gap: ".6rem", alignItems: "flex-start", flexWrap: "wrap" }}>
         <div style={{ flex: 1, minWidth: 260 }}>

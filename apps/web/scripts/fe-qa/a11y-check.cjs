@@ -9,8 +9,12 @@ const BASE = process.env.BASE || "http://127.0.0.1:3000";
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || "dev-admin-token";
 const EXE = "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
 const PAGES = ["/", "/en", "/login", "/signup", "/pricing", "/features", "/docs", "/contact"];
-const ADMIN_PAGES = ["/admin", "/admin/tenants", "/admin/contact", "/admin/operators",
+const ADMIN_PAGES = ["/admin", "/admin/tenants", "/admin/contact", "/admin/operators", "/admin/providers", "/admin/ai-config",
   "/admin/elasticsearch", "/admin/queue", "/admin/flags", "/admin/health"];
+const OWNER_PAGES = ["/dashboard", "/onboarding", "/dashboard/catalog", "/dashboard/search",
+  "/dashboard/widget", "/dashboard/assistant", "/dashboard/knowledge", "/dashboard/analytics",
+  "/dashboard/chat", "/dashboard/sales", "/dashboard/leads", "/dashboard/keys", "/dashboard/team",
+  "/dashboard/credits", "/dashboard/billing", "/dashboard/audit", "/dashboard/settings"];
 const FAIL = new Set(["serious", "critical"]);
 
 async function audit(ctx, paths, label) {
@@ -60,6 +64,25 @@ async function audit(ctx, paths, label) {
     failures++;
   } else {
     failures += await audit(ctx, ADMIN_PAGES, "admin");
+  }
+
+  // Owner dashboard: sign up a fresh store owner and audit every page.
+  await ctx.clearCookies();
+  const ownerEmail = `owner.a11y.${stamp}@store.com`;
+  const ownerPass = "Sup3r!Str0ng#2026";
+  await ctx.request.post(`${BASE}/api/auth/signup`, {
+    headers: { "content-type": "application/json" },
+    data: { email: ownerEmail, password: ownerPass, store_name: "A11y Store" },
+  });
+  const ownerLogin = await ctx.request.post(`${BASE}/api/auth/login`, {
+    headers: { "content-type": "application/json" },
+    data: { email: ownerEmail, password: ownerPass },
+  });
+  if (!ownerLogin.ok()) {
+    console.error(`✗ owner login failed (${ownerLogin.status()}) — owner a11y skipped`);
+    failures++;
+  } else {
+    failures += await audit(ctx, OWNER_PAGES, "owner");
   }
 
   await browser.close();

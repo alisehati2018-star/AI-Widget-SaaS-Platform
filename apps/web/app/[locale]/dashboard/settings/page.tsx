@@ -16,6 +16,7 @@ export default function SettingsPage() {
   const [profile, setProfile] = useState<TenantProfile | null>(null);
   const [tracking, setTracking] = useState(true);
   const [note, setNote] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [pw, setPw] = useState({ current: "", next: "", confirm: "" });
   const [pwNote, setPwNote] = useState<string | null>(null);
   const [pwError, setPwError] = useState<string | null>(null);
@@ -36,30 +37,45 @@ export default function SettingsPage() {
 
   async function toggleTracking() {
     const next = !tracking;
+    setError(null);
+    setNote(null);
+    // Optimistic toggle, but roll back and report if the server rejects it —
+    // a privacy setting must never show a false success.
     setTracking(next);
-    await authFetch("/tenant/tracking", { body: { enabled: next } }).catch(() => {});
-    setNote(next ? t("settings.trackingEnabled") : t("settings.trackingDisabled"));
+    try {
+      await authFetch("/tenant/tracking", { body: { enabled: next } });
+      setNote(next ? t("settings.trackingEnabled") : t("settings.trackingDisabled"));
+    } catch (err) {
+      setTracking(!next);
+      setError(err instanceof ApiError ? err.message : t("common.actionFailed"));
+    }
   }
 
   async function exportData() {
-    const data = await authFetch<unknown>("/tenant/export").catch(() => null);
-    if (!data) return;
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "vitrin-export.json";
-    a.click();
+    setError(null);
+    try {
+      const data = await authFetch<unknown>("/tenant/export");
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "vitrin-export.json";
+      a.click();
+    } catch {
+      setError(t("common.exportFailed"));
+    }
   }
 
   async function eraseData() {
     if (!profile) return;
     const confirm = window.prompt(t("settings.erasePrompt", { slug: profile.slug }));
     if (confirm === null) return;
+    setError(null);
+    setNote(null);
     try {
       await authFetch("/tenant/erase", { body: { confirm } });
       setNote(t("settings.erased"));
-    } catch {
-      setNote(t("settings.eraseFailed"));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t("settings.eraseFailed"));
     }
   }
 
@@ -108,6 +124,7 @@ export default function SettingsPage() {
   return (
     <DashboardShell title={t("nav.settings")} nav={nav}>
       {note ? <Alert kind="success">{note}</Alert> : null}
+      {error ? <Alert kind="error">{error}</Alert> : null}
 
       <ConnectWizard />
 

@@ -8,6 +8,8 @@
     "usage": "Usage",
     "analytics": "Analytics",
     "models": "Models",
+    "providers": "AI providers",
+    "aiConfig": "AI configuration",
     "queue": "Queue",
     "health": "System health",
     "security": "Security",
@@ -47,7 +49,10 @@
     "noPaidShare": "No-paid share",
     "costCredits": "Cost (credits)",
     "assistantTurns": "Assistant turns",
-    "zeroTitle": "Zero-result searches"
+    "zeroTitle": "Zero-result searches",
+    "actionFailed": "The action failed. Please try again.",
+    "loadFailed": "Loading data failed. Check the server connection.",
+    "retry": "Retry"
   },
   "overview": {
     "title": "Platform overview",
@@ -105,6 +110,7 @@
     "exportData": "Export data (JSON)",
     "eraseData": "Erase all data",
     "eraseConfirm": "Erase ALL data for this tenant? This cannot be undone.",
+    "suspendConfirm": "Suspend this store? Its widget and API access stop immediately.",
     "noteTrackingOn": "Tracking enabled.",
     "noteTrackingOff": "Tracking disabled.",
     "noteErased": "Tenant data erased.",
@@ -235,7 +241,8 @@
     "creditPolicyAmountHint": "How many credits are added to a new customer's balance immediately after their first signup.",
     "creditPolicySave": "Save credit settings",
     "creditPolicySaved": "Signup credit settings saved.",
-    "creditPolicyInvalid": "Credit amount must be a valid, non-negative number."
+    "creditPolicyInvalid": "Credit amount must be a valid, non-negative number.",
+    "numericHint": "An empty or non-numeric value is stored as zero."
   },
   "billing": {
     "title": "Billing",
@@ -467,7 +474,8 @@
     "remaining": "Remaining",
     "platformUsage30d": "Platform usage (last 30 days)",
     "creditsShort": "credits",
-    "callsShort": "calls"
+    "callsShort": "calls",
+    "deleteConfirm": "Delete provider \"{name}\"? This cannot be undone."
   },
   "discoverPicker": {
     "searchPlaceholder": "Search models…",
@@ -579,7 +587,8 @@
     "effectInsight": "The insight engine (demand gaps, funnel analysis) is computed and shown on dashboards.",
     "effectLeads": "In-conversation lead capture (customer phone/email) is active.",
     "effectAgentActions": "Money-moving agent actions (orders/payments/discounts) — off by default, only for fully hardened deployments.",
-    "hint": "Flag changes apply platform-wide immediately and are recorded in the audit log with the changer's name."
+    "hint": "Flag changes apply platform-wide immediately and are recorded in the audit log with the changer's name.",
+    "empty": "No feature flags are defined — flags are created by database migrations."
   },
   "audit": {
     "title": "Audit log",
@@ -807,5 +816,8 @@
     "actionFailed": "The action failed.",
     "confirmSuspend": "Suspend {email}? Their live sessions end immediately.",
     "confirmDelete": "Delete {email} permanently? This cannot be undone."
+  },
+  "toast": {
+    "requiredFields": "Please fill the required fields."
   }
 }

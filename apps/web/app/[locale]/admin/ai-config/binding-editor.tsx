@@ -128,12 +128,14 @@ export function BindingEditor({
       ) : (
         <div className="row" style={{ gap: ".4rem", marginTop: ".6rem", flexWrap: "wrap" }}>
           <select className="input" dir="ltr" style={{ maxWidth: "12rem" }}
+            aria-label={ta("chooseProvider")}
             value={draftProviderId}
             onChange={(e) => { setDraftProviderId(e.target.value); setDraftModelId(""); }}>
             <option value="">{ta("chooseProvider")}</option>
             {eligibleProviders.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
           <select className="input" dir="ltr" style={{ maxWidth: "16rem" }}
+            aria-label={ta("chooseModel")}
             disabled={!draftProviderId || draftModels.length === 0}
             value={draftModelId} onChange={(e) => setDraftModelId(e.target.value)}>
             <option value="">

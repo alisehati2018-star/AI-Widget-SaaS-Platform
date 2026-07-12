@@ -1,7 +1,7 @@
 "use client";
 
 import { useLocale, useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ApiError } from "@/lib/api";
 import { authFetch } from "@/lib/auth";
 import { formatNumber } from "@/lib/datetime";
@@ -23,7 +23,9 @@ export default function SearchTuningPage() {
   const [synonyms, setSynonyms] = useState("");
   const [zero, setZero] = useState<{ term: string; count: number }[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const [query, setQuery] = useState("");
@@ -31,23 +33,36 @@ export default function SearchTuningPage() {
   const [test, setTest] = useState<SearchTest | null>(null);
   const [testError, setTestError] = useState<string | null>(null);
 
-  useEffect(() => {
+  // If the synonyms load fails we must NOT show an empty editor — saving it
+  // would silently wipe the tenant's real synonym list.
+  const loadSynonyms = useCallback(() => {
+    setLoaded(false);
+    setLoadFailed(false);
     authFetch<{ synonyms: string[] }>("/tenant/synonyms")
-      .then((r) => setSynonyms(r.synonyms.join("\n")))
-      .catch(() => {})
-      .finally(() => setLoaded(true));
+      .then((r) => {
+        setSynonyms(r.synonyms.join("\n"));
+        setLoaded(true);
+      })
+      .catch(() => setLoadFailed(true));
+  }, []);
+
+  useEffect(() => {
+    loadSynonyms();
     authFetch<{ terms: { term: string; count: number }[] }>("/tenant/zero-results")
       .then((r) => setZero(r.terms))
       .catch(() => {});
-  }, []);
+  }, [loadSynonyms]);
 
   async function save() {
     setBusy(true);
     setSaved(false);
+    setSaveError(null);
     try {
       const lines = synonyms.split("\n").map((l) => l.trim()).filter(Boolean);
       await authFetch("/tenant/synonyms", { body: { synonyms: lines } });
       setSaved(true);
+    } catch (e) {
+      setSaveError(e instanceof ApiError ? e.message : t("common.actionFailed"));
     } finally {
       setBusy(false);
     }
@@ -120,23 +135,31 @@ export default function SearchTuningPage() {
           <h3>{t("search.synonyms")}</h3>
           <p className="hint">{t("search.synonymsHint")}</p>
           {saved ? <Alert kind="success">{t("search.synonymsSaved")}</Alert> : null}
-          {loaded ? (
-            <textarea
-              className="input"
-              aria-label={t("search.synonyms")}
-              style={{ minHeight: 180, fontFamily: "monospace" }}
-              value={synonyms}
-              onChange={(e) => setSynonyms(e.target.value)}
-              placeholder={t("search.synonymsPlaceholder")}
-            />
+          {saveError ? <Alert kind="error">{saveError}</Alert> : null}
+          {loadFailed ? (
+            <>
+              <p className="muted">{t("common.loadFailed")}</p>
+              <button className="btn btn-soft" onClick={loadSynonyms}>{t("common.retry")}</button>
+            </>
+          ) : loaded ? (
+            <>
+              <textarea
+                className="input"
+                aria-label={t("search.synonyms")}
+                style={{ minHeight: 180, fontFamily: "monospace" }}
+                value={synonyms}
+                onChange={(e) => setSynonyms(e.target.value)}
+                placeholder={t("search.synonymsPlaceholder")}
+              />
+              <div style={{ marginTop: "1rem" }}>
+                <button className="btn btn-primary" onClick={() => void save()} disabled={busy}>
+                  {busy ? <Spinner /> : t("search.saveSynonyms")}
+                </button>
+              </div>
+            </>
           ) : (
             <Spinner />
           )}
-          <div style={{ marginTop: "1rem" }}>
-            <button className="btn btn-primary" onClick={() => void save()} disabled={busy}>
-              {busy ? <Spinner /> : t("search.saveSynonyms")}
-            </button>
-          </div>
         </div>
 
         <div className="card">

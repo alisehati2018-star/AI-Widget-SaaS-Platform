@@ -2,7 +2,7 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
-import type { Lead } from "@/lib/api";
+import { ApiError, type Lead } from "@/lib/api";
 import { authFetch } from "@/lib/auth";
 import { formatDate, formatNumber } from "@/lib/datetime";
 import type { Locale } from "@/i18n/routing";
@@ -21,6 +21,7 @@ export default function LeadsPage() {
   const [bulkStatus, setBulkStatus] = useState<string>("contacted");
   const [bulkBusy, setBulkBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     authFetch<{ leads: Lead[] }>("/tenant/leads")
@@ -30,8 +31,18 @@ export default function LeadsPage() {
 
   async function setStatus(lead: Lead, status: string) {
     if (lead.id == null) return;
+    const previous = lead.status ?? "new";
+    setError(null);
+    // Optimistic update, but ROLL BACK on failure so the UI never lies.
     setLeads((rows) => rows?.map((r) => (r.id === lead.id ? { ...r, status } : r)) ?? rows);
-    await authFetch(`/tenant/leads/${lead.id}`, { body: { status } }).catch(() => {});
+    try {
+      await authFetch(`/tenant/leads/${lead.id}`, { body: { status } });
+    } catch (err) {
+      setLeads((rows) =>
+        rows?.map((r) => (r.id === lead.id ? { ...r, status: previous } : r)) ?? rows,
+      );
+      setError(err instanceof ApiError ? err.message : t("common.actionFailed"));
+    }
   }
 
   function toggle(id: number) {
@@ -47,6 +58,7 @@ export default function LeadsPage() {
     if (!selected.size) return;
     setBulkBusy(true);
     setNote(null);
+    setError(null);
     try {
       // The single-lead endpoint is the mutation unit; bulk fans out over it.
       await Promise.all(
@@ -57,6 +69,8 @@ export default function LeadsPage() {
       );
       setNote(t("leads.bulkApplied", { n: formatNumber(selected.size, locale) }));
       setSelected(new Set());
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t("common.actionFailed"));
     } finally {
       setBulkBusy(false);
     }
@@ -72,15 +86,19 @@ export default function LeadsPage() {
   const statusLabel = (s: string | undefined) => statusLabels[s ?? "new"] ?? statusLabels.new;
 
   async function exportData() {
-    const data = await authFetch<unknown>("/tenant/export").catch(() => null);
-    if (!data) return;
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "vitrin-leads.json";
-    a.click();
-    URL.revokeObjectURL(url);
+    setError(null);
+    try {
+      const data = await authFetch<unknown>("/tenant/export");
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "vitrin-leads.json";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setError(t("common.exportFailed"));
+    }
   }
 
   const visible = (leads ?? []).filter((l) => !filter || (l.status ?? "new") === filter);
@@ -109,6 +127,7 @@ export default function LeadsPage() {
           </button>
         </div>
         {note ? <Alert kind="success">{note}</Alert> : null}
+        {error ? <Alert kind="error">{error}</Alert> : null}
 
         <div className="row" style={{ flexWrap: "wrap", gap: ".4rem", marginBottom: "1rem" }}>
           <button className={filter === "" ? "btn btn-primary" : "btn btn-soft"} onClick={() => setFilter("")}>

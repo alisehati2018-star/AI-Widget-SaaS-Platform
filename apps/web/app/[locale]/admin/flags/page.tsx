@@ -2,11 +2,12 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
+import { ApiError } from "@/lib/api";
 import { adminFetch as authFetch } from "@/lib/auth";
 import { formatDateTime } from "@/lib/datetime";
 import type { Locale } from "@/i18n/routing";
 import { DashboardShell, useAdminNav } from "@/components/shell";
-import { Badge, Spinner } from "@/components/ui";
+import { Alert, Badge, Spinner } from "@/components/ui";
 
 interface Flag {
   key: string;
@@ -23,6 +24,7 @@ export default function AdminFlags() {
   const nav = useAdminNav();
   const [flags, setFlags] = useState<Flag[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
 
   const load = useCallback(() => {
     authFetch<{ flags: Flag[] }>("/admin/feature-flags").then((r) => setFlags(r.flags)).catch(() => setFlags([]));
@@ -31,9 +33,12 @@ export default function AdminFlags() {
 
   async function toggle(key: string, enabled: boolean) {
     setBusy(key);
+    setErr(null);
     try {
       await authFetch(`/admin/feature-flags/${key}`, { body: { enabled } });
       load();
+    } catch (e2) {
+      setErr(e2 instanceof ApiError ? e2.message : t("common.actionFailed"));
     } finally {
       setBusy(null);
     }
@@ -55,8 +60,11 @@ export default function AdminFlags() {
     <DashboardShell title={t("flags.title")} nav={nav} requireAdmin loginHref="/admin/login">
       <p style={{ marginTop: "-1rem" }}>{t("flags.intro")}</p>
       <div className="card">
+        {err ? <Alert kind="error">{err}</Alert> : null}
         {flags === null ? (
           <Spinner />
+        ) : flags.length === 0 ? (
+          <p className="muted">{t("flags.empty")}</p>
         ) : (
           <table className="table">
             <thead><tr>

@@ -50,11 +50,28 @@ class EmbeddingEndpoint:
 
 
 @dataclass
+class RerankEndpoint:
+    """One reranker in the `rerank` task chain. Wire mirrors the embedding
+    convention: the platform's local reranker speaks TEI `/rerank`; an
+    admin-added vendor is assumed Cohere-`/rerank`-wire-compatible (the de
+    facto standard Cohere/Jina/Voyage all expose)."""
+
+    base_url: str
+    api_key: str | None
+    model: str
+    is_local: bool
+    wire: str
+    max_retries: int = 0
+    retry_backoff_ms: int = 250
+
+
+@dataclass
 class RegistrySnapshot:
     """One consistent read of the registry tables."""
 
     endpoints_by_task: dict[str, list[Endpoint]] = field(default_factory=dict)
     embedding_endpoints: list[EmbeddingEndpoint] = field(default_factory=list)
+    rerank_endpoints: list[RerankEndpoint] = field(default_factory=list)
     prices: dict[tuple[str, str], ModelPrice] = field(default_factory=dict)
     pricing: PricingConfig = field(default_factory=PricingConfig)
     failover_enabled: bool = True
@@ -111,6 +128,19 @@ def _env_embedding_endpoints() -> list[EmbeddingEndpoint]:
     ]
 
 
+def _env_rerank_endpoints() -> list[RerankEndpoint]:
+    """The legacy env-configured single local (TEI) reranker, when set."""
+    s = get_settings()
+    if not s.reranker_url:
+        return []
+    return [
+        RerankEndpoint(
+            base_url=s.reranker_url, api_key=None, model=s.reranker_model,
+            is_local=True, wire="tei",
+        )
+    ]
+
+
 class ProviderRegistry:
     """TTL-cached view of the provider/pricing tables."""
 
@@ -153,6 +183,14 @@ class ProviderRegistry:
                 "JOIN ai_providers p ON p.id = m.provider_id AND p.enabled "
                 "WHERE r.task = 'embedding' ORDER BY r.position"
             )
+            rerank_rows = await conn.fetch(
+                "SELECT r.position, m.model, p.base_url, p.api_key, p.is_local, "
+                "p.max_retries, p.retry_backoff_ms "
+                "FROM ai_routes r "
+                "JOIN ai_models m ON m.id = r.model_id AND m.enabled AND m.modality = 'rerank' "
+                "JOIN ai_providers p ON p.id = m.provider_id AND p.enabled "
+                "WHERE r.task = 'rerank' ORDER BY r.position"
+            )
             price_rows = await conn.fetch(
                 "SELECT p.name AS provider, m.model, m.input_usd_per_1m, m.output_usd_per_1m "
                 "FROM ai_models m JOIN ai_providers p ON p.id = m.provider_id"
@@ -191,6 +229,18 @@ class ProviderRegistry:
             )
             for r in embed_rows
         ]
+        rerank_endpoints = [
+            RerankEndpoint(
+                base_url=r["base_url"],
+                api_key=r["api_key"] or None,
+                model=r["model"],
+                is_local=bool(r["is_local"]),
+                wire="tei" if r["is_local"] else "cohere",
+                max_retries=int(r["max_retries"] or 0),
+                retry_backoff_ms=int(r["retry_backoff_ms"] or 250),
+            )
+            for r in rerank_rows
+        ]
         prices = {
             (r["provider"], r["model"]): ModelPrice(
                 provider=r["provider"],
@@ -203,6 +253,7 @@ class ProviderRegistry:
         return RegistrySnapshot(
             endpoints_by_task=by_task,
             embedding_endpoints=embedding_endpoints,
+            rerank_endpoints=rerank_endpoints,
             prices=prices,
             pricing=parse_pricing_row(pricing_row),
             failover_enabled=bool(routing_row["failover_enabled"]) if routing_row else True,
@@ -232,6 +283,13 @@ class ProviderRegistry:
         pattern as `.endpoints()` for chat/analyst."""
         snap = await self.snapshot()
         chain = list(snap.embedding_endpoints) or _env_embedding_endpoints()
+        return _apply_failover_toggle(chain, snap.failover_enabled)
+
+    async def rerank_endpoints(self) -> list[RerankEndpoint]:
+        """Ordered chain for the `rerank` task; falls back to the env local
+        TEI reranker when unconfigured (may be empty — reranking is optional)."""
+        snap = await self.snapshot()
+        chain = list(snap.rerank_endpoints) or _env_rerank_endpoints()
         return _apply_failover_toggle(chain, snap.failover_enabled)
 
     async def price_for(self, provider: str, model: str) -> ModelPrice | None:

@@ -17,7 +17,7 @@ import { ProviderTemplatesPanel } from "../models/provider-templates-panel";
 import type { AiProvider } from "../models/types";
 import { CheckCreditPanel } from "./check-credit-panel";
 
-type AsyncAction = () => Promise<unknown>;
+type AsyncAction = { (): Promise<unknown> };
 
 const EMPTY_FORM = {
   name: "", base_url: "", api_key: "", is_local: false, priority: "0",
@@ -221,8 +221,10 @@ export function ProvidersTable({
                       {tp("editProvider")}
                     </button>
                     <button className="btn btn-danger" disabled={busy}
-                      onClick={() => void run(() => authFetch(`/admin/ai/providers/${p.id}`, {
-                        method: "DELETE" }))}>
+                      onClick={() => {
+                        if (!window.confirm(tp("deleteConfirm", { name: p.name }))) return;
+                        void run(() => authFetch(`/admin/ai/providers/${p.id}`, { method: "DELETE" }));
+                      }}>
                       {t("models.delete")}
                     </button>
                   </div>

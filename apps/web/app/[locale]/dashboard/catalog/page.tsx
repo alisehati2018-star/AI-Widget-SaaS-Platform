@@ -29,14 +29,22 @@ export default function CatalogPage() {
   const [platform, setPlatform] = useState("woocommerce");
   const [storeUrl, setStoreUrl] = useState("");
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [sync, setSync] = useState<SyncStatus | null>(null);
+  const [syncFailed, setSyncFailed] = useState(false);
   const [syncBusy, setSyncBusy] = useState(false);
   const [syncNote, setSyncNote] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
 
   const loadSync = useCallback(() => {
-    authFetch<SyncStatus>("/tenant/sync-status").then(setSync).catch(() => setSync(null));
+    setSyncFailed(false);
+    authFetch<SyncStatus>("/tenant/sync-status")
+      .then(setSync)
+      .catch(() => {
+        setSync(null);
+        setSyncFailed(true);
+      });
   }, []);
 
   useEffect(() => {
@@ -54,9 +62,12 @@ export default function CatalogPage() {
     e.preventDefault();
     setBusy(true);
     setSaved(false);
+    setSaveError(null);
     try {
       await authFetch("/tenant/settings", { method: "PATCH", body: { platform, store_url: storeUrl } });
       setSaved(true);
+    } catch (err) {
+      setSaveError(err instanceof ApiError ? err.message : t("common.actionFailed"));
     } finally {
       setBusy(false);
     }
@@ -96,11 +107,19 @@ export default function CatalogPage() {
         </div>
         {syncNote ? <Alert kind="success">{syncNote}</Alert> : null}
         {syncError ? <Alert kind="error">{syncError}</Alert> : null}
+        {syncFailed ? (
+          <div className="alert alert-warning" role="status">
+            {t("common.loadFailed")}{" "}
+            <button className="btn btn-soft" onClick={loadSync} style={{ marginInlineStart: ".5rem" }}>
+              {t("common.retry")}
+            </button>
+          </div>
+        ) : null}
         <div className="stat-grid" style={{ margin: "1rem 0" }}>
           <div className="stat">
             <span className="stat-label">{t("catalog.docsIndexed")}</span>
             <span className="stat-value">
-              {sync == null ? <Spinner /> : sync.docs_indexed != null
+              {sync == null ? (syncFailed ? "—" : <Spinner />) : sync.docs_indexed != null
                 ? formatNumber(sync.docs_indexed, locale)
                 : <Badge tone="warning">{t("catalog.docsUnavailable")}</Badge>}
             </span>
@@ -147,6 +166,7 @@ export default function CatalogPage() {
             </Badge>
           </div>
           {saved ? <Alert kind="success">{t("common.saved")}</Alert> : null}
+          {saveError ? <Alert kind="error">{saveError}</Alert> : null}
           <form onSubmit={save}>
             <Field label={t("catalog.platform")}>
               <select className="input" aria-label={t("catalog.platform")} value={platform} onChange={(e) => setPlatform(e.target.value)}>

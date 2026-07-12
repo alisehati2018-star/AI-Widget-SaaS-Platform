@@ -9,6 +9,7 @@ import type { Locale } from "@/i18n/routing";
 import { Link } from "@/i18n/navigation";
 import { DashboardShell, useOwnerNav } from "@/components/shell";
 import { Loading } from "@/components/states";
+import { Alert } from "@/components/ui";
 
 interface Step {
   title: string;
@@ -26,24 +27,42 @@ export default function OnboardingPage() {
   const { user } = useSession();
   const [profile, setProfile] = useState<TenantProfile | null>(null);
   const [keys, setKeys] = useState<ApiKey[] | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [resent, setResent] = useState(false);
+  const [resendError, setResendError] = useState<string | null>(null);
 
   function load() {
-    authFetch<TenantProfile>("/tenant/profile").then(setProfile).catch(() => setProfile(null));
+    setLoadFailed(false);
+    authFetch<TenantProfile>("/tenant/profile").then(setProfile).catch(() => {
+      setProfile(null);
+      setLoadFailed(true);
+    });
     authFetch<{ keys: ApiKey[] }>("/tenant/keys").then((r) => setKeys(r.keys)).catch(() => setKeys([]));
   }
   useEffect(() => load(), []);
 
   async function resend() {
     if (!user?.email) return;
-    await apiFetch("/auth/verify-request", { body: { email: user.email } }).catch(() => {});
-    setResent(true);
+    setResendError(null);
+    try {
+      await apiFetch("/auth/verify-request", { body: { email: user.email } });
+      setResent(true);
+    } catch {
+      setResendError(t("common.actionFailed"));
+    }
   }
 
   if (!profile || keys === null) {
     return (
       <DashboardShell title={t("getStarted.title")} nav={nav}>
-        <Loading />
+        {loadFailed ? (
+          <div className="card">
+            <p className="muted">{t("common.loadFailed")}</p>
+            <button className="btn btn-soft" onClick={load}>{t("common.retry")}</button>
+          </div>
+        ) : (
+          <Loading />
+        )}
       </DashboardShell>
     );
   }
@@ -91,6 +110,7 @@ export default function OnboardingPage() {
           ? t("getStarted.welcomeNamed", { name: user.full_name })
           : t("getStarted.welcome")}
       </p>
+      {resendError ? <Alert kind="error">{resendError}</Alert> : null}
 
       <div className="card" style={{ marginBottom: "1.5rem" }}>
         <div className="row-between" style={{ marginBottom: "0.6rem" }}>
@@ -99,7 +119,14 @@ export default function OnboardingPage() {
             {formatNumber(pct, locale)}%
           </span>
         </div>
-        <div className="progress-track" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+        <div
+          className="progress-track"
+          role="progressbar"
+          aria-label={t("getStarted.progress", { done: doneCount, total: steps.length })}
+          aria-valuenow={pct}
+          aria-valuemin={0}
+          aria-valuemax={100}
+        >
           <div className="progress-fill" style={{ width: `${pct}%` }} />
         </div>
         {pct === 100 ? (
