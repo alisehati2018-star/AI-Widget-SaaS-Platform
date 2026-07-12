@@ -115,12 +115,12 @@ packages/             Domain libs: acip_core, acip_auth, acip_search, acip_sync,
 services/             api · worker (FastAPI + Celery) — incl. auth/admin/public routers
                       (the AI gateway ladder runs inside `api`, via `acip_gateway`)
 apps/web/             Next.js app: marketing site + auth + store dashboard + admin panel
-apps/dashboard/       Legacy operator console + embeddable widget (widget/acip-widget.ts)
+apps/widget/          Embeddable store widget loader (served at /widget/v1.js)
 db/migrations/        PostgreSQL control-plane schema (0001–0009: identity/auth/plans/billing/kb)
 eval/                 Golden-set metrics + evaluation harness
 infra/                docker-compose.yml, Dockerfile, cluster verify script
 tests/                Unit + PG/ES integration tests
-reports/              Audits, compliance, gap-closure, dependency upgrade
+reports/              Current audits + phase sign-offs (interim reports live in git history)
 ```
 
 ## Notes

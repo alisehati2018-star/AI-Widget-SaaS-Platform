@@ -128,12 +128,9 @@ jobs:
 
   frontend:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        app: ["apps/dashboard", "apps/web"]
     defaults:
       run:
-        working-directory: ${{ matrix.app }}
+        working-directory: apps/web
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -141,8 +138,7 @@ jobs:
           node-version: "22"
       - name: Install
         run: npm install --no-audit --no-fund
-      - name: Frontend QA gates (web)
-        if: matrix.app == 'apps/web'
+      - name: Frontend QA gates
         run: npm run check:all
       - name: Type-check
         run: npx tsc --noEmit

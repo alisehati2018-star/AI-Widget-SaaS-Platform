@@ -22,10 +22,8 @@ router = APIRouter(tags=["widget"])
 
 _KEY = Header(default=None, alias=API_KEY_HEADER)
 
-# loader.js lives in the repo at apps/dashboard/widget/loader.js
-_LOADER_PATH = (
-    Path(__file__).resolve().parents[3] / "apps" / "dashboard" / "widget" / "loader.js"
-)
+# loader.js lives in the repo at apps/widget/loader.js
+_LOADER_PATH = Path(__file__).resolve().parents[3] / "apps" / "widget" / "loader.js"
 _WIDGET_DEFAULTS_KEY = "widget:global_defaults"
 
 # Keys a store may override from its dashboard (presentation only).
