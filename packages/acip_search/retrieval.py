@@ -77,7 +77,16 @@ class SearchService:
         results = [{**h["_source"], "score": h.get("_score")} for h in hits]
 
         if app_rerank and len(results) > 1:
-            docs = [str(r.get("title", "")) for r in results]
+            # Give the cross-encoder the description too (capped: rerank models
+            # have short context windows) — title alone starves it of signal.
+            docs = [
+                " — ".join(
+                    part
+                    for part in (str(r.get("title", "")), str(r.get("description", ""))[:300])
+                    if part
+                )
+                for r in results
+            ]
             order = await self._reranker.rerank(text, docs)
             results = [results[i] for i in order if i < len(results)]
 

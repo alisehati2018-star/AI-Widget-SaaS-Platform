@@ -26,6 +26,7 @@ export default function CatalogPage() {
   const locale = useLocale() as Locale;
   const nav = useOwnerNav();
   const [profile, setProfile] = useState<TenantProfile | null>(null);
+  const [profileFailed, setProfileFailed] = useState(false);
   const [platform, setPlatform] = useState("woocommerce");
   const [storeUrl, setStoreUrl] = useState("");
   const [saved, setSaved] = useState(false);
@@ -47,16 +48,21 @@ export default function CatalogPage() {
       });
   }, []);
 
-  useEffect(() => {
+  const loadProfile = useCallback(() => {
+    setProfileFailed(false);
     authFetch<TenantProfile>("/tenant/profile")
       .then((p) => {
         setProfile(p);
         setPlatform(p.settings.platform ?? "woocommerce");
         setStoreUrl(p.settings.store_url ?? "");
       })
-      .catch(() => setProfile(null));
+      .catch(() => setProfileFailed(true));
+  }, []);
+
+  useEffect(() => {
+    loadProfile();
     loadSync();
-  }, [loadSync]);
+  }, [loadProfile, loadSync]);
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -167,21 +173,32 @@ export default function CatalogPage() {
           </div>
           {saved ? <Alert kind="success">{t("common.saved")}</Alert> : null}
           {saveError ? <Alert kind="error">{saveError}</Alert> : null}
-          <form onSubmit={save}>
-            <Field label={t("catalog.platform")}>
-              <select className="input" aria-label={t("catalog.platform")} value={platform} onChange={(e) => setPlatform(e.target.value)}>
-                <option value="woocommerce">WooCommerce</option>
-                <option value="opencart">OpenCart</option>
-                <option value="custom">{t("catalog.platformCustom")}</option>
-              </select>
-            </Field>
-            <Field label={t("catalog.storeUrl")} hint={t("catalog.storeUrlHint")}>
-              <Input value={storeUrl} onChange={(e) => setStoreUrl(e.target.value)} placeholder="https://shop.example.com" dir="ltr" />
-            </Field>
-            <button className="btn btn-primary" disabled={busy}>
-              {busy ? <Spinner /> : t("catalog.saveConnection")}
-            </button>
-          </form>
+          {profileFailed && !profile ? (
+            // Don't render the form over unknown state — saving defaults here
+            // would silently overwrite the store's real connection settings.
+            <>
+              <p className="muted">{t("common.loadFailed")}</p>
+              <button className="btn btn-soft" onClick={loadProfile}>{t("common.retry")}</button>
+            </>
+          ) : !profile ? (
+            <Spinner />
+          ) : (
+            <form onSubmit={save}>
+              <Field label={t("catalog.platform")}>
+                <select className="input" aria-label={t("catalog.platform")} value={platform} onChange={(e) => setPlatform(e.target.value)}>
+                  <option value="woocommerce">WooCommerce</option>
+                  <option value="opencart">OpenCart</option>
+                  <option value="custom">{t("catalog.platformCustom")}</option>
+                </select>
+              </Field>
+              <Field label={t("catalog.storeUrl")} hint={t("catalog.storeUrlHint")}>
+                <Input value={storeUrl} onChange={(e) => setStoreUrl(e.target.value)} placeholder="https://shop.example.com" dir="ltr" />
+              </Field>
+              <button className="btn btn-primary" disabled={busy}>
+                {busy ? <Spinner /> : t("catalog.saveConnection")}
+              </button>
+            </form>
+          )}
         </div>
 
         <div className="card">

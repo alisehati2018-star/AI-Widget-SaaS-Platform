@@ -57,6 +57,7 @@ export default function AdminAgent() {
   const [results, setResults] = useState<Citation[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [docCount, setDocCount] = useState<number | null>(null);
+  const [docCountFailed, setDocCountFailed] = useState(false);
 
   useEffect(() => {
     authFetch<{ tenants: TenantRow[] }>("/admin/tenants")
@@ -67,12 +68,13 @@ export default function AdminAgent() {
   useEffect(() => {
     if (!selected) return;
     setDocCount(null);
+    setDocCountFailed(false);
     setResults(null);
     // Each tenant keeps its own console history (locally, per browser).
     setHistory(loadHistory(selected));
     authFetch<{ docs: number }>(`/admin/es/tenant-count?tenant=${encodeURIComponent(selected)}`)
       .then((r) => setDocCount(r.docs))
-      .catch(() => setDocCount(null));
+      .catch(() => setDocCountFailed(true));
   }, [selected]);
 
   function pushTurns(...entries: HistoryEntry[]) {
@@ -223,7 +225,7 @@ export default function AdminAgent() {
                 <tr><td className="muted">{t("common.tenant")}</td><td><code>{selected || "—"}</code></td></tr>
                 <tr>
                   <td className="muted">{t("agent.indexedDocs")}</td>
-                  <td>{docCount == null ? t("agent.docsLoading") : docCount}</td>
+                  <td>{docCountFailed ? "—" : docCount == null ? t("agent.docsLoading") : docCount}</td>
                 </tr>
               </tbody>
             </table>

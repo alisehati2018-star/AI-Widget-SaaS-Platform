@@ -72,8 +72,8 @@ class _FakeES:
     async def search(self, *, index, body):
         self.last_body = body
         return {"hits": {"hits": [
-            {"_source": {"title": "A"}, "_score": 3.0},
-            {"_source": {"title": "B"}, "_score": 2.0},
+            {"_source": {"title": "A", "description": "x" * 500}, "_score": 3.0},
+            {"_source": {"title": "B", "description": "توضیح ب"}, "_score": 2.0},
             {"_source": {"title": "C"}, "_score": 1.0},
         ]}}
 
@@ -97,7 +97,9 @@ async def test_search_applies_admin_bound_rerank_order():
     svc = SearchService(es, reranker=rr)
     out = await svc.search("t1", "کفش")
     assert [r["title"] for r in out["results"]] == ["C", "A", "B"]
-    assert rr.called_with == ["A", "B", "C"]
+    # The cross-encoder sees title + description (description capped at 300
+    # chars for the model's short context window); title-only docs stay bare.
+    assert rr.called_with == ["A — " + "x" * 300, "B — توضیح ب", "C"]
     # App-side rerank must NOT also request the ES-side reranker.
     assert "text_similarity" not in str(es.last_body)
 

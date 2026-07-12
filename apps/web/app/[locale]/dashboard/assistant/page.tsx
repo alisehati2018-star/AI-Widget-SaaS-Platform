@@ -21,6 +21,7 @@ export default function AssistantPage() {
   const nav = useOwnerNav();
   const [greeting, setGreeting] = useState("");
   const [loaded, setLoaded] = useState(false);
+  const [greetingFailed, setGreetingFailed] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -35,13 +36,21 @@ export default function AssistantPage() {
       .catch(() => setStatusFailed(true));
   }, []);
 
-  useEffect(() => {
+  const loadGreeting = useCallback(() => {
+    setGreetingFailed(false);
+    setLoaded(false);
     authFetch<TenantProfile>("/tenant/profile")
-      .then((p) => setGreeting(p.settings.widget_greeting ?? ""))
-      .catch(() => {})
-      .finally(() => setLoaded(true));
+      .then((p) => {
+        setGreeting(p.settings.widget_greeting ?? "");
+        setLoaded(true);
+      })
+      .catch(() => setGreetingFailed(true));
+  }, []);
+
+  useEffect(() => {
+    loadGreeting();
     loadStatus();
-  }, [loadStatus]);
+  }, [loadGreeting, loadStatus]);
 
   async function save() {
     setBusy(true);
@@ -119,20 +128,29 @@ export default function AssistantPage() {
         <h3>{t("assistant.greetingTitle")}</h3>
         {saved ? <Alert kind="success">{t("common.saved")}</Alert> : null}
         {error ? <Alert kind="error">{error}</Alert> : null}
-        {loaded ? (
-          <Field label={t("assistant.greetingLabel")}>
-            <Input
-              value={greeting}
-              onChange={(e) => setGreeting(e.target.value)}
-              placeholder={t("assistant.greetingPlaceholder")}
-            />
-          </Field>
+        {greetingFailed ? (
+          // Editing over unknown state could wipe the saved greeting — block
+          // the form until the current value actually loads.
+          <>
+            <p className="muted">{t("common.loadFailed")}</p>
+            <button className="btn btn-soft" onClick={loadGreeting}>{t("common.retry")}</button>
+          </>
+        ) : loaded ? (
+          <>
+            <Field label={t("assistant.greetingLabel")}>
+              <Input
+                value={greeting}
+                onChange={(e) => setGreeting(e.target.value)}
+                placeholder={t("assistant.greetingPlaceholder")}
+              />
+            </Field>
+            <button className="btn btn-primary" onClick={() => void save()} disabled={busy}>
+              {busy ? <Spinner /> : tc("actions.save")}
+            </button>
+          </>
         ) : (
           <Spinner />
         )}
-        <button className="btn btn-primary" onClick={() => void save()} disabled={busy}>
-          {busy ? <Spinner /> : tc("actions.save")}
-        </button>
       </div>
 
       <div className="card">
